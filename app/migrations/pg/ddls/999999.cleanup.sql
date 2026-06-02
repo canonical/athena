@@ -1,0 +1,2 @@
+-- Cleanup legacy tables if needed
+-- Currently no legacy tables to clean up

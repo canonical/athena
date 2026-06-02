@@ -1,0 +1,78 @@
+name: athena
+# see https://documentation.ubuntu.com/rockcraft/en/latest/explanation/bases/
+# for more information about bases and using 'bare' bases for chiselled rocks
+base: ubuntu@24.04
+version: "0.0.1"
+summary: Multi-agent orchestration service.
+
+description: |
+  Multi-agent orchestration service.
+
+# the platforms this rock should be built on and run on.
+# you can check your architecture with `dpkg --print-architecture`
+platforms:
+  amd64:
+
+# to ensure the expressjs-framework extension works properly, your ExpressJS
+# application should be inside the app directory and the "start" script defined
+# in the package.json's scripts section.
+extensions:
+  - expressjs-framework
+
+parts:
+  libraries:
+    plugin: npm
+    stage-packages:
+      - ca-certificates_data
+    build-environment:
+      - UV_USE_IO_URING: "0"
+    source-type: local
+    source: libraries/
+    npm-include-node: false
+    build-snaps:
+      - node/24/stable
+    override-build: |
+      # Libraries are pre-built by the GitHub action, just copy the tarballs
+      ls -la *.tgz 2>/dev/null || echo "No tarballs found - ensure they are built by the GitHub action"
+  expressjs-framework/install-app:
+    after: [libraries]
+    npm-include-node: true
+    npm-node-version: "24"
+    override-build: |
+      rm -rf node_modules
+      rm -rf dist
+
+      mkdir -p libraries
+      cp /root/parts/libraries/build/*.tgz ./libraries/
+
+      # Define the libraries to bundle (NOTE: Order matters - libraries with dependencies must come after their dependencies)
+      libraries=(
+        utilities
+        zod-utils
+        janus-client
+        authorization
+        portal-navigation
+        coverage-tools
+        testing-tools
+      )
+      tarballs=()
+      for library in "${libraries[@]}"; do
+        tarballs+=("./libraries/portal-${library}-0.0.1.tgz")
+        npm pkg set bundledDependencies[]="@portal/${library}"
+      done
+      npm install --save "${tarballs[@]}" npm-run-all --include=dev
+      npm run build:fe
+      npm run build:be
+      npm prune --omit=dev
+      mkdir -p ${CRAFT_PART_INSTALL}/lib/node_modules/athena/node_modules
+      cp -r node_modules/. ${CRAFT_PART_INSTALL}/lib/node_modules/athena/node_modules
+      craftctl default
+
+      # We need to copy the built files to the install directory
+      mkdir -p ${CRAFT_PART_INSTALL}/lib/node_modules/athena/dist
+      cp -r dist/. ${CRAFT_PART_INSTALL}/lib/node_modules/athena/dist
+      npm config set script-shell=bash --location project
+      cp ${CRAFT_PART_BUILD}/.npmrc ${CRAFT_PART_INSTALL}/lib/node_modules/athena/.npmrc
+      chown -R 584792:584792 ${CRAFT_PART_INSTALL}/lib/node_modules/athena
+      ln -s /lib/node_modules/athena ${CRAFT_PART_INSTALL}/app
+      chown -R 584792:584792 ${CRAFT_PART_INSTALL}/app

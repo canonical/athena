@@ -1,0 +1,110 @@
+# This file configures Charmcraft.
+# See https://canonical-charmcraft.readthedocs-hosted.com/stable/reference/files/charmcraft-yaml-file/ for guidance.
+
+name: zeus
+
+type: charm
+
+base: ubuntu@24.04
+
+# the platforms this charm should be built on and run on.
+# you can check your architecture with `dpkg --print-architecture`
+platforms:
+  amd64:
+
+# (Required)
+summary: Portal gateway service.
+
+# (Required)
+description: |
+  Portal gateway service.
+
+extensions:
+  - expressjs-framework
+
+charm-libs:
+  - lib: traefik_k8s.traefik_route
+    version: "0"
+  - lib: tempo_coordinator_k8s.tracing
+    version: "0"
+  - lib: smtp_integrator.smtp
+    version: "0"
+  - lib: openfga_k8s.openfga
+    version: "1"
+  - lib: hydra.oauth
+    version: "0"
+
+requires:
+  traefik-route:
+    interface: traefik_route
+    limit: 1
+    optional: true
+  postgresql:
+    interface: postgresql_client
+    optional: false
+    limit: 1
+
+config:
+  options:
+    root:
+      description: The root prefix for ingress to the application
+      type: string
+      default: "/"
+      required: true
+    fqdn:
+      description: Application FQDN for ingress
+      type: string
+      default: "https://portal.staging.canonical.com"
+      required: true
+    allowed-origins:
+      description: A Comma-separated list of allowed CORS origins. Defaults to the fqdn.
+      type: string
+      required: false
+    gateway-url:
+      description: URL of the Zeus Gateway
+      type: string
+      required: true
+      default: "https://portal.staging.canonical.com/gateway"
+    sentry:
+      type: secret
+      description: |
+        Sentry configuration used by Zeus backend and frontend.
+        Secret can include:
+        - dsn # Sentry DSN for Zeus
+        - environment # Sentry environment name, for example staging or production
+        - traces-sample-rate # Trace sampling rate between 0 and 1, defaults to 0.1
+      required: false
+    pg-pool-max:
+      description: Maximum number of clients in the PostgreSQL pool
+      type: int
+      default: 1
+      required: false
+    pg-pool-idle-timeout-ms:
+      description: Idle timeout for PostgreSQL pool clients in milliseconds
+      type: int
+      default: 60000
+      required: false
+    janus:
+      type: secret
+      description: |
+        Janus configuration, used for authentication integration.
+        Secret must include:
+        - fqdn # FQDN for Janus e.g. http://janus.<model>.svc.cluster.local:8080
+        - root # URL prefix for Janus routes e.g. /authentication
+        Optionally, it can also include:
+        - redirect-fqdn # FQDN used for Janus redirects, defaults to `janus-fqdn` e.g. https://portal.staging.canonical.com
+        - session-cookie # Name of the cookie used for Janus sessions, default is "canonical-sts-session"
+        - timeout-ms # Timeout for Janus requests in milliseconds, default is 5000
+      required: true
+    authorization:
+      type: secret
+      description: |
+        Cerberus configuration, used for authorization integration.
+        Secret must include:
+        - endpoint # URL for auth check endpoint e.g. http://cerberus.<model>.svc.cluster.local:8080/authorization/ext_authz/check
+        - base-url # base URL for Cerberus API e.g. http://cerberus.<model>.svc.cluster.local:8080/authorization/api
+        Optionally, it can also include:
+        - fail-open # Whether to allow requests if Cerberus is unreachable, default is false
+        - timeout-ms # Timeout for Cerberus requests in milliseconds, default is 2000
+        - management-timeout-ms # Timeout for Cerberus management API requests in milliseconds, default is 3000
+      required: true
