@@ -1,0 +1,10 @@
+@import "vanilla-framework";
+
+html { font-size: 14px; }
+
+@import "./settings";
+@import "./customizations";
+
+@include vanilla;
+
+:root { font-size: 14px; }

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="48" viewBox="0 0 220 48" fill="none" role="img" aria-labelledby="athena-logo-title">
+  <title id="athena-logo-title">Athena</title>
+  <rect width="220" height="48" rx="12" fill="#111111"/>
+  <text x="24"
+y="31"
+fill="white"
+font-family="Ubuntu, system-ui, sans-serif"
+font-size="36"
+font-weight="500"
+letter-spacing="0.2"
+>Athena</text>
+</svg>
