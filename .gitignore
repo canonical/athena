@@ -1,0 +1,44 @@
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Build outputs
+build/
+dist/
+coverage/
+.nyc_output/
+
+# Environment and local overrides
+.env
+.env.*
+!.example.env
+
+# Python and charm artifacts
+venv/
+.venv/
+.tox/
+.coverage
+__pycache__/
+*.py[cod]
+*.charm
+*.rock
+
+# Editor and OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Cache and temporary files
+.cache/
+.eslintcache
+tmp/
+temp/
+
+# Local task files
+*.tasklist.local.md
+tasklist.local.md
+*instructions.local.md

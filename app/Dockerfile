@@ -1,16 +1,15 @@
-# Build stage: Install dependencies
-# ===
-
-FROM portal_base
 WORKDIR /app
 
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends curl ca-certificates zstd \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& curl -fsSL https://ollama.com/install.sh | sh
+COPY package.json package-lock.json ./
 
-COPY agent/ agent/
+RUN npm ci
 
-RUN npm run build --workspace @portal/athena
+COPY tsconfig.json tsconfig.server.json ./
+COPY src ./src
+COPY scripts ./scripts
 
-RUN chmod +x /app/agent/scripts/start-athena-container.sh
+RUN chmod +x ./scripts/start-athena-container.sh
+
+EXPOSE 8080
+
+CMD ["./scripts/start-athena-container.sh"]

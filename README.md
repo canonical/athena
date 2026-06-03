@@ -2,7 +2,7 @@
 
 Athena is a multi-agent orchestration service. This repository is the bootstrap workspace for the service runtime, packaging, and deployment artifacts.
 
-At the moment, the implementation is still early-stage. The application already exposes a small HTTP surface for health, environment inspection, and routing scaffolding, while the repository also carries the first rock and charm packaging files.
+At the moment, the implementation is still early-stage. The application currently exposes a single status endpoint while the repository carries the first rock and charm packaging files.
 
 ## Current status
 
@@ -11,7 +11,7 @@ At the moment, the implementation is still early-stage. The application already 
 - Runtime: Node.js and TypeScript in [app](./app)
 - Packaging: Rockcraft in [rockcraft.yaml](./rockcraft.yaml)
 - Operator packaging: Juju charm in [charm](./charm)
-- Current API surface: `/health`, `/environment`, `/route`
+- Current API surface: `GET /_status/check`
 
 ## Repository layout
 
@@ -22,13 +22,11 @@ At the moment, the implementation is still early-stage. The application already 
 
 ## What the app does today
 
-The current service starts an Express server and exposes a few bootstrap endpoints:
+The current service starts an Express server and exposes one status endpoint:
 
-- `GET /health`: returns a basic service health response.
-- `GET /environment`: returns a runtime environment snapshot.
-- `POST /route`: placeholder route-decision endpoint.
+- `GET /_status/check`: returns `{"status":"ok","whoami":"athena"}`.
 
-The service also loads Athena personas from [app/src/personas](./app/src/personas) during startup and runs bootstrap logic before handling normal traffic.
+No bootstrap workflow, routing logic, or environment inspection API is exposed at this stage.
 
 ## Local development
 
@@ -62,6 +60,29 @@ cd app
 npm run start
 ```
 
+Run Athena with PostgreSQL 16 via Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- `postgres` on `localhost:5432`
+- `athena` on `localhost:8080`
+
+The application status endpoint is:
+
+- `GET http://localhost:8080/_status/check`
+
+Compose currently prepares Athena with a PostgreSQL 16 instance and provides `POSTGRESQL_DB_CONNECT_STRING`, but database migrations are not run automatically yet.
+
+Container runtime modes are selected with `APP_ATHENA_RUN_MODE`:
+
+- `production`: builds Athena and starts the server.
+- `dev`: runs the watcher for live development.
+- `test`: runs `npm run test`.
+
 ## Default runtime configuration
 
 Athena reads configuration from environment variables with the prefixes `APP_ATHENA`, `APP`, and `ATHENA`.
@@ -69,10 +90,14 @@ Athena reads configuration from environment variables with the prefixes `APP_ATH
 Useful defaults in the current bootstrap:
 
 - Host: `127.0.0.1`
-- Port: `4141`
-- Root path: `/`
+- Port: `8080`
 
-The service expects a PostgreSQL connection string to be available through `POSTGRESQL_DB_CONNECT_STRING`.
+For local Compose, PostgreSQL runs as:
+
+- Version: `16`
+- Database: `athena`
+- User: `athena`
+- Password: `athena`
 
 ## Packaging notes
 

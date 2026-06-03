@@ -7,6 +7,7 @@
     "build:be": "tsc --project ./tsconfig.server.json && tsc-alias --project ./tsconfig.server.json --resolve-full-paths",
     "build": "npm run build:be",
     "check:ts": "tsc --noEmit -p ./tsconfig.server.json",
+    "test": "npm run check:ts",
     "watch:be": "nodemon --config ./nodemon.json",
     "watch": "npm run watch:be",
     "start": "NODE_USE_ENV_PROXY=1 node --enable-source-maps dist/server.js"
@@ -19,10 +20,6 @@
     "typescript": "5.9.3"
   },
   "dependencies": {
-    "@portal/utilities": "0.0.1",
-    "cheerio": "1.0.0",
-    "express": "5.1.0",
-    "ollama": "0.6.3",
-    "zod": "4.1.13"
+    "express": "5.1.0"
   }
 }

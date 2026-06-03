@@ -8,10 +8,8 @@ BEGIN;
 \ir ./fncs/000300.ensureUpdatedAtTrigger.sql
 
 \echo >>> Running Athena DDL migrations
--- \ir ./ddls/000100.placeholder.sql
-
-\echo >>> Running Athena seed migrations
--- \ir ./seed/000100.placeholder.sql
+\ir ./ddls/000100.event.sql
+\ir ./ddls/999999.cleanup.sql
 
 COMMIT;
 
