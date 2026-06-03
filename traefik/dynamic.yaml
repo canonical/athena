@@ -1,0 +1,25 @@
+http:
+  routers:
+    athena-api:
+      entryPoints:
+        - web
+      rule: Host(`athena.localhost`) && PathPrefix(`/_status`)
+      service: athena-api
+      priority: 100
+
+    athena:
+      entryPoints:
+        - web
+      rule: Host(`athena.localhost`)
+      service: athena-frontend
+
+  services:
+    athena-api:
+      loadBalancer:
+        servers:
+          - url: http://athenabe:8080
+
+    athena-frontend:
+      loadBalancer:
+        servers:
+          - url: http://athena-frontend:5173

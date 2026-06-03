@@ -1,0 +1,81 @@
+# This file configures Charmcraft.
+# See https://canonical-charmcraft.readthedocs-hosted.com/stable/reference/files/charmcraft-yaml-file/ for guidance.
+
+name: athena
+
+type: charm
+
+base: ubuntu@24.04
+
+# the platforms this charm should be built on and run on.
+# you can check your architecture with `dpkg --print-architecture`
+platforms:
+  amd64:
+
+# (Required)
+summary: Multi-agent orchestration service.
+
+# (Required)
+description: |
+  Multi-agent orchestration service.
+
+extensions:
+  - expressjs-framework
+
+charm-libs:
+  - lib: traefik_k8s.ingress
+    version: "2"
+  - lib: tempo_coordinator_k8s.tracing
+    version: "0"
+  - lib: smtp_integrator.smtp
+    version: "0"
+  - lib: openfga_k8s.openfga
+    version: "1"
+  - lib: hydra.oauth
+    version: "0"
+
+requires:
+  ingress:
+    interface: ingress
+    optional: true
+    limit: 1
+  postgresql:
+    interface: postgresql_client
+    optional: false
+    limit: 1
+
+config:
+  options:
+    path:
+      description: Path prefix for ingress to the application
+      type: string
+      default: "/"
+      required: true
+    hostname:
+      description: Hostname for Athena ingress
+      type: string
+      default: "athena.local"
+      required: true
+    allowed-origins:
+      description: A Comma-separated list of allowed CORS origins. Defaults to the hostname.
+      type: string
+      required: false
+    sentry:
+      type: secret
+      description: |
+        Sentry configuration used by Athena services.
+        Secret can include:
+        - dsn # Sentry DSN for Athena
+        - environment # Sentry environment name, for example staging or production
+        - traces-sample-rate # Trace sampling rate between 0 and 1, defaults to 0.1
+      required: false
+    pg-pool-max:
+      description: Maximum number of clients in the PostgreSQL pool
+      type: int
+      default: 1
+      required: false
+    pg-pool-idle-timeout-ms:
+      description: Idle timeout for PostgreSQL pool clients in milliseconds
+      type: int
+      default: 60000
+      required: false

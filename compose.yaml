@@ -1,0 +1,105 @@
+services:
+  traefik:
+    image: traefik:v2.11
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: athena
+      POSTGRES_USER: athena
+      POSTGRES_PASSWORD: athena
+    ports:
+      - "5432:5432"
+    volumes:
+      - athena-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U athena -d athena"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  prepare:
+    image: postgres:16
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: athena
+    volumes:
+      - ./migrations:/migrations:ro
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        psql -h postgres -U athena -d athena -v APP_ROLE_NAME=athena -f /migrations/pg/migrate.sql
+
+  athenabe:
+    build:
+      context: ./app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prepare:
+        condition: service_completed_successfully
+    environment:
+      APP_ATHENA_HOST: 0.0.0.0
+      APP_ATHENA_PORT: "8080"
+      APP_ATHENA_RUN_MODE: production
+      POSTGRESQL_DB_CONNECT_STRING: postgresql://athena:athena@postgres:5432/athena
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8080/_status/check >/dev/null",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.athena-api.rule=Host(`athenabe.localhost`)
+      - traefik.http.routers.athena-api.entrypoints=web
+      - traefik.http.services.athena-api.loadbalancer.server.port=8080
+
+  athena:
+    build:
+      context: ./app
+    depends_on:
+      athenabe:
+        condition: service_healthy
+    environment:
+      VITE_BACKEND_PROXY_TARGET: http://athenabe:8080
+    command:
+      - /bin/sh
+      - -c
+      - npm run dev:fe
+    volumes:
+      - ./app/src/frontend:/app/src/frontend
+      - ./app/vite.config.ts:/app/vite.config.ts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5173 >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.athena.rule=Host(`athena.localhost`)
+      - traefik.http.routers.athena.entrypoints=web
+      - traefik.http.services.athena.loadbalancer.server.port=5173
+
+volumes:
+  athena-postgres-data:
