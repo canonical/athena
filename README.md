@@ -77,11 +77,26 @@ The application status endpoint is:
 
 Compose currently prepares Athena with a PostgreSQL 16 instance and provides `POSTGRESQL_DB_CONNECT_STRING`, but database migrations are not run automatically yet.
 
+Compose also includes a one-shot `prepare` service that runs Athena migrations before the app starts, mirroring the Portal pattern of bootstrapping the database before application health checks.
+
 Container runtime modes are selected with `APP_ATHENA_RUN_MODE`:
 
 - `production`: builds Athena and starts the server.
 - `dev`: runs the watcher for live development.
 - `test`: runs `npm run test`.
+
+## E2E testing
+
+Athena uses Playwright E2E tests with a local wrapper in [app/testing/playwright](./app/testing/playwright), mirroring the lightweight shared-fixture pattern used in Portal.
+
+Run the E2E suite from [app](./app):
+
+```bash
+cd app
+npm run test
+```
+
+This uses [app/playwright.config.ts](./app/playwright.config.ts), starts the local Compose stack in global setup, runs the migration `prepare` service, waits for Athena to become healthy, and then executes co-located `*.spec.ts` tests under [app](./app).
 
 ## Default runtime configuration
 

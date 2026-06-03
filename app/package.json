@@ -7,12 +7,14 @@
     "build:be": "tsc --project ./tsconfig.server.json && tsc-alias --project ./tsconfig.server.json --resolve-full-paths",
     "build": "npm run build:be",
     "check:ts": "tsc --noEmit -p ./tsconfig.server.json",
-    "test": "npm run check:ts",
+    "test": "playwright test -c ./playwright.config.ts",
+    "test:ui": "playwright test -c ./playwright.config.ts --ui",
     "watch:be": "nodemon --config ./nodemon.json",
     "watch": "npm run watch:be",
     "start": "NODE_USE_ENV_PROXY=1 node --enable-source-maps dist/server.js"
   },
   "devDependencies": {
+    "@playwright/test": "1.57.0",
     "@types/express": "5.0.5",
     "@types/node": "24.10.1",
     "nodemon": "3.1.11",
