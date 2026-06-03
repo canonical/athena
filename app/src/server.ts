@@ -1,7 +1,7 @@
-import { config } from "@components/config/config.js";
-import express, { type Request, type Response } from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { config } from "@components/config/config.js";
+import express, { type Request, type Response } from "express";
 
 const app = express();
 const host = config.app.host;
