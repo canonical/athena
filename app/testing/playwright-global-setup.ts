@@ -26,7 +26,7 @@ const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
 };
 
 const globalSetup = async (): Promise<void> => {
-  execFileSync(`docker`, [`compose`, `up`, `-d`, `postgres`, `prepare`, `athena`], {
+  execFileSync(`docker`, [`compose`, `up`, `-d`, `postgres`, `prepare`, `athenabe`], {
     cwd: repoRoot,
     stdio: `inherit`,
   });
