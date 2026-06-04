@@ -87,7 +87,7 @@ services:
       - -c
       - npm run dev:fe
     volumes:
-      - ./app/src/frontend:/app/src/frontend
+      - ./app/src:/app/src
       - ./app/vite.config.ts:/app/vite.config.ts:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5173 >/dev/null"]

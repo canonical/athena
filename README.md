@@ -20,6 +20,12 @@ At the moment, the implementation is still early-stage. The application currentl
 - [migrations](./migrations): Repository-level PostgreSQL schema and seed files.
 - [rockcraft.yaml](./rockcraft.yaml): Rock packaging definition for Athena.
 
+## Coding standards
+
+Athena uses a co-located, flat component structure in [app/src/components](./app/src/components): frontend and backend files for the same feature live side-by-side in the same component folder, and component folders contain files only.
+
+See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rules, including file move conventions.
+
 ## What the app does today
 
 The current service starts an Express server and exposes one status endpoint:
@@ -88,6 +94,8 @@ Container runtime modes are selected with `APP_ATHENA_RUN_MODE`:
 ## E2E testing
 
 Athena uses Playwright E2E tests with a local wrapper in [app/testing/playwright](./app/testing/playwright), mirroring the lightweight shared-fixture pattern used in Portal.
+
+See [docs/testing-standards.md](./docs/testing-standards.md) for the canonical test strategy and coverage expectations.
 
 Run the E2E suite from [app](./app):
 

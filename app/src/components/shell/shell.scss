@@ -2,8 +2,8 @@
 
 html { font-size: 14px; }
 
-@import "./settings";
-@import "./customizations";
+@import "./settings.scss";
+@import "./customizations.scss";
 
 @include vanilla;
 
