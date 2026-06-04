@@ -2,6 +2,7 @@
 set -eu
 
 mode="${APP_ATHENA_RUN_MODE:-production}"
+coverage="${COVERAGE:-}"
 
 case "$mode" in
   dev|development)
@@ -12,6 +13,9 @@ case "$mode" in
     ;;
   prod|production)
     npm run build
+    if [ -n "$coverage" ]; then
+      exec npm run coverage:start
+    fi
     exec npm run start
     ;;
   *)

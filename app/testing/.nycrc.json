@@ -1,0 +1,10 @@
+{
+  "all": true,
+  "extension": [".ts", ".tsx", ".js", ".jsx"],
+  "include": ["src/**/*.{ts,tsx,js,jsx}", "dist/**/*.js"],
+  "exclude": ["node_modules", "testing/**", "src/**/*.spec.ts", "src/types/**"],
+  "instrument": false,
+  "skipEmpty": false,
+  "report-dir": "testing/output/coverage",
+  "temp-dir": "testing/output/.nyc_merged"
+}
