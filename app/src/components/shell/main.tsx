@@ -2,7 +2,9 @@ import { ApplicationLayout, Chip, Notification, NotificationSeverity, type SideN
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import "./styles/app.scss";
+import athenaLogo from "./athena-logo.svg";
+import favicon from "./favicon.png";
+import "./shell.scss";
 
 const navItems: SideNavigationProps["items"] = [
   {
@@ -33,9 +35,9 @@ function App() {
       dark={true}
       logo={{
         href: "/",
-        icon: "/favicon.png",
+        icon: favicon,
         iconAlt: "Athena",
-        name: "/athena-logo.svg",
+        name: athenaLogo,
         nameAlt: "Athena",
       }}
       mainId="main-content"
