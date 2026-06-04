@@ -63,6 +63,9 @@ jobs:
         working-directory: app
         run: npm ci
 
+      - name: Prepare compose environment file
+        run: cp .example.env .env
+
       - name: Run tests with coverage
         working-directory: app
         run: npm run test:ci
