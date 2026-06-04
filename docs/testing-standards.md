@@ -31,15 +31,15 @@ This document is the source of truth for test strategy and test scope.
 ## Coverage output contract
 
 1. Raw coverage outputs must be written to dedicated intermediate directories:
-	- `app/testing/output/.nyc_frontend`
-	- `app/testing/output/.nyc_backend`
-	- `app/testing/output/.nyc_merged`
+   - `app/testing/output/.nyc_frontend`
+   - `app/testing/output/.nyc_backend`
+   - `app/testing/output/.nyc_merged`
 2. Final coverage reports must be generated under `app/testing/output/coverage`.
 3. Coverage report formats must include:
-	- HTML report (`index.html`)
-	- LCOV report (`lcov.info`)
-	- Cobertura XML report (`cobertura-coverage.xml`)
-	- Text summary in test logs
+   - HTML report (`index.html`)
+   - LCOV report (`lcov.info`)
+   - Cobertura XML report (`cobertura-coverage.xml`)
+   - Text summary in test logs
 4. Report generation must fail the test job when merged coverage data cannot be processed.
 
 ## CI publication contract

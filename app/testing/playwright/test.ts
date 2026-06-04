@@ -19,6 +19,7 @@ declare global {
 }
 
 const frontendCoverageDirectory = path.join(process.cwd(), `testing/output/.nyc_frontend`);
+let coverageFileSequence = 0;
 
 const remapContainerCoveragePaths = (coverage: IstanbulCoverage): IstanbulCoverage => {
   const remappedCoverage: IstanbulCoverage = {};
@@ -42,14 +43,15 @@ const remapContainerCoveragePaths = (coverage: IstanbulCoverage): IstanbulCovera
   return remappedCoverage;
 };
 
-const createCoverageFileName = (titlePath: string[]) => {
+const createCoverageFileName = (titlePath: string[], retry: number, repeatEachIndex: number) => {
   const readableName = titlePath
     .join(` `)
     .replaceAll(/[^a-zA-Z0-9]+/g, `-`)
     .replaceAll(/^-|-$/g, ``)
     .toLowerCase();
 
-  return `${readableName || `e2e-coverage`}-${process.pid}.json`;
+  coverageFileSequence += 1;
+  return `${readableName || `e2e-coverage`}-${process.pid}-r${retry}-e${repeatEachIndex}-n${coverageFileSequence}.json`;
 };
 
 // Keep a local wrapper so future shared fixtures can be added without changing test imports.
@@ -68,6 +70,6 @@ export const test = baseTest.extend({
     }
 
     await mkdir(frontendCoverageDirectory, { recursive: true });
-    await writeFile(path.join(frontendCoverageDirectory, createCoverageFileName(testInfo.titlePath)), JSON.stringify(remapContainerCoveragePaths(coverage)), `utf8`);
+    await writeFile(path.join(frontendCoverageDirectory, createCoverageFileName(testInfo.titlePath, testInfo.retry, testInfo.repeatEachIndex)), JSON.stringify(remapContainerCoveragePaths(coverage)), `utf8`);
   },
 });

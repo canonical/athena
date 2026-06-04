@@ -90,7 +90,7 @@ jobs:
             ./testing/output/coverage/coverage-comment.md
 
       - name: Post coverage comment
-        if: ${{ github.event_name == 'pull_request' && !cancelled() }}
+        if: ${{ github.event_name == 'pull_request' && !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           COVERAGE_COMMENT_PATH: app/testing/output/coverage/coverage-comment.md
@@ -126,7 +126,13 @@ jobs:
             }
 
       - name: Fail on coverage regression
-        if: ${{ steps.coverage_delta.outcome == 'failure' }}
+        if: ${{ steps.coverage_delta.outputs.has_regression == 'true' }}
         run: |
           echo "Coverage regression detected compared to app/testing/coverage-baseline.json"
+          exit 1
+
+      - name: Fail on coverage evaluation error
+        if: ${{ steps.coverage_delta.outputs.evaluation_error == 'true' || (steps.coverage_delta.outcome == 'failure' && steps.coverage_delta.outputs.has_regression != 'true') }}
+        run: |
+          echo "Coverage delta evaluation failed due to malformed or missing coverage inputs"
           exit 1

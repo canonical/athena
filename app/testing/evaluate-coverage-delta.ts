@@ -7,53 +7,72 @@ const markdownOutputPath = process.argv[4] ?? `./testing/output/coverage/coverag
 
 const metricNames = ["lines", "statements", "functions", "branches"];
 
-const parseJson = (filePath) => JSON.parse(readFileSync(filePath, `utf8`));
+const runUrl = process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : undefined;
 
-const currentSummary = parseJson(currentSummaryPath);
-const baselineSummary = parseJson(baselinePath);
-
-const current = currentSummary.total ?? {};
-const baseline = baselineSummary.total ?? {};
-
-const rows = [];
-let hasRegression = false;
-
-for (const metricName of metricNames) {
-  const currentPct = Number(current?.[metricName]?.pct ?? 0);
-  const baselinePct = Number(baseline?.[metricName]?.pct ?? 0);
-  const delta = Number((currentPct - baselinePct).toFixed(2));
-
-  if (delta < 0) {
-    hasRegression = true;
+const appendGithubOutput = (line: string): void => {
+  if (!process.env.GITHUB_OUTPUT) {
+    return;
   }
 
-  rows.push({ metricName, currentPct, baselinePct, delta });
-}
+  writeFileSync(process.env.GITHUB_OUTPUT, `${line}\n`, { flag: `a` });
+};
 
-const markdown = [
-  `<!-- athena-coverage-report -->`,
-  `## Coverage Report`,
-  ``,
-  `| Metric | Baseline % | Current % | Delta |`,
-  `| --- | ---: | ---: | ---: |`,
-  ...rows.map((row) => {
-    const deltaPrefix = row.delta > 0 ? `+` : ``;
-    return `| ${row.metricName} | ${row.baselinePct.toFixed(2)} | ${row.currentPct.toFixed(2)} | ${deltaPrefix}${row.delta.toFixed(2)} |`;
-  }),
-  ``,
-  hasRegression ? `Result: regression detected. Current coverage is below baseline for one or more metrics.` : `Result: no regression detected. Current coverage meets or exceeds baseline.`,
-  ``,
-  `Coverage artifact: see workflow run artifacts (name: athena-coverage-report).`,
-].join(`\n`);
+const parseJson = (filePath: string): unknown => JSON.parse(readFileSync(filePath, `utf8`));
 
-mkdirSync(path.dirname(markdownOutputPath), { recursive: true });
-writeFileSync(markdownOutputPath, markdown);
+try {
+  const currentSummary = parseJson(currentSummaryPath) as { total?: Record<string, { pct?: number }> };
+  const baselineSummary = parseJson(baselinePath) as { total?: Record<string, { pct?: number }> };
 
-if (process.env.GITHUB_OUTPUT) {
-  writeFileSync(process.env.GITHUB_OUTPUT, `has_regression=${hasRegression}\n`, { flag: `a` });
-  writeFileSync(process.env.GITHUB_OUTPUT, `comment_path=${markdownOutputPath}\n`, { flag: `a` });
-}
+  const current = currentSummary.total ?? {};
+  const baseline = baselineSummary.total ?? {};
 
-if (hasRegression) {
+  const rows: Array<{ metricName: string; currentPct: number; baselinePct: number; delta: number }> = [];
+  let hasRegression = false;
+
+  for (const metricName of metricNames) {
+    const currentPct = Number(current?.[metricName]?.pct ?? 0);
+    const baselinePct = Number(baseline?.[metricName]?.pct ?? 0);
+    const delta = Number((currentPct - baselinePct).toFixed(2));
+
+    if (delta < 0) {
+      hasRegression = true;
+    }
+
+    rows.push({ metricName, currentPct, baselinePct, delta });
+  }
+
+  const markdown = [
+    `<!-- athena-coverage-report -->`,
+    `## Coverage Report`,
+    ``,
+    `| Metric | Baseline % | Current % | Delta |`,
+    `| --- | ---: | ---: | ---: |`,
+    ...rows.map((row) => {
+      const deltaPrefix = row.delta > 0 ? `+` : ``;
+      return `| ${row.metricName} | ${row.baselinePct.toFixed(2)} | ${row.currentPct.toFixed(2)} | ${deltaPrefix}${row.delta.toFixed(2)} |`;
+    }),
+    ``,
+    hasRegression ? `Result: regression detected. Current coverage is below baseline for one or more metrics.` : `Result: no regression detected. Current coverage meets or exceeds baseline.`,
+    ``,
+    `Coverage artifact: see workflow run artifacts (name: athena-coverage-report).`,
+    ...(runUrl ? [`Actions run: ${runUrl}`] : []),
+  ].join(`\n`);
+
+  mkdirSync(path.dirname(markdownOutputPath), { recursive: true });
+  writeFileSync(markdownOutputPath, markdown);
+
+  appendGithubOutput(`has_regression=${hasRegression}`);
+  appendGithubOutput(`evaluation_error=false`);
+  appendGithubOutput(`comment_path=${markdownOutputPath}`);
+
+  if (hasRegression) {
+    process.exit(1);
+  }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  appendGithubOutput(`has_regression=false`);
+  appendGithubOutput(`evaluation_error=true`);
+  console.error(`Coverage delta evaluation error: ${message}`);
   process.exit(1);
 }

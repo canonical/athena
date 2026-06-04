@@ -15,7 +15,7 @@ services:
     environment:
       POSTGRES_DB: athena
       POSTGRES_USER: athena
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-athena}
     ports:
       - "5432:5432"
     volumes:
@@ -33,7 +33,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-athena}
     volumes:
       - ./migrations:/migrations:ro
     command:
