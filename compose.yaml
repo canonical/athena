@@ -15,7 +15,7 @@ services:
     environment:
       POSTGRES_DB: athena
       POSTGRES_USER: athena
-      POSTGRES_PASSWORD: athena
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-athena}
     ports:
       - "5432:5432"
     volumes:
@@ -33,7 +33,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      PGPASSWORD: athena
+      PGPASSWORD: ${POSTGRES_PASSWORD:-athena}
     volumes:
       - ./migrations:/migrations:ro
     command:
@@ -54,8 +54,9 @@ services:
     environment:
       APP_ATHENA_HOST: 0.0.0.0
       APP_ATHENA_PORT: "8080"
-      APP_ATHENA_RUN_MODE: production
-      POSTGRESQL_DB_CONNECT_STRING: postgresql://athena:athena@postgres:5432/athena
+      APP_ATHENA_RUN_MODE: ${APP_ATHENA_RUN_MODE:-production}
+      COVERAGE: ${COVERAGE:-}
+      POSTGRESQL_DB_CONNECT_STRING: ${POSTGRESQL_DB_CONNECT_STRING}
     ports:
       - "8080:8080"
     healthcheck:
@@ -82,6 +83,7 @@ services:
         condition: service_healthy
     environment:
       VITE_BACKEND_PROXY_TARGET: http://athenabe:8080
+      COVERAGE: ${COVERAGE:-}
     command:
       - /bin/sh
       - -c

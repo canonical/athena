@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const repoRoot = join(__dirname, `..`);
+const workspaceRoot = join(repoRoot, `..`);
 const statusUrl = `http://127.0.0.1:8080/_status/check`;
 
 const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
@@ -27,7 +28,7 @@ const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
 
 const globalSetup = async (): Promise<void> => {
   execFileSync(`docker`, [`compose`, `up`, `-d`, `postgres`, `prepare`, `athenabe`], {
-    cwd: repoRoot,
+    cwd: workspaceRoot,
     stdio: `inherit`,
   });
 

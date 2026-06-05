@@ -17,6 +17,7 @@ const config = defineConfig({
     trace: `on-first-retry`,
   },
   globalSetup: `./testing/playwright-global-setup.ts`,
+  globalTeardown: process.env.COVERAGE ? `./testing/playwright-coverage-teardown.ts` : undefined,
   projects: [
     {
       name: `athena`,

@@ -22,6 +22,12 @@ app.get(`/_status/check`, (_request: Request, response: Response) => {
   });
 });
 
+if (process.env.COVERAGE) {
+  app.get(`/__coverage__`, (_request: Request, response: Response) => {
+    response.json((globalThis as typeof globalThis & { __coverage__?: unknown }).__coverage__ ?? {});
+  });
+}
+
 app.listen(port, host, () => {
   console.log(`Athena server listening on http://${host}:${port}`);
 });
