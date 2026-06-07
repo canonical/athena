@@ -1,5 +1,5 @@
 {
-  "name": "@portal/athena",
+  "name": "@canonical/athena",
   "version": "0.0.1",
   "private": true,
   "type": "module",
