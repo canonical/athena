@@ -26,7 +26,8 @@ __pycache__/
 
 # Editor and OS files
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
 *.iml
 .DS_Store
 Thumbs.db

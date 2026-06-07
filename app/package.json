@@ -26,28 +26,28 @@
     "start": "NODE_USE_ENV_PROXY=1 node --enable-source-maps dist/server.js"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
     "@istanbuljs/esm-loader-hook": "0.3.0",
-    "@biomejs/biome": "2.3.8",
-    "@playwright/test": "1.57.0",
-    "@types/express": "5.0.5",
-    "istanbul-lib-coverage": "3.2.2",
-    "nyc": "18.0.0",
+    "@playwright/test": "^1.60.0",
+    "@types/express": "^5.0.6",
     "@types/node": "24.10.1",
-    "@types/react": "^18.3.27",
-    "@types/react-dom": "^18.3.7",
-    "nodemon": "3.1.11",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "istanbul-lib-coverage": "3.2.2",
+    "nodemon": "^3.1.14",
+    "nyc": "18.0.0",
     "sass": "^1.100.0",
-    "tsc-alias": "1.8.16",
-    "typescript": "5.9.3",
+    "tsc-alias": "^1.8.17",
+    "typescript": "^6.0.3",
     "vite": "^8.0.16",
-    "vite-plugin-istanbul": "8.0.0"
+    "vite-plugin-istanbul": "^9.0.1"
   },
   "dependencies": {
     "@canonical/react-components": "^4.5.4",
-    "express": "5.1.0",
+    "express": "^5.2.1",
     "formik": "^2.4.9",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "vanilla-framework": "^4.51.0"
   }
 }
