@@ -34,17 +34,17 @@ The current service starts an Express server with session-based authentication:
 	- `GET /authentication`: React authentication view that allows sign-in and sign-out via backend auth endpoints.
 
 - Public health endpoints:
-	- `GET /_status/check`
-	- `GET /_status/ping`
+  - `GET /_status/check`
+  - `GET /_status/ping`
 - Public auth endpoints:
-	- `GET /authentication/login`
-	- `GET /authentication/callback`
-	- `GET /authentication/logout`
-	- `GET /authentication/profile`
+  - `GET /authentication/login`
+  - `GET /authentication/callback`
+  - `GET /authentication/logout`
+  - `GET /authentication/profile`
 - Backend route policy:
-	- Non-public backend routes require an authenticated session.
-	- Unauthenticated requests return HTTP `401 Unauthorized`.
-	- Static assets are not served by the Express backend.
+  - Non-public backend routes require an authenticated session.
+  - Unauthenticated requests return HTTP `401 Unauthorized`.
+  - Static assets are not served by the Express backend.
 
 ## Local development
 
