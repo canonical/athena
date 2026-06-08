@@ -2,7 +2,7 @@
 
 Athena is a multi-agent orchestration service. This repository is the bootstrap workspace for the service runtime, packaging, and deployment artifacts.
 
-At the moment, the implementation is still early-stage. The application currently exposes a single status endpoint while the repository carries the first rock and charm packaging files.
+At the moment, the implementation is still early-stage. The application now includes a first OIDC-backed session authentication flow alongside bootstrap packaging files.
 
 ## Current status
 
@@ -28,11 +28,23 @@ See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rul
 
 ## What the app does today
 
-The current service starts an Express server and exposes one status endpoint:
+The current service starts an Express server with session-based authentication:
 
-- `GET /_status/check`: returns `{"status":"ok","whoami":"athena"}`.
+- Frontend route:
+	- `GET /authentication`: React authentication view that allows sign-in and sign-out via backend auth endpoints.
 
-No bootstrap workflow, routing logic, or environment inspection API is exposed at this stage.
+- Public health endpoints:
+	- `GET /_status/check`
+	- `GET /_status/ping`
+- Public auth endpoints:
+	- `GET /authentication/login`
+	- `GET /authentication/callback`
+	- `GET /authentication/logout`
+	- `GET /authentication/profile`
+- Backend route policy:
+	- Non-public backend routes require an authenticated session.
+	- Unauthenticated requests return HTTP `401 Unauthorized`.
+	- Static assets are not served by the Express backend.
 
 ## Local development
 
@@ -75,13 +87,15 @@ docker compose up --build
 This starts:
 
 - `postgres` on `localhost:5432`
+- `dex` (local OIDC provider mimic) on `localhost:5556`
 - `athena` on `localhost:8080`
 
-The application status endpoint is:
+The main public endpoints are:
 
 - `GET http://localhost:8080/_status/check`
+- `GET http://localhost:8080/_status/ping`
 
-Compose currently prepares Athena with a PostgreSQL 16 instance and provides `POSTGRESQL_DB_CONNECT_STRING`, but database migrations are not run automatically yet.
+Compose currently prepares Athena with a PostgreSQL 16 instance, local Dex for OIDC, and the required auth environment variables.
 
 Compose also includes a one-shot `prepare` service that runs Athena migrations before the app starts, mirroring the Portal pattern of bootstrapping the database before application health checks.
 
@@ -114,6 +128,40 @@ Useful defaults in the current bootstrap:
 
 - Host: `127.0.0.1`
 - Port: `8080`
+- OIDC callback URL: `http://athenabe.localhost/authentication/callback`
+- Local OIDC discovery URL: `http://dex.localhost/dex/.well-known/openid-configuration`
+- Session max age: `86400000` (24 hours)
+
+Authentication-related runtime variables:
+
+- `APP_ATHENA_OIDC_DISCOVERY_URL`
+- `APP_ATHENA_OIDC_CLIENT_ID`
+- `APP_ATHENA_OIDC_CLIENT_SECRET`
+- `APP_ATHENA_OAUTH_CALLBACK_URL`
+- `APP_ATHENA_SECRET_KEY`
+- `APP_ATHENA_SESSION_MAX_AGE`
+- `APP_ATHENA_ALLOWED_ORIGINS`
+
+Frontend API routing variable:
+
+- `VITE_API_BASE_URL`
+
+Frontend behavior:
+
+- `VITE_API_BASE_URL` is a build-time variable consumed directly by Vite.
+- `VITE_API_BASE_URL` is required and must be non-empty.
+- The UI always calls backend APIs using this explicit base URL (for example `https://api.athena.example.com`).
+
+Deployment note:
+
+- See [docs/deployment.md](./docs/deployment.md) for deployment guidance focused on `VITE_API_BASE_URL`.
+
+Backend CORS behavior:
+
+- Athena registers CORS middleware with `credentials: true` and an origin allowlist from `APP_ATHENA_ALLOWED_ORIGINS`.
+- Set this variable to your frontend host list, for example `https://athena.example.com`.
+
+For local development with Compose, set these in `.env` and keep defaults/example values in `.example.env`.
 
 For local Compose, PostgreSQL runs as:
 

@@ -42,6 +42,8 @@ Notes:
 - Avoid global styling wherever possible. Introduce global styles only when there is no practical component-scoped alternative.
 - `<componentName>.schema.ts` is the only allowed location for that component's TypeScript types and Zod schemas.
 - `<componentName>.controller.ts` owns business logic and database interaction for that component.
+- `<componentName>.controller.ts` should stay transport-agnostic and must not depend on Express imports except when absolutely necessary.
+- `<componentName>.router.ts` owns Express route definitions and all request/response handling.
 - `<componentName>.query.ts` owns TanStack Query definitions and uses `<componentName>.client.ts` for HTTP calls.
 - Shared cross-component code should live in a clearly named shared location and stay minimal.
 

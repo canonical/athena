@@ -1,0 +1,28 @@
+issuer: http://dex.localhost/dex
+
+storage:
+  type: sqlite3
+  config:
+    file: /tmp/dex.db
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  skipApprovalScreen: true
+
+staticClients:
+  - id: athena
+    name: Athena
+    secret: super-secret-value
+    redirectURIs:
+      - http://athenabe.localhost/authentication/callback
+
+enablePasswordDB: true
+
+staticPasswords:
+  - email: dev.user@canonical.com
+    # Local dev plaintext password: password
+    hash: $2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W
+    username: devuser
+    userID: 50f31e6f-26f2-4d93-9fd6-947f8f3f23a8

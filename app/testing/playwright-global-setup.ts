@@ -7,6 +7,7 @@ const __dirname = dirname(__filename);
 const repoRoot = join(__dirname, `..`);
 const workspaceRoot = join(repoRoot, `..`);
 const statusUrl = `http://127.0.0.1:8080/_status/check`;
+const frontendUrl = `http://athena.localhost`;
 
 const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -27,12 +28,13 @@ const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
 };
 
 const globalSetup = async (): Promise<void> => {
-  execFileSync(`docker`, [`compose`, `up`, `-d`, `postgres`, `prepare`, `athenabe`], {
+  execFileSync(`docker`, [`compose`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `athenabe`, `athena`], {
     cwd: workspaceRoot,
     stdio: `inherit`,
   });
 
   await waitForUrl(statusUrl);
+  await waitForUrl(frontendUrl);
 };
 
 export default globalSetup;

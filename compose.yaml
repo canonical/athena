@@ -10,6 +10,19 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
+  dex:
+    image: dexidp/dex:v2.45.1
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes:
+      - ./app/scripts/dex-config.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "5556:5556"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dex.rule=Host(`dex.localhost`)
+      - traefik.http.routers.dex.entrypoints=web
+      - traefik.http.services.dex.loadbalancer.server.port=5556
+
   postgres:
     image: postgres:16
     environment:
@@ -47,6 +60,8 @@ services:
     build:
       context: ./app
     depends_on:
+      dex:
+        condition: service_started
       postgres:
         condition: service_healthy
       prepare:
@@ -54,9 +69,19 @@ services:
     environment:
       APP_ATHENA_HOST: 0.0.0.0
       APP_ATHENA_PORT: "8080"
+      APP_ATHENA_NODE_ENV: development
+      APP_ATHENA_ALLOWED_ORIGINS: ${APP_ATHENA_ALLOWED_ORIGINS:-http://127.0.0.1:5173,http://athena.localhost}
       APP_ATHENA_RUN_MODE: ${APP_ATHENA_RUN_MODE:-production}
+      APP_ATHENA_OAUTH_CALLBACK_URL: ${APP_ATHENA_OAUTH_CALLBACK_URL:-http://athenabe.localhost/authentication/callback}
+      APP_ATHENA_OIDC_DISCOVERY_URL: ${APP_ATHENA_OIDC_DISCOVERY_URL:-http://dex.localhost/dex/.well-known/openid-configuration}
+      APP_ATHENA_OIDC_CLIENT_ID: ${APP_ATHENA_OIDC_CLIENT_ID:-athena}
+      APP_ATHENA_OIDC_CLIENT_SECRET: ${APP_ATHENA_OIDC_CLIENT_SECRET:-super-secret-value}
+      APP_ATHENA_SECRET_KEY: ${APP_ATHENA_SECRET_KEY:-athena-dev-session-secret-change-me}
+      APP_ATHENA_SESSION_MAX_AGE: ${APP_ATHENA_SESSION_MAX_AGE:-86400000}
       COVERAGE: ${COVERAGE:-}
       POSTGRESQL_DB_CONNECT_STRING: ${POSTGRESQL_DB_CONNECT_STRING}
+    extra_hosts:
+      - "dex.localhost:host-gateway"
     ports:
       - "8080:8080"
     healthcheck:
@@ -78,11 +103,8 @@ services:
   athena:
     build:
       context: ./app
-    depends_on:
-      athenabe:
-        condition: service_healthy
     environment:
-      VITE_BACKEND_PROXY_TARGET: http://athenabe:8080
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:?VITE_API_BASE_URL is required}
       COVERAGE: ${COVERAGE:-}
     command:
       - /bin/sh

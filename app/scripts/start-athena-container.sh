@@ -12,7 +12,7 @@ case "$mode" in
     exec npm run test
     ;;
   prod|production)
-    npm run build
+    npm run build:be
     if [ -n "$coverage" ]; then
       exec npm run coverage:start
     fi

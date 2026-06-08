@@ -67,5 +67,5 @@ This document is the source of truth for test strategy and test scope.
 ## Execution baseline
 
 - Playwright configuration source: `app/playwright.config.ts`
-- Standard test command: `cd app && npm run test`
+- Standard test command: `cd app && npm test`
 - Tests live co-located under `app/src` as `*.spec.ts` files.
