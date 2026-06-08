@@ -33,3 +33,26 @@ test(`authentication flow signs in through Dex`, async ({ page }) => {
   await expect(page.locator(`body`)).toContainText(`"isAuthenticated":true`);
   await expect(page.locator(`body`)).toContainText(dexEmail);
 });
+
+test(`authentication ignores external returnTo values`, async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto(`http://athenabe.localhost/authentication/login?returnTo=https://attacker.example/path`);
+
+  const loginInput = page.locator(`input[name=login], input[type=email]`).first();
+  const passwordInput = page.locator(`input[name=password], input[type=password]`).first();
+
+  if (!(await loginInput.isVisible())) {
+    const emailLoginAction = page.locator(`button:has-text("Log in with Email"), a:has-text("Log in with Email")`).first();
+    await expect(emailLoginAction).toBeVisible();
+    await emailLoginAction.click();
+  }
+
+  await expect(loginInput).toBeVisible();
+  await expect(passwordInput).toBeVisible();
+
+  await loginInput.fill(dexEmail);
+  await passwordInput.fill(dexPassword);
+  await page.locator(`button[type=submit], input[type=submit]`).first().click();
+
+  await expect(page).toHaveURL(/athena\.localhost\/?$/);
+});

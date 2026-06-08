@@ -8,6 +8,51 @@ import { Strategy as OAuth2Strategy, type VerifyCallback as OAuth2VerifyCallback
 let oidcConfigPromise: Promise<oidClient.Configuration> | null = null;
 let oidcStrategyPromise: Promise<void> | null = null;
 
+const allowedReturnToOrigins = new Set(
+  config.cors.allowedOrigins
+    .map((origin) => {
+      try {
+        return new URL(origin).origin;
+      } catch {
+        return undefined;
+      }
+    })
+    .filter((origin): origin is string => Boolean(origin)),
+);
+
+const isAllowedAbsoluteReturnTo = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== `http:` && parsed.protocol !== `https:`) {
+      return false;
+    }
+
+    return allowedReturnToOrigins.has(parsed.origin);
+  } catch {
+    return false;
+  }
+};
+
+const isAllowedRelativeReturnTo = (value: string): boolean => value.startsWith(`/`) && !value.startsWith(`//`);
+
+const sanitizeReturnTo = (value: unknown): string | undefined => {
+  if (typeof value !== `string`) {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+
+  if (normalized.length === 0) {
+    return undefined;
+  }
+
+  if (isAllowedRelativeReturnTo(normalized) || isAllowedAbsoluteReturnTo(normalized)) {
+    return normalized;
+  }
+
+  return undefined;
+};
+
 const getOidcConfiguration = async (): Promise<oidClient.Configuration> => {
   if (!oidcConfigPromise) {
     const discoveryOptions = config.application.nodeEnv === `production` ? undefined : { execute: [oidClient.allowInsecureRequests] };
@@ -92,13 +137,16 @@ const isAuthUser = (value: unknown): value is AuthUser => {
 };
 
 export const normalizeReturnTo = (value: unknown): string | undefined => {
-  if (typeof value === `string` && value.length > 0) {
-    return value;
+  const singleValue = sanitizeReturnTo(value);
+
+  if (singleValue) {
+    return singleValue;
   }
 
   if (Array.isArray(value)) {
-    const first = value.find((entry): entry is string => typeof entry === `string` && entry.length > 0);
-    return first;
+    const firstSafe = value.map((entry) => sanitizeReturnTo(entry)).find((entry): entry is string => typeof entry === `string`);
+
+    return firstSafe;
   }
 
   return undefined;
