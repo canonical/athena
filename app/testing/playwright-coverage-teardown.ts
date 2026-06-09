@@ -87,7 +87,7 @@ const readCoverageFile = async (filePath: string): Promise<CoverageMap | null> =
 
 const maybeFetchBackendCoverage = async () => {
   try {
-    const response = await fetch(`http://127.0.0.1:8080/__coverage__`);
+    const response = await fetch(`http://athenabe.localhost/__coverage__`);
     if (!response.ok) {
       console.warn(`[coverage] backend coverage endpoint returned HTTP ${response.status}`);
       return;

@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const repoRoot = join(__dirname, `..`);
 const workspaceRoot = join(repoRoot, `..`);
-const statusUrl = `http://127.0.0.1:8080/_status/check`;
+const statusUrl = `http://athenabe.localhost/_status/check`;
 const dexDiscoveryUrl = `http://dex.localhost/dex/.well-known/openid-configuration`;
 const frontendUrl = `http://athena.localhost`;
 

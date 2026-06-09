@@ -126,8 +126,6 @@ Athena reads configuration from environment variables with the prefixes `APP_ATH
 
 Useful defaults in the current bootstrap:
 
-- Host: `127.0.0.1`
-- Port: `8080`
 - OIDC callback URL: `http://athenabe.localhost/authentication/callback`
 - Local OIDC discovery URL: `http://dex.localhost/dex/.well-known/openid-configuration`
 - Session max age: `86400000` (24 hours)

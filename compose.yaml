@@ -70,7 +70,7 @@ services:
       APP_ATHENA_HOST: 0.0.0.0
       APP_ATHENA_PORT: "8080"
       APP_ATHENA_NODE_ENV: development
-      APP_ATHENA_ALLOWED_ORIGINS: ${APP_ATHENA_ALLOWED_ORIGINS:-http://127.0.0.1:5173,http://athena.localhost}
+      APP_ATHENA_ALLOWED_ORIGINS: ${APP_ATHENA_ALLOWED_ORIGINS:-http://athena.localhost}
       APP_ATHENA_FRONTEND_BASE_URL: ${APP_ATHENA_FRONTEND_BASE_URL:-http://athena.localhost}
       APP_ATHENA_RUN_MODE: ${APP_ATHENA_RUN_MODE:-production}
       APP_ATHENA_OAUTH_CALLBACK_URL: ${APP_ATHENA_OAUTH_CALLBACK_URL:-http://athenabe.localhost/authentication/callback}
@@ -83,8 +83,6 @@ services:
       COVERAGE: ${COVERAGE:-}
     extra_hosts:
       - "dex.localhost:host-gateway"
-    ports:
-      - "8080:8080"
     healthcheck:
       test:
         [

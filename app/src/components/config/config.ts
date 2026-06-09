@@ -4,8 +4,8 @@ import { ensurePG } from "@components/postgres/postgres.js";
 const env = createEnvAccessor({ prefixes: [`APP_ATHENA`, `APP`, `ATHENA`], allowEmpty: true });
 const requiredEnv = createEnvAccessor({ prefixes: [`APP_ATHENA`, `APP`, `ATHENA`], allowEmpty: false });
 
-const port = env.getNumber(`PORT`, 8080);
-const host = env.getEnv(`HOST`, `127.0.0.1`);
+const port = requiredEnv.getNumber(`PORT`);
+const host = requiredEnv.getEnv(`HOST`);
 const nodeEnv = env.getEnv(`NODE_ENV`, `development`);
 const normalizeBaseUrl = (value: string): string => {
   const url = new URL(value);
