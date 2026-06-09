@@ -97,6 +97,16 @@ test(`authentication ignores external returnTo values`, async ({ page }) => {
   await expect(page).toHaveURL(/athena\.localhost\/?$/);
 });
 
+test(`authentication resolves relative returnTo values on the frontend host`, async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto(`http://athenabe.localhost/authentication/login?returnTo=/authentication`);
+  await expectFrontendSessionCookieToOnlyContainId(page);
+  await expectBackendSessionCookieToExcludeSensitiveData(page);
+  await signInWithDex(page);
+
+  await expect(page).toHaveURL(/athena\.localhost\/authentication$/);
+});
+
 test(`logout clears the Athena session without starting a new sign-in`, async ({ page }) => {
   await page.context().clearCookies();
   await page.goto(`http://athena.localhost/authentication`);

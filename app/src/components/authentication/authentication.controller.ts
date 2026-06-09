@@ -179,6 +179,8 @@ export const storeReturnTo = (session: Session | null, returnTo: string | undefi
   }
 };
 
+export const resolveFrontendReturnTo = (returnTo: string | undefined): string => new URL(returnTo ?? `/`, config.frontend.baseUrl).toString();
+
 export const pruneSessionToCookieFields = (session: Session | null | undefined): void => {
   if (!session) {
     return;
@@ -275,7 +277,7 @@ export const deleteAuthenticationSession = async (sessionId: string | undefined)
 };
 
 export const consumeReturnTo = (session: Session | null): string => {
-  const returnTo = session?.returnTo || config.frontend.baseUrl;
+  const returnTo = resolveFrontendReturnTo(session?.returnTo);
 
   if (session) {
     delete session.returnTo;

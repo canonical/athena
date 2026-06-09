@@ -7,6 +7,7 @@ import {
   getAuthenticatedUser,
   normalizeReturnTo,
   passport,
+  resolveFrontendReturnTo,
   storeAuthenticatedUser,
   storeReturnTo,
 } from "@components/authentication/authentication.controller.js";
@@ -21,7 +22,7 @@ authenticationRouter.get(`/authentication/login`, async (req: Request, res: Resp
     const returnTo = normalizeReturnTo(req.query.returnTo);
 
     if (await getAuthenticatedUser(getSessionId(req))) {
-      res.redirect(returnTo ?? config.frontend.baseUrl);
+      res.redirect(resolveFrontendReturnTo(returnTo));
       return;
     }
 
