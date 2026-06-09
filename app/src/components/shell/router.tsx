@@ -39,7 +39,7 @@ function ShellLayout() {
 
 function OverviewView() {
   return (
-    <section className="athena-home" id="main-content">
+    <section className="athena-home">
       <p className="p-heading--5">Athena</p>
       <h1 className="p-heading--2">Hello from Athena</h1>
       <p className="p-text--default">Athena is live. This is the first React homepage, wired with Canonical React Components and a sidebar application layout.</p>
@@ -61,7 +61,7 @@ function AuthenticationRouteView() {
 
 function NotFoundView() {
   return (
-    <section className="athena-home" id="main-content">
+    <section className="athena-home">
       <p className="p-heading--5">Athena</p>
       <h1 className="p-heading--2">Page not found</h1>
       <p className="p-text--default">The requested route does not exist.</p>

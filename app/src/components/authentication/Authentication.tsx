@@ -59,7 +59,7 @@ export function AuthenticationView({ returnTo }: AuthenticationViewProps) {
 
   if (errorMessage) {
     return (
-      <section className="athena-home" id="main-content">
+      <section className="athena-home">
         <p className="p-heading--5">Authentication</p>
         <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load authentication state">
           {errorMessage}
@@ -70,7 +70,7 @@ export function AuthenticationView({ returnTo }: AuthenticationViewProps) {
 
   if (!profile) {
     return (
-      <section className="athena-home" id="main-content">
+      <section className="athena-home">
         <p className="p-heading--5">Authentication</p>
         <p className="p-text--default">Checking authentication status...</p>
       </section>
@@ -79,7 +79,7 @@ export function AuthenticationView({ returnTo }: AuthenticationViewProps) {
 
   if (!profile.isAuthenticated || !profile.user) {
     return (
-      <section className="athena-home" id="main-content">
+      <section className="athena-home">
         <p className="p-heading--5">Authentication</p>
         <h1 className="p-heading--2">Sign in to Athena</h1>
         <p className="p-text--default">Authenticate with the configured OIDC provider to access protected backend routes.</p>
@@ -91,7 +91,7 @@ export function AuthenticationView({ returnTo }: AuthenticationViewProps) {
   }
 
   return (
-    <section className="athena-home" id="main-content">
+    <section className="athena-home">
       <p className="p-heading--5">Authentication</p>
       <h1 className="p-heading--2">You are authenticated</h1>
       <p className="p-text--default">Signed in as {profile.user.email || profile.user.name || profile.user.id}.</p>
