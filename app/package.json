@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "build:fe": "vite build --config ./vite.config.ts",
-    "dev:fe": "vite --config ./vite.config.ts --host 0.0.0.0 --port 5173",
     "build:be": "tsc --project ./tsconfig.server.json && tsc-alias --project ./tsconfig.server.json --resolve-full-paths",
     "build": "npm run build:be && npm run build:fe",
     "check:biome": "biome check",
@@ -20,8 +19,9 @@
     "test:ui": "playwright test -c ./playwright.config.ts --ui",
     "coverage:clean": "rm -rf ./testing/output",
     "coverage:report": "nyc report --all --nycrc-path ./testing/.nycrc.json --temp-dir ./testing/output/.nyc_merged --reporter=text-summary --reporter=lcov --reporter=html --reporter=cobertura --reporter=json-summary --report-dir ./testing/output/coverage --exclude-after-remap=false",
+    "watch:fe": "vite build --config ./vite.config.ts --watch",
     "watch:be": "nodemon --config ./nodemon.json",
-    "watch": "npm run watch:be",
+    "watch": "sh -c 'npm run watch:fe & npm run watch:be'",
     "coverage:start": "NODE_OPTIONS='--loader @istanbuljs/esm-loader-hook' nyc --silent --cwd . --reporter=json --temp-dir .nyc_output node dist/server.js",
     "start": "NODE_USE_ENV_PROXY=1 node --enable-source-maps dist/server.js"
   },

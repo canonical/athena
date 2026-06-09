@@ -1,6 +1,5 @@
 import { ApplicationLayout, Chip, Notification, NotificationSeverity } from "@canonical/react-components";
 import { AuthenticationView } from "@components/authentication/Authentication.js";
-import { getApiUrl } from "@components/config/frontend.client.js";
 import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
 
 import athenaLogo from "./athena-logo.svg";
@@ -10,7 +9,6 @@ import "./shell.scss";
 
 const rootPath = `/`;
 const authenticationPath = `/authentication`;
-const statusCheckUrl = getApiUrl(`/_status/check`);
 
 type AuthenticationSearch = {
   returnTo?: string;
@@ -45,8 +43,7 @@ function OverviewView() {
       <p className="p-text--default">Athena is live. This is the first React homepage, wired with Canonical React Components and a sidebar application layout.</p>
       <div className="athena-callout">
         <Notification severity={NotificationSeverity.INFORMATION} title="Status">
-          Frontend shell is active. API health is available at
-          <a href={statusCheckUrl}> {statusCheckUrl}</a>.
+          Frontend shell is active.
         </Notification>
       </div>
     </section>

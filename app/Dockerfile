@@ -19,6 +19,6 @@ COPY testing ./testing
 
 RUN chmod +x ./scripts/start-athena-container.sh
 
-EXPOSE 8080
+EXPOSE 8000
 
 CMD ["./scripts/start-athena-container.sh"]

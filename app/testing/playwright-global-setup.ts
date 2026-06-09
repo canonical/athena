@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const repoRoot = join(__dirname, `..`);
 const workspaceRoot = join(repoRoot, `..`);
-const statusUrl = `http://athenabe.localhost/_status/check`;
+const statusUrl = `http://athena.localhost/_status/check`;
 const dexDiscoveryUrl = `http://dex.localhost/dex/.well-known/openid-configuration`;
 const frontendUrl = `http://athena.localhost`;
 
@@ -34,7 +34,7 @@ const globalSetup = async (): Promise<void> => {
     stdio: `inherit`,
   });
 
-  execFileSync(`docker`, [`compose`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `athenabe`, `athena`], {
+  execFileSync(`docker`, [`compose`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `athena`], {
     cwd: workspaceRoot,
     stdio: `inherit`,
   });

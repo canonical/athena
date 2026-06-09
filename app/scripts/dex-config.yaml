@@ -16,7 +16,7 @@ staticClients:
     name: Athena
     secret: super-secret-value
     redirectURIs:
-      - http://athenabe.localhost/authentication/callback
+      - http://athena.localhost/api/authentication/callback
 
 enablePasswordDB: true
 

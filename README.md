@@ -88,22 +88,21 @@ This starts:
 
 - `postgres` on `localhost:5432`
 - `dex` (local OIDC provider mimic) on `localhost:5556`
-- `athena` on `localhost:8080`
+- `athena` on `athena.localhost` (served through Traefik)
 
 The main public endpoints are:
 
-- `GET http://localhost:8080/_status/check`
-- `GET http://localhost:8080/_status/ping`
+- `GET http://athena.localhost/_status/check`
+- `GET http://athena.localhost/_status/ping`
 
 Compose currently prepares Athena with a PostgreSQL 16 instance, local Dex for OIDC, and the required auth environment variables.
 
 Compose also includes a one-shot `prepare` service that runs Athena migrations before the app starts, mirroring the Portal pattern of bootstrapping the database before application health checks.
 
-Container runtime modes are selected with `APP_ATHENA_RUN_MODE`:
+Container runtime is controlled by `APP_ATHENA_DEV_MODE`:
 
-- `production`: builds Athena and starts the server.
-- `dev`: runs the watcher for live development.
-- `test`: runs `npm run test`.
+- `true`: runs frontend build watch and backend watch mode.
+- `false`: builds Athena and starts the server.
 
 ## E2E testing
 
@@ -126,7 +125,7 @@ Athena reads configuration from environment variables with the prefixes `APP_ATH
 
 Useful defaults in the current bootstrap:
 
-- OIDC callback URL: `http://athenabe.localhost/authentication/callback`
+- OIDC callback URL: `http://athena.localhost/api/authentication/callback`
 - Local OIDC discovery URL: `http://dex.localhost/dex/.well-known/openid-configuration`
 - Session max age: `86400000` (24 hours)
 

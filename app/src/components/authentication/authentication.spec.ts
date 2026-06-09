@@ -24,7 +24,7 @@ const expectFrontendSessionCookieToOnlyContainId = async (page: Page) => {
 };
 
 const expectApiSessionCookieToExcludeSensitiveData = async (page: Page) => {
-  const sessionPayload = await getSessionCookiePayload(page, `http://athenabe.localhost`);
+  const sessionPayload = await getSessionCookiePayload(page, `http://athena.localhost`);
 
   if (!sessionPayload) {
     return;
@@ -67,14 +67,14 @@ test(`authentication flow signs in through Dex`, async ({ page }) => {
   await expect(page).toHaveURL(/athena\.localhost\/(?:authentication)?$/);
   await expectFrontendSessionCookieToOnlyContainId(page);
 
-  await page.goto(`http://athenabe.localhost/authentication/profile`);
+  await page.goto(`http://athena.localhost/api/authentication/profile`);
   const profile = JSON.parse(await page.locator(`body`).innerText()) as { isAuthenticated: boolean; user: Record<string, unknown> | null };
   expect(profile.isAuthenticated).toBe(true);
   expect(profile.user).toMatchObject({ id: dexEmail, email: dexEmail });
   expect(profile.user).not.toHaveProperty(`idToken`);
   expect(profile.user).not.toHaveProperty(`accessToken`);
 
-  const sessionCookie = (await page.context().cookies(`http://athenabe.localhost`)).find((cookie) => cookie.name === `session`);
+  const sessionCookie = (await page.context().cookies(`http://athena.localhost`)).find((cookie) => cookie.name === `session`);
   expect(sessionCookie).toBeDefined();
   expect(sessionCookie?.httpOnly).toBe(true);
 
@@ -86,9 +86,23 @@ test(`authentication flow signs in through Dex`, async ({ page }) => {
   expect(sessionPayload).not.toHaveProperty(`accessToken`);
 });
 
+test(`authentication page shows authenticated state after sign-in`, async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto(`http://athena.localhost/authentication`);
+
+  await expect(page.getByRole(`heading`, { name: `Sign in to Athena` })).toBeVisible();
+  await page.getByRole(`link`, { name: `Sign in` }).click();
+  await expectApiSessionCookieToExcludeSensitiveData(page);
+  await signInWithDex(page);
+
+  await page.goto(`http://athena.localhost/authentication`);
+  await expect(page.getByRole(`heading`, { name: `You are authenticated` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Sign out` })).toBeVisible();
+});
+
 test(`authentication ignores external returnTo values`, async ({ page }) => {
   await page.context().clearCookies();
-  await page.goto(`http://athenabe.localhost/authentication/login?returnTo=https://attacker.example/path`);
+  await page.goto(`http://athena.localhost/api/authentication/login?returnTo=https://attacker.example/path`);
   await expectApiSessionCookieToExcludeSensitiveData(page);
   await signInWithDex(page);
 
@@ -97,7 +111,7 @@ test(`authentication ignores external returnTo values`, async ({ page }) => {
 
 test(`authentication resolves relative returnTo values on the frontend host`, async ({ page }) => {
   await page.context().clearCookies();
-  await page.goto(`http://athenabe.localhost/authentication/login?returnTo=/authentication`);
+  await page.goto(`http://athena.localhost/api/authentication/login?returnTo=/authentication`);
   await expectApiSessionCookieToExcludeSensitiveData(page);
   await signInWithDex(page);
 
@@ -106,20 +120,20 @@ test(`authentication resolves relative returnTo values on the frontend host`, as
 
 test(`logout clears the Athena session without starting a new sign-in`, async ({ page }) => {
   await page.context().clearCookies();
-  await page.goto(`http://athenabe.localhost/authentication/login?returnTo=/authentication`);
+  await page.goto(`http://athena.localhost/api/authentication/login?returnTo=/authentication`);
   await expectApiSessionCookieToExcludeSensitiveData(page);
   await signInWithDex(page);
 
   await expect(page).toHaveURL(/athena\.localhost\/authentication$/);
-  const logoutResponse = await page.request.post(`http://athenabe.localhost/authentication/logout`, {
+  const logoutResponse = await page.request.post(`http://athena.localhost/api/authentication/logout`, {
     headers: { origin: `http://athena.localhost` },
   });
   expect(logoutResponse.status()).toBe(204);
 
-  const sessionCookie = (await page.context().cookies(`http://athenabe.localhost`)).find((cookie) => cookie.name === `session`);
+  const sessionCookie = (await page.context().cookies(`http://athena.localhost`)).find((cookie) => cookie.name === `session`);
   expect(sessionCookie).toBeUndefined();
 
-  await page.goto(`http://athenabe.localhost/authentication/profile`);
+  await page.goto(`http://athena.localhost/api/authentication/profile`);
   const profile = JSON.parse(await page.locator(`body`).innerText()) as { isAuthenticated: boolean; user: Record<string, unknown> | null };
   expect(profile).toEqual({ isAuthenticated: false, user: null });
 });

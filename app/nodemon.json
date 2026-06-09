@@ -2,6 +2,6 @@
   "watch": ["src"],
   "ext": "ts,json",
   "ignore": ["node_modules/*"],
-  "exec": "npm run build && npm start",
+  "exec": "npm run build:be && npm start",
   "delay": "200"
 }
