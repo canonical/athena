@@ -116,7 +116,7 @@ const ensureOidcStrategy = async (): Promise<void> => {
 
                 done(null, {
                   id: email,
-                  subject: userInfo.sub,
+                  subject,
                   name: userInfo.name?.trim() || ``,
                   email,
                   picture: userInfo.picture?.trim() || ``,

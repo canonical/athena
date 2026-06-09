@@ -73,7 +73,7 @@ jobs:
           git commit -m "ci: update coverage baseline [skip coverage-baseline]"
           git push --force-with-lease origin "$branch"
 
-          existing_pr_number="$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number')"
+          existing_pr_number="$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number // ""')"
 
           if [[ -n "$existing_pr_number" ]]; then
             echo "Updated existing PR #$existing_pr_number for coverage baseline"
