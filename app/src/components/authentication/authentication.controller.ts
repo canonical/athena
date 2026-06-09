@@ -107,14 +107,19 @@ const ensureOidcStrategy = async (): Promise<void> => {
             oidClient
               .fetchUserInfo(oidcConfig, accessToken, subject)
               .then((userInfo: OIDCUserInfo) => {
-                const email = userInfo.email || ``;
+                const email = userInfo.email?.trim();
+
+                if (!email) {
+                  done(new Error(`OIDC user info did not include a required email claim`));
+                  return;
+                }
 
                 done(null, {
                   id: email,
                   subject: userInfo.sub,
-                  name: userInfo.name || ``,
+                  name: userInfo.name?.trim() || ``,
                   email,
-                  picture: userInfo.picture || ``,
+                  picture: userInfo.picture?.trim() || ``,
                   idToken,
                   accessToken,
                 });

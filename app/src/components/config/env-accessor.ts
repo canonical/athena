@@ -131,14 +131,8 @@ export const createEnvAccessor = (options: EnvAccessorOptions = {}): EnvAccessor
     }
   };
 
-  const getList = (key: string, separator = `,`, defaultValue: string[] = []): string[] => {
-    const resolvedValue = resolveEnvValue(key, prefixes, allowEmpty);
-
-    if (resolvedValue === undefined && defaultValue.length === 0) {
-      return [];
-    }
-
-    const value = resolvedValue ?? defaultValue.join(separator);
+  const getList = (key: string, separator = `,`, defaultValue?: string[]): string[] => {
+    const value = getEnv(key, defaultValue === undefined ? undefined : defaultValue.join(separator));
 
     return value
       .split(separator)
