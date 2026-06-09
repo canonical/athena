@@ -1,14 +1,17 @@
-export type AuthUser = {
+export type User = {
   id: string;
   name: string;
   email: string;
   picture: string;
+};
+
+export type AuthenticatedUser = User & {
+  subject: string;
   idToken: string;
   accessToken: string;
 };
 
-export type SessionData = {
-  user?: AuthUser;
+export type Session = {
+  id?: string;
   returnTo?: string;
-  [key: string]: unknown;
 };

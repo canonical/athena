@@ -1,12 +1,15 @@
-import type { OIDCResult, OIDCUserInfo } from "@components/authentication/authentication.schema.js";
-import type { AuthUser, SessionData } from "@components/authentication/session.schema.js";
+import type { OIDCUserInfo } from "@components/authentication/authentication.schema.js";
+import type { AuthenticatedUser, Session, User } from "@components/authentication/session.schema.js";
 import { config } from "@components/config/config.js";
+import { getPool } from "@components/postgres/postgres.js";
+import type { Request } from "express";
 import * as oidClient from "openid-client";
+import { type AuthenticateOptions, Strategy } from "openid-client/passport";
 import passport from "passport";
-import { Strategy as OAuth2Strategy, type VerifyCallback as OAuth2VerifyCallback } from "passport-oauth2";
 
 let oidcConfigPromise: Promise<oidClient.Configuration> | null = null;
 let oidcStrategyPromise: Promise<void> | null = null;
+const oidcSessionKey = `athenaOidc`;
 
 const allowedReturnToOrigins = new Set(
   config.cors.allowedOrigins
@@ -34,6 +37,18 @@ const isAllowedAbsoluteReturnTo = (value: string): boolean => {
 };
 
 const isAllowedRelativeReturnTo = (value: string): boolean => value.startsWith(`/`) && !value.startsWith(`//`);
+
+class AthenaStrategy extends Strategy {
+  override authorizationRequestParams<TOptions extends AuthenticateOptions>(req: Request, options: TOptions): URLSearchParams | Record<string, string> | undefined {
+    const params = new URLSearchParams(super.authorizationRequestParams(req, options));
+
+    if (!params.has(`state`)) {
+      params.set(`state`, oidClient.randomState());
+    }
+
+    return params;
+  }
+}
 
 const sanitizeReturnTo = (value: unknown): string | undefined => {
   if (typeof value !== `string`) {
@@ -63,52 +78,44 @@ const getOidcConfiguration = async (): Promise<oidClient.Configuration> => {
   return oidcConfigPromise;
 };
 
-const decodeTokenSubject = (idToken: string): string => {
-  const tokenSections = idToken.split(`.`);
-
-  if (tokenSections.length < 2) {
-    throw new Error(`OIDC id_token payload is malformed`);
-  }
-
-  const payload = JSON.parse(Buffer.from(tokenSections[1], `base64url`).toString(`utf8`)) as { sub?: string };
-
-  if (!payload.sub) {
-    throw new Error(`OIDC id_token payload did not include subject`);
-  }
-
-  return payload.sub;
-};
-
 const ensureOidcStrategy = async (): Promise<void> => {
   if (!oidcStrategyPromise) {
     oidcStrategyPromise = (async () => {
       const oidcConfig = await getOidcConfiguration();
-      const oidcMetadata = oidcConfig.serverMetadata();
 
       passport.use(
         `oidc`,
-        new OAuth2Strategy(
+        new AthenaStrategy(
           {
-            authorizationURL: oidcMetadata.authorization_endpoint ?? ``,
-            clientID: config.authentication.oidc.clientId,
-            clientSecret: config.authentication.oidc.clientSecret,
+            config: oidcConfig,
+            name: `oidc`,
+            sessionKey: oidcSessionKey,
             callbackURL: config.authentication.oidc.oauthCallbackUrl,
-            tokenURL: oidcMetadata.token_endpoint ?? ``,
-            scope: [`openid`, `profile`, `email`],
-            state: true,
+            scope: `openid profile email`,
           },
-          (accessToken: string, _refreshToken: unknown, result: OIDCResult, _profile: unknown, done: OAuth2VerifyCallback) => {
-            const subject = decodeTokenSubject(result.id_token);
+          (tokens, done) => {
+            const claims = tokens.claims();
+            const subject = claims?.sub;
+            const accessToken = tokens.access_token;
+            const idToken = tokens.id_token;
+
+            if (!subject || !accessToken || !idToken) {
+              done(new Error(`OIDC token response did not include required claims or tokens`));
+              return;
+            }
 
             oidClient
               .fetchUserInfo(oidcConfig, accessToken, subject)
               .then((userInfo: OIDCUserInfo) => {
+                const email = userInfo.email || ``;
+
                 done(null, {
-                  id: userInfo.sub,
+                  id: email,
+                  subject: userInfo.sub,
                   name: userInfo.name || ``,
-                  email: userInfo.email || ``,
+                  email,
                   picture: userInfo.picture || ``,
-                  idToken: result.id_token,
+                  idToken,
                   accessToken,
                 });
               })
@@ -124,15 +131,24 @@ const ensureOidcStrategy = async (): Promise<void> => {
   return oidcStrategyPromise;
 };
 
-const isAuthUser = (value: unknown): value is AuthUser => {
+const isAuthenticatedUser = (value: unknown): value is AuthenticatedUser => {
   if (!value || typeof value !== `object`) {
     return false;
   }
 
-  const candidate = value as Partial<AuthUser>;
+  const candidate = value as Partial<AuthenticatedUser>;
 
   return (
-    typeof candidate.id === `string` && typeof candidate.name === `string` && typeof candidate.email === `string` && typeof candidate.picture === `string` && typeof candidate.idToken === `string` && typeof candidate.accessToken === `string`
+    typeof candidate.id === `string` &&
+    candidate.id.length > 0 &&
+    typeof candidate.subject === `string` &&
+    typeof candidate.name === `string` &&
+    typeof candidate.email === `string` &&
+    candidate.email.length > 0 &&
+    candidate.id === candidate.email &&
+    typeof candidate.picture === `string` &&
+    typeof candidate.idToken === `string` &&
+    typeof candidate.accessToken === `string`
   );
 };
 
@@ -152,26 +168,109 @@ export const normalizeReturnTo = (value: unknown): string | undefined => {
   return undefined;
 };
 
-export const storeReturnTo = (session: SessionData | null, returnTo: string | undefined): void => {
+export const storeReturnTo = (session: Session | null, returnTo: string | undefined): void => {
   if (session && returnTo) {
     session.returnTo = returnTo;
   }
 };
 
-export const storeAuthenticatedUser = (session: SessionData | null, user: unknown): void => {
+export const pruneSessionToCookieFields = (session: Session | null | undefined): void => {
   if (!session) {
     return;
   }
 
-  if (!isAuthUser(user)) {
+  for (const key of Object.keys(session)) {
+    if (key !== `id` && key !== `returnTo`) {
+      delete (session as Record<string, unknown>)[key];
+    }
+  }
+};
+
+export const storeAuthenticatedUser = async (session: Session | null, user: unknown): Promise<void> => {
+  if (!session) {
+    return;
+  }
+
+  if (!isAuthenticatedUser(user)) {
     throw new Error(`Authenticated user payload is invalid`);
   }
 
-  session.user = user;
+  const client = await getPool().connect();
+
+  try {
+    await client.query(`BEGIN`);
+
+    await client.query(
+      `
+        INSERT INTO "user" ("id", "subject", "name", "picture")
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT ("id") DO UPDATE SET
+          "subject" = EXCLUDED."subject",
+          "name" = EXCLUDED."name",
+          "picture" = EXCLUDED."picture",
+          "updatedAt" = NOW()
+      `,
+      [user.id, user.subject, user.name, user.picture],
+    );
+
+    const result = await client.query<{ id: string }>(
+      `
+        INSERT INTO "session" ("user", "idToken", "accessToken")
+        VALUES ($1, $2, $3)
+        RETURNING "id"
+      `,
+      [user.id, user.idToken, user.accessToken],
+    );
+
+    const sessionId = result.rows[0]?.id;
+
+    if (!sessionId) {
+      throw new Error(`Authentication session was not created`);
+    }
+
+    await client.query(`COMMIT`);
+    session.id = sessionId;
+    pruneSessionToCookieFields(session);
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
-export const consumeReturnTo = (session: SessionData | null): string => {
-  const returnTo = session?.returnTo || `/`;
+export const getAuthenticatedUser = async (sessionId: string | undefined): Promise<User | undefined> => {
+  if (!sessionId) {
+    return undefined;
+  }
+
+  const result = await getPool().query<User>(
+    `
+      SELECT
+        u."id",
+        u."name",
+        u."id" AS "email",
+        u."picture"
+      FROM "session" s
+      JOIN "user" u ON u."id" = s."user"
+      WHERE s."id" = $1
+    `,
+    [sessionId],
+  );
+
+  return result.rows[0];
+};
+
+export const deleteAuthenticationSession = async (sessionId: string | undefined): Promise<void> => {
+  if (!sessionId) {
+    return;
+  }
+
+  await getPool().query(`DELETE FROM "session" WHERE "id" = $1`, [sessionId]);
+};
+
+export const consumeReturnTo = (session: Session | null): string => {
+  const returnTo = session?.returnTo || config.frontend.baseUrl;
 
   if (session) {
     delete session.returnTo;
@@ -182,7 +281,7 @@ export const consumeReturnTo = (session: SessionData | null): string => {
 
 export const clearSession = (): null => null;
 
-export const buildProfileResponse = (user: AuthUser | undefined): { isAuthenticated: boolean; user: AuthUser | null } => {
+export const buildProfileResponse = (user: User | undefined): { isAuthenticated: boolean; user: User | null } => {
   if (user) {
     return {
       isAuthenticated: true,

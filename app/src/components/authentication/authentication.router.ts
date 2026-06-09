@@ -1,5 +1,17 @@
-import { buildProfileResponse, clearSession, consumeReturnTo, ensureOidcStrategy, normalizeReturnTo, passport, storeAuthenticatedUser, storeReturnTo } from "@components/authentication/authentication.controller.js";
-import { getSession, getUser } from "@components/authentication/session.js";
+import {
+  buildProfileResponse,
+  clearSession,
+  consumeReturnTo,
+  deleteAuthenticationSession,
+  ensureOidcStrategy,
+  getAuthenticatedUser,
+  normalizeReturnTo,
+  passport,
+  storeAuthenticatedUser,
+  storeReturnTo,
+} from "@components/authentication/authentication.controller.js";
+import { getSession, getSessionId } from "@components/authentication/session.js";
+import { config } from "@components/config/config.js";
 import { type NextFunction, type Request, type Response, Router } from "express";
 
 export const authenticationRouter = Router();
@@ -8,8 +20,8 @@ authenticationRouter.get(`/authentication/login`, async (req: Request, res: Resp
   try {
     const returnTo = normalizeReturnTo(req.query.returnTo);
 
-    if (getUser(req)) {
-      res.redirect(returnTo ?? `/`);
+    if (await getAuthenticatedUser(getSessionId(req))) {
+      res.redirect(returnTo ?? config.frontend.baseUrl);
       return;
     }
 
@@ -37,24 +49,31 @@ authenticationRouter.get(`/authentication/callback`, async (req: Request, res: R
 
       const session = getSession(req);
 
-      try {
-        storeAuthenticatedUser(session, user);
-      } catch (storeError) {
-        return next(storeError);
-      }
-
-      return res.redirect(consumeReturnTo(session));
+      void storeAuthenticatedUser(session, user)
+        .then(() => {
+          res.redirect(consumeReturnTo(session));
+        })
+        .catch(next);
     })(req, res, next);
   } catch (error) {
     next(error);
   }
 });
 
-authenticationRouter.get(`/authentication/logout`, (req: Request, res: Response) => {
-  req.session = clearSession();
-  res.redirect(`/authentication/login`);
+authenticationRouter.get(`/authentication/logout`, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await deleteAuthenticationSession(getSessionId(req));
+    req.session = clearSession();
+    res.redirect(config.frontend.baseUrl);
+  } catch (error) {
+    next(error);
+  }
 });
 
-authenticationRouter.get(`/authentication/profile`, (req: Request, res: Response) => {
-  res.json(buildProfileResponse(getUser(req)));
+authenticationRouter.get(`/authentication/profile`, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json(buildProfileResponse(await getAuthenticatedUser(getSessionId(req))));
+  } catch (error) {
+    next(error);
+  }
 });

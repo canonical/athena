@@ -5,8 +5,3 @@ export type OIDCUserInfo = {
   picture?: string;
   [key: string]: unknown;
 };
-
-export type OIDCResult = {
-  access_token: string;
-  id_token: string;
-};

@@ -1,9 +1,9 @@
-import type { SessionData } from "@components/authentication/session.schema.js";
+import type { Session } from "@components/authentication/session.schema.js";
 
 declare global {
   namespace Express {
     interface Request {
-      session?: SessionData | null;
+      session?: Session | null;
     }
   }
 }

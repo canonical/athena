@@ -141,6 +141,15 @@ Authentication-related runtime variables:
 - `APP_ATHENA_SECRET_KEY`
 - `APP_ATHENA_SESSION_MAX_AGE`
 - `APP_ATHENA_ALLOWED_ORIGINS`
+- `APP_ATHENA_FRONTEND_BASE_URL`
+
+`APP_ATHENA_OIDC_CLIENT_SECRET` and `APP_ATHENA_SECRET_KEY` are required and must be explicitly set. Do not rely on development sample values outside local development.
+
+Database runtime variables:
+
+- `APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING`
+
+`APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING` is required and is the only database connection string used by Athena.
 
 Frontend API routing variable:
 
@@ -148,6 +157,7 @@ Frontend API routing variable:
 
 Frontend behavior:
 
+- `APP_ATHENA_FRONTEND_BASE_URL` is the frontend origin/base URL used by the backend for auth redirects when no safe `returnTo` is available.
 - `VITE_API_BASE_URL` is a build-time variable consumed directly by Vite.
 - `VITE_API_BASE_URL` is required and must be non-empty.
 - The UI always calls backend APIs using this explicit base URL (for example `https://api.athena.example.com`).
@@ -159,7 +169,8 @@ Deployment note:
 Backend CORS behavior:
 
 - Athena registers CORS middleware with `credentials: true` and an origin allowlist from `APP_ATHENA_ALLOWED_ORIGINS`.
-- Set this variable to your frontend host list, for example `https://athena.example.com`.
+- `APP_ATHENA_ALLOWED_ORIGINS` is required and must be set to your frontend host list, for example `https://athena.example.com`.
+- `APP_ATHENA_FRONTEND_BASE_URL` is required and must be set to the frontend base URL users should return to after authentication.
 
 For local development with Compose, set these in `.env` and keep defaults/example values in `.example.env`.
 
