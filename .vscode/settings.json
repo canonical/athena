@@ -23,6 +23,8 @@
   },
   "chat.tools.terminal.autoApprove": {
     "npm run check": true,
-    "npm run check && npm run test": true
+    "npm test": true,
+    "npm run check && npm test": true,
+    "npx biome format": true
   }
 }
