@@ -2,6 +2,8 @@
 
 BEGIN;
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 \echo >>> Running Athena function migrations
 \ir ./fncs/000100.uuidv7.sql
 \ir ./fncs/000200.updatedAt.sql
