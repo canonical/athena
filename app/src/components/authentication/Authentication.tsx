@@ -21,6 +21,26 @@ export function AuthenticationView({ returnTo }: AuthenticationViewProps) {
   const authenticationLoginPath = getAuthenticationLoginPath(resolvedReturnTo);
   const [profile, setProfile] = useState<AuthenticationProfile | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch(authenticationApiPaths.logout, { method: `POST`, credentials: `include` });
+
+      if (!response.ok) {
+        throw new Error(`Authentication logout request failed with status ${response.status}`);
+      }
+
+      window.location.assign(new URL(`/`, window.location.origin).toString());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setErrorMessage(message);
+      setIsSigningOut(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -95,8 +115,8 @@ export function AuthenticationView({ returnTo }: AuthenticationViewProps) {
       <p className="p-heading--5">Authentication</p>
       <h1 className="p-heading--2">You are authenticated</h1>
       <p className="p-text--default">Signed in as {profile.user.email || profile.user.name || profile.user.id}.</p>
-      <Button appearance="base" element="a" href={authenticationApiPaths.logout}>
-        Sign out
+      <Button appearance="base" disabled={isSigningOut} onClick={handleSignOut} type="button">
+        {isSigningOut ? `Signing out...` : `Sign out`}
       </Button>
     </section>
   );

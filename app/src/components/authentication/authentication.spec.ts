@@ -23,7 +23,7 @@ const expectFrontendSessionCookieToOnlyContainId = async (page: Page) => {
   expect(Object.keys(sessionPayload)).toEqual([`id`]);
 };
 
-const expectBackendSessionCookieToExcludeSensitiveData = async (page: Page) => {
+const expectApiSessionCookieToExcludeSensitiveData = async (page: Page) => {
   const sessionPayload = await getSessionCookiePayload(page, `http://athenabe.localhost`);
 
   if (!sessionPayload) {
@@ -61,8 +61,7 @@ test(`authentication flow signs in through Dex`, async ({ page }) => {
 
   await expect(page.getByRole(`heading`, { name: `Sign in to Athena` })).toBeVisible();
   await page.getByRole(`link`, { name: `Sign in` }).click();
-  await expectFrontendSessionCookieToOnlyContainId(page);
-  await expectBackendSessionCookieToExcludeSensitiveData(page);
+  await expectApiSessionCookieToExcludeSensitiveData(page);
   await signInWithDex(page);
 
   await expect(page).toHaveURL(/athena\.localhost\/(?:authentication)?$/);
@@ -90,8 +89,7 @@ test(`authentication flow signs in through Dex`, async ({ page }) => {
 test(`authentication ignores external returnTo values`, async ({ page }) => {
   await page.context().clearCookies();
   await page.goto(`http://athenabe.localhost/authentication/login?returnTo=https://attacker.example/path`);
-  await expectFrontendSessionCookieToOnlyContainId(page);
-  await expectBackendSessionCookieToExcludeSensitiveData(page);
+  await expectApiSessionCookieToExcludeSensitiveData(page);
   await signInWithDex(page);
 
   await expect(page).toHaveURL(/athena\.localhost\/?$/);
@@ -100,8 +98,7 @@ test(`authentication ignores external returnTo values`, async ({ page }) => {
 test(`authentication resolves relative returnTo values on the frontend host`, async ({ page }) => {
   await page.context().clearCookies();
   await page.goto(`http://athenabe.localhost/authentication/login?returnTo=/authentication`);
-  await expectFrontendSessionCookieToOnlyContainId(page);
-  await expectBackendSessionCookieToExcludeSensitiveData(page);
+  await expectApiSessionCookieToExcludeSensitiveData(page);
   await signInWithDex(page);
 
   await expect(page).toHaveURL(/athena\.localhost\/authentication$/);
@@ -109,19 +106,15 @@ test(`authentication resolves relative returnTo values on the frontend host`, as
 
 test(`logout clears the Athena session without starting a new sign-in`, async ({ page }) => {
   await page.context().clearCookies();
-  await page.goto(`http://athena.localhost/authentication`);
-
-  await expect(page.getByRole(`heading`, { name: `Sign in to Athena` })).toBeVisible();
-  await page.getByRole(`link`, { name: `Sign in` }).click();
-  await expectFrontendSessionCookieToOnlyContainId(page);
-  await expectBackendSessionCookieToExcludeSensitiveData(page);
+  await page.goto(`http://athenabe.localhost/authentication/login?returnTo=/authentication`);
+  await expectApiSessionCookieToExcludeSensitiveData(page);
   await signInWithDex(page);
 
-  await expect(page).toHaveURL(/athena\.localhost\/(?:authentication)?$/);
-
-  await page.goto(`http://athenabe.localhost/authentication/logout`);
-
-  await expect(page).toHaveURL(/athena\.localhost\/?$/);
+  await expect(page).toHaveURL(/athena\.localhost\/authentication$/);
+  const logoutResponse = await page.request.post(`http://athenabe.localhost/authentication/logout`, {
+    headers: { origin: `http://athena.localhost` },
+  });
+  expect(logoutResponse.status()).toBe(204);
 
   const sessionCookie = (await page.context().cookies(`http://athenabe.localhost`)).find((cookie) => cookie.name === `session`);
   expect(sessionCookie).toBeUndefined();

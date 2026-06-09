@@ -2,6 +2,7 @@ import type { OIDCUserInfo } from "@components/authentication/authentication.sch
 import type { AuthenticatedUser, Session, User } from "@components/authentication/session.schema.js";
 import { config } from "@components/config/config.js";
 import { getPool } from "@components/postgres/postgres.js";
+import { retry } from "@components/utilities/perseverance.js";
 import type { Request } from "express";
 import * as oidClient from "openid-client";
 import { type AuthenticateOptions, Strategy } from "openid-client/passport";
@@ -10,6 +11,8 @@ import passport from "passport";
 let oidcConfigPromise: Promise<oidClient.Configuration> | null = null;
 let oidcStrategyPromise: Promise<void> | null = null;
 const oidcSessionKey = `athenaOidc`;
+const oidcRetryCount = 3;
+const oidcRetryIntervalMs = 1000;
 
 const allowedReturnToOrigins = new Set(
   config.cors.allowedOrigins
@@ -72,7 +75,14 @@ const getOidcConfiguration = async (): Promise<oidClient.Configuration> => {
   if (!oidcConfigPromise) {
     const discoveryOptions = config.application.nodeEnv === `production` ? undefined : { execute: [oidClient.allowInsecureRequests] };
 
-    oidcConfigPromise = oidClient.discovery(new URL(config.authentication.oidc.discoveryUrl), config.authentication.oidc.clientId, config.authentication.oidc.clientSecret, undefined, discoveryOptions);
+    oidcConfigPromise = retry(
+      () => oidClient.discovery(new URL(config.authentication.oidc.discoveryUrl), config.authentication.oidc.clientId, config.authentication.oidc.clientSecret, undefined, discoveryOptions),
+      oidcRetryCount,
+      oidcRetryIntervalMs,
+    ).catch((error: unknown) => {
+      oidcConfigPromise = null;
+      throw error;
+    });
   }
 
   return oidcConfigPromise;
@@ -80,57 +90,61 @@ const getOidcConfiguration = async (): Promise<oidClient.Configuration> => {
 
 const ensureOidcStrategy = async (): Promise<void> => {
   if (!oidcStrategyPromise) {
-    oidcStrategyPromise = (async () => {
-      const oidcConfig = await getOidcConfiguration();
+    oidcStrategyPromise = retry(
+      async () => {
+        const oidcConfig = await getOidcConfiguration();
 
-      passport.use(
-        `oidc`,
-        new AthenaStrategy(
-          {
-            config: oidcConfig,
-            name: `oidc`,
-            sessionKey: oidcSessionKey,
-            callbackURL: config.authentication.oidc.oauthCallbackUrl,
-            scope: `openid profile email`,
-          },
-          (tokens, done) => {
-            const claims = tokens.claims();
-            const subject = claims?.sub;
-            const accessToken = tokens.access_token;
-            const idToken = tokens.id_token;
+        passport.use(
+          `oidc`,
+          new AthenaStrategy(
+            {
+              config: oidcConfig,
+              name: `oidc`,
+              sessionKey: oidcSessionKey,
+              callbackURL: config.authentication.oidc.oauthCallbackUrl,
+              scope: `openid profile email`,
+            },
+            (tokens, done) => {
+              const claims = tokens.claims();
+              const subject = claims?.sub;
+              const accessToken = tokens.access_token;
 
-            if (!subject || !accessToken || !idToken) {
-              done(new Error(`OIDC token response did not include required claims or tokens`));
-              return;
-            }
+              if (!subject || !accessToken) {
+                done(new Error(`OIDC token response did not include required claims or tokens`));
+                return;
+              }
 
-            oidClient
-              .fetchUserInfo(oidcConfig, accessToken, subject)
-              .then((userInfo: OIDCUserInfo) => {
-                const email = userInfo.email?.trim();
+              oidClient
+                .fetchUserInfo(oidcConfig, accessToken, subject)
+                .then((userInfo: OIDCUserInfo) => {
+                  const email = userInfo.email?.trim();
 
-                if (!email) {
-                  done(new Error(`OIDC user info did not include a required email claim`));
-                  return;
-                }
+                  if (!email) {
+                    done(new Error(`OIDC user info did not include a required email claim`));
+                    return;
+                  }
 
-                done(null, {
-                  id: email,
-                  subject,
-                  name: userInfo.name?.trim() || ``,
-                  email,
-                  picture: userInfo.picture?.trim() || ``,
-                  idToken,
-                  accessToken,
+                  done(null, {
+                    id: email,
+                    subject,
+                    name: userInfo.name?.trim() || ``,
+                    email,
+                    picture: userInfo.picture?.trim() || ``,
+                  });
+                })
+                .catch((error: unknown) => {
+                  done(error);
                 });
-              })
-              .catch((error: unknown) => {
-                done(error);
-              });
-          },
-        ),
-      );
-    })();
+            },
+          ),
+        );
+      },
+      oidcRetryCount,
+      oidcRetryIntervalMs,
+    ).catch((error: unknown) => {
+      oidcStrategyPromise = null;
+      throw error;
+    });
   }
 
   return oidcStrategyPromise;
@@ -151,9 +165,7 @@ const isAuthenticatedUser = (value: unknown): value is AuthenticatedUser => {
     typeof candidate.email === `string` &&
     candidate.email.length > 0 &&
     candidate.id === candidate.email &&
-    typeof candidate.picture === `string` &&
-    typeof candidate.idToken === `string` &&
-    typeof candidate.accessToken === `string`
+    typeof candidate.picture === `string`
   );
 };
 
@@ -222,11 +234,11 @@ export const storeAuthenticatedUser = async (session: Session | null, user: unkn
 
     const result = await client.query<{ id: string }>(
       `
-        INSERT INTO "session" ("user", "idToken", "accessToken")
-        VALUES ($1, $2, $3)
+        INSERT INTO "session" ("user")
+        VALUES ($1)
         RETURNING "id"
       `,
-      [user.id, user.idToken, user.accessToken],
+      [user.id],
     );
 
     const sessionId = result.rows[0]?.id;

@@ -17,6 +17,22 @@ import { type NextFunction, type Request, type Response, Router } from "express"
 
 export const authenticationRouter = Router();
 
+const frontendOrigin = new URL(config.frontend.baseUrl).origin;
+
+const isAllowedLogoutOrigin = (req: Request): boolean => {
+  const origin = req.get(`origin`);
+
+  if (!origin) {
+    return false;
+  }
+
+  try {
+    return new URL(origin).origin === frontendOrigin;
+  } catch {
+    return false;
+  }
+};
+
 authenticationRouter.get(`/authentication/login`, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const returnTo = normalizeReturnTo(req.query.returnTo);
@@ -61,11 +77,16 @@ authenticationRouter.get(`/authentication/callback`, async (req: Request, res: R
   }
 });
 
-authenticationRouter.get(`/authentication/logout`, async (req: Request, res: Response, next: NextFunction) => {
+authenticationRouter.post(`/authentication/logout`, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (!isAllowedLogoutOrigin(req)) {
+      res.sendStatus(403);
+      return;
+    }
+
     await deleteAuthenticationSession(getSessionId(req));
     req.session = clearSession();
-    res.redirect(config.frontend.baseUrl);
+    res.sendStatus(204);
   } catch (error) {
     next(error);
   }

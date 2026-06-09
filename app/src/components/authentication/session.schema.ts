@@ -7,8 +7,6 @@ export type User = {
 
 export type AuthenticatedUser = User & {
   subject: string;
-  idToken: string;
-  accessToken: string;
 };
 
 export type Session = {
