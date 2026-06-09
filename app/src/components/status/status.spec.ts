@@ -4,7 +4,7 @@ const statusEndpoints = [`/_status/check`, `/_status/ping`];
 
 for (const endpoint of statusEndpoints) {
   test(`${endpoint} is publicly accessible`, async ({ request }) => {
-    const response = await request.get(`http://athenabe.localhost${endpoint}`);
+    const response = await request.get(endpoint);
 
     expect(response.ok()).toBe(true);
     expect(await response.json()).toEqual({

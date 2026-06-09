@@ -13,7 +13,7 @@ const config = defineConfig({
     timeout: 120_000,
   },
   use: {
-    baseURL: `http://127.0.0.1:8080`,
+    baseURL: `http://athenabe.localhost`,
     trace: `on-first-retry`,
   },
   globalSetup: `./testing/playwright-global-setup.ts`,
