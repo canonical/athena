@@ -261,8 +261,9 @@ export const getAuthenticatedUser = async (sessionId: string | undefined): Promi
       FROM "session" s
       JOIN "user" u ON u."id" = s."user"
       WHERE s."id" = $1
+        AND s."createdAt" >= NOW() - (INTERVAL '1 millisecond' * $2::double precision)
     `,
-    [sessionId],
+    [sessionId, config.authentication.session.maxAgeMs],
   );
 
   return result.rows[0];
