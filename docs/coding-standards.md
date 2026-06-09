@@ -53,3 +53,8 @@ Notes:
 2. After moves, update all path-based config (for example, Vite root paths and compose bind mounts).
 3. Keep moves and behavior changes in separate commits when practical.
 
+## Formatting standard
+
+1. Use spaces instead of tabs for indentation.
+2. In Markdown files, indent nested list items with two spaces so GitHub renders lists consistently.
+

@@ -31,7 +31,7 @@ See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rul
 The current service starts an Express server with session-based authentication:
 
 - Frontend route:
-	- `GET /authentication`: React authentication view that allows sign-in and sign-out via backend auth endpoints.
+  - `GET /authentication`: React authentication view that allows sign-in and sign-out via backend auth endpoints.
 
 - Public health endpoints:
   - `GET /_status/check`
