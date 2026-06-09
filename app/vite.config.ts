@@ -2,9 +2,7 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import istanbul from "vite-plugin-istanbul";
 
-const apiBaseUrl = process.env.VITE_API_BASE_URL?.trim();
-
-if (!apiBaseUrl) {
+if (!process.env.VITE_API_BASE_URL?.trim()) {
   throw new Error(`VITE_API_BASE_URL is required and must be non-empty for Athena frontend builds.`);
 }
 
