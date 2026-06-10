@@ -95,7 +95,7 @@ for (const sourceFixture of sourceFixtures) {
     const body = (await response.json()) as {
       outcome: string;
       events: Array<{
-        userId: string;
+        user: string;
         sourceType: string;
         sourceRef: string | null;
         status: string;
@@ -114,9 +114,9 @@ for (const sourceFixture of sourceFixtures) {
     expect(body.outcome).toBe(`completed`);
     expect(body.events).toHaveLength(3);
     expect(body.events.map((event) => event.status)).toEqual([`created`, `routed`, `completed`]);
-    expect(body.events[0]?.userId).toBe(dexEmail);
-    expect(body.events[1]?.userId).toBe(dexEmail);
-    expect(body.events[2]?.userId).toBe(dexEmail);
+    expect(body.events[0]?.user).toBe(dexEmail);
+    expect(body.events[1]?.user).toBe(dexEmail);
+    expect(body.events[2]?.user).toBe(dexEmail);
     expect(body.events[0]?.sourceType).toBe(sourceFixture.sourceType);
     expect(body.events[0]?.sourceRef).toBe(sourceFixture.expectedSourceRef);
     expect(body.events[0]?.assignee).toBeNull();
@@ -217,14 +217,14 @@ test(`GET loop events returns events for the authenticated user`, async ({ page 
   expect(listResponse.status()).toBe(200);
 
   const events = (await listResponse.json()) as Array<{
-    userId: string;
+    user: string;
     status: string;
     workItemUrl: string | null;
   }>;
 
   expect(Array.isArray(events)).toBe(true);
   expect(events.length).toBeGreaterThan(0);
-  expect(events.every((e) => e.userId === dexEmail)).toBe(true);
+  expect(events.every((e) => e.user === dexEmail)).toBe(true);
 });
 
 test(`loop page shows events in the UI`, async ({ page }) => {

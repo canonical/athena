@@ -19,7 +19,7 @@ import { athenaPersonaId, engineeringManagerPersonaId, executionPersonaIds, loop
 
 const loopEventColumns = `
   "id",
-  "userId",
+  "user",
   "sourceType",
   "sourceRef",
   "status",
@@ -212,7 +212,7 @@ const insertLoopEvent = async (event: LoopEventInsert): Promise<LoopEventRecord>
   const result = await getPool().query<LoopEventRecord>(
     `
       INSERT INTO "event" (
-        "userId",
+        "user",
         "sourceType",
         "sourceRef",
         "status",
@@ -230,7 +230,7 @@ const insertLoopEvent = async (event: LoopEventInsert): Promise<LoopEventRecord>
       RETURNING ${loopEventColumns}
     `,
     [
-      event.userId,
+      event.user,
       event.sourceType,
       event.sourceRef ?? null,
       event.status,
@@ -299,7 +299,7 @@ export const validateRunLoopRequest = (value: unknown): ValidatedRunLoopRequest 
 
 const createInitialEvent = async (request: ValidatedRunLoopRequest, sourceContext: LoopPayload, sourceRef: string | undefined, userId: string): Promise<LoopEventRecord> =>
   insertLoopEvent({
-    userId,
+    user: userId,
     sourceType: request.sourceType,
     sourceRef,
     status: `created`,
@@ -338,7 +338,7 @@ const createRoutedEvent = async ({
   userId: string;
 }): Promise<LoopEventRecord> =>
   insertLoopEvent({
-    userId,
+    user: userId,
     sourceType: request.sourceType,
     sourceRef,
     status: `routed`,
@@ -376,7 +376,7 @@ const createCompletedEvent = async ({
   userId: string;
 }): Promise<LoopEventRecord> =>
   insertLoopEvent({
-    userId,
+    user: userId,
     sourceType: request.sourceType,
     sourceRef,
     status: `completed`,
@@ -417,7 +417,7 @@ const createBlockedEvent = async ({
   userId: string;
 }): Promise<LoopEventRecord> =>
   insertLoopEvent({
-    userId,
+    user: userId,
     sourceType: request.sourceType,
     sourceRef,
     status: `blocked`,
@@ -581,7 +581,7 @@ export const listLoopEvents = async (userId: string): Promise<LoopEventRecord[]>
     `
       SELECT ${loopEventColumns}
       FROM "event"
-      WHERE "userId" = $1
+      WHERE "user" = $1
       ORDER BY "emittedAt" DESC
     `,
     [userId],

@@ -53,6 +53,11 @@ Notes:
 2. After moves, update all path-based config (for example, Vite root paths and compose bind mounts).
 3. Keep moves and behavior changes in separate commits when practical.
 
+## Event field naming standard
+
+1. Use `event.user` for the user field on event records, not `event.userId`.
+2. This allows simpler, more semantic assignment: `event.user = user.id`.
+
 ## Formatting standard
 
 1. Use spaces instead of tabs for indentation.
