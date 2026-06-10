@@ -1,7 +1,7 @@
 import { expect, type Page } from "./test.js";
 
 export const dexEmail = `dev.user@canonical.com`;
-const dexPassword = `password`;
+const dexPassword = process.env.APP_ATHENA_E2E_DEX_PASSWORD || `password`;
 
 export const signInWithDex = async (page: Page) => {
   const loginInput = page.locator(`input[name=login], input[type=email]`).first();
