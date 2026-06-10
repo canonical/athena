@@ -23,4 +23,4 @@ Example:
 
 ## Local compose requirement
 
-In local Compose, `VITE_API_BASE_URL` must be defined explicitly (for example `http://athenabe.localhost`).
+In local Compose, `VITE_API_BASE_URL` should use same-host backend routing via Traefik (default: `/api`, served from `http://athena.localhost`).

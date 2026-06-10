@@ -37,14 +37,14 @@ The current service starts an Express server with session-based authentication:
   - `GET /_status/check`
   - `GET /_status/ping`
 - Public auth endpoints:
-  - `GET /authentication/login`
-  - `GET /authentication/callback`
-  - `GET /authentication/logout`
-  - `GET /authentication/profile`
+  - `GET /api/authentication/login`
+  - `GET /api/authentication/callback`
+  - `POST /api/authentication/logout`
+  - `GET /api/authentication/profile`
 - Backend route policy:
   - Non-public backend routes require an authenticated session.
   - Unauthenticated requests return HTTP `401 Unauthorized`.
-  - Static assets are not served by the Express backend.
+  - Static assets and SPA fallback are served by the Express backend static router.
 
 ## Local development
 

@@ -54,7 +54,7 @@ config:
     host:
       description: Hostname for Athena ingress
       type: string
-      default: "athenabe.localhost"
+      default: "athena.localhost"
       required: true
     allowed-origins:
       description: A Comma-separated list of allowed CORS origins. Defaults to the hostname.

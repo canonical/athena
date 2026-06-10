@@ -221,6 +221,14 @@ export const storeAuthenticatedUser = async (session: Session | null, user: unkn
 
     await client.query(
       `
+        DELETE FROM "session"
+        WHERE "createdAt" < NOW() - (INTERVAL '1 millisecond' * $1::double precision)
+      `,
+      [config.authentication.session.maxAgeMs],
+    );
+
+    await client.query(
+      `
         INSERT INTO "user" ("id", "subject", "name", "picture")
         VALUES ($1, $2, $3, $4)
         ON CONFLICT ("id") DO UPDATE SET

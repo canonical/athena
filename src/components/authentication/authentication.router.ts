@@ -61,7 +61,7 @@ authenticationRouter.get(`/authentication/callback`, async (req: Request, res: R
       }
 
       if (!user) {
-        return res.redirect(`/authentication/login`);
+        return res.redirect(`${req.baseUrl}/authentication/login`);
       }
 
       const session = getSession(req);
