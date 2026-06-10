@@ -18,18 +18,6 @@ CREATE TABLE IF NOT EXISTS "event" (
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Rename legacy "userId" column to "user" on existing databases.
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'event' AND column_name = 'userId'
-  ) THEN
-    ALTER TABLE "event" RENAME COLUMN "userId" TO "user";
-  END IF;
-END
-$$;
-
 COMMENT ON TABLE "event" IS 'Athena loop events.';
 COMMENT ON COLUMN "event"."id" IS 'Event identifier.';
 COMMENT ON COLUMN "event"."user" IS 'User who submitted the loop request.';

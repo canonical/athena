@@ -1,31 +1,4 @@
-import { expect, type Page, test } from "../../../testing/playwright/index.js";
-
-const dexEmail = `dev.user@canonical.com`;
-const dexPassword = `password`;
-
-const signInWithDex = async (page: Page) => {
-  const loginInput = page.locator(`input[name=login], input[type=email]`).first();
-  const passwordInput = page.locator(`input[name=password], input[type=password]`).first();
-  const emailLoginAction = page.locator(`button:has-text("Log in with Email"), a:has-text("Log in with Email")`).first();
-
-  await expect(loginInput.or(emailLoginAction)).toBeVisible();
-
-  if (await emailLoginAction.isVisible()) {
-    await emailLoginAction.click();
-  }
-
-  await loginInput.fill(dexEmail);
-  await passwordInput.fill(dexPassword);
-  await page.locator(`button[type=submit], input[type=submit]`).first().click();
-};
-
-const authenticate = async (page: Page) => {
-  await page.context().clearCookies();
-  await page.goto(`http://athena.localhost/authentication`);
-  await page.getByRole(`link`, { name: `Sign in` }).click();
-  await signInWithDex(page);
-  await expect(page).toHaveURL(/athena\.localhost\/(?:authentication)?$/);
-};
+import { authenticate, dexEmail, expect, test } from "../../../testing/playwright/index.js";
 
 const sourceFixtures = [
   {

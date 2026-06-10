@@ -1,7 +1,4 @@
-import { expect, type Page, test } from "../../../testing/playwright/index.js";
-
-const dexEmail = `dev.user@canonical.com`;
-const dexPassword = `password`;
+import { dexEmail, expect, type Page, signInWithDex, test } from "../../../testing/playwright/index.js";
 
 const decodeSessionCookie = (value: string): Record<string, unknown> => JSON.parse(globalThis.atob(decodeURIComponent(value))) as Record<string, unknown>;
 
@@ -34,25 +31,6 @@ const expectApiSessionCookieToExcludeSensitiveData = async (page: Page) => {
   expect(sessionPayload).not.toHaveProperty(`idToken`);
   expect(sessionPayload).not.toHaveProperty(`accessToken`);
   expect(sessionPayload).not.toHaveProperty(`refreshToken`);
-};
-
-const signInWithDex = async (page: Page) => {
-  const loginInput = page.locator(`input[name=login], input[type=email]`).first();
-  const passwordInput = page.locator(`input[name=password], input[type=password]`).first();
-  const emailLoginAction = page.locator(`button:has-text("Log in with Email"), a:has-text("Log in with Email")`).first();
-
-  await expect(loginInput.or(emailLoginAction)).toBeVisible();
-
-  if (await emailLoginAction.isVisible()) {
-    await emailLoginAction.click();
-  }
-
-  await expect(loginInput).toBeVisible();
-  await expect(passwordInput).toBeVisible();
-
-  await loginInput.fill(dexEmail);
-  await passwordInput.fill(dexPassword);
-  await page.locator(`button[type=submit], input[type=submit]`).first().click();
 };
 
 test(`authentication flow signs in through Dex`, async ({ page }) => {
