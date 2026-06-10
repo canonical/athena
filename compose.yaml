@@ -10,6 +10,19 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
+  dex:
+    image: dexidp/dex:v2.45.1
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes:
+      - ./scripts/dex-config.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "5556:5556"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dex.rule=Host(`dex.localhost`)
+      - traefik.http.routers.dex.entrypoints=web
+      - traefik.http.services.dex.loadbalancer.server.port=5556
+
   postgres:
     image: postgres:16
     environment:
@@ -43,56 +56,41 @@ services:
         set -eu
         psql -h postgres -U athena -d athena -v APP_ROLE_NAME=athena -f /migrations/pg/migrate.sql
 
-  athenabe:
+  athena:
     build:
-      context: ./app
+      context: .
     depends_on:
+      dex:
+        condition: service_started
       postgres:
         condition: service_healthy
       prepare:
         condition: service_completed_successfully
     environment:
-      APP_ATHENA_HOST: 0.0.0.0
-      APP_ATHENA_PORT: "8080"
-      APP_ATHENA_RUN_MODE: ${APP_ATHENA_RUN_MODE:-production}
+      APP_ATHENA_PORT: "8000"
+      APP_ATHENA_NODE_ENV: development
+      APP_ATHENA_ALLOWED_ORIGINS: ${APP_ATHENA_ALLOWED_ORIGINS:-http://athena.localhost}
+      APP_ATHENA_FRONTEND_BASE_URL: ${APP_ATHENA_FRONTEND_BASE_URL:-http://athena.localhost}
+      APP_ATHENA_DEV_MODE: ${APP_ATHENA_DEV_MODE:-false}
+      APP_ATHENA_OAUTH_CALLBACK_URL: ${APP_ATHENA_OAUTH_CALLBACK_URL:-http://athena.localhost/api/authentication/callback}
+      APP_ATHENA_OIDC_DISCOVERY_URL: ${APP_ATHENA_OIDC_DISCOVERY_URL:-http://dex.localhost/dex/.well-known/openid-configuration}
+      APP_ATHENA_OIDC_CLIENT_ID: ${APP_ATHENA_OIDC_CLIENT_ID:-athena}
+      APP_ATHENA_OIDC_CLIENT_SECRET: ${APP_ATHENA_OIDC_CLIENT_SECRET:?APP_ATHENA_OIDC_CLIENT_SECRET is required}
+      APP_ATHENA_SECRET_KEY: ${APP_ATHENA_SECRET_KEY:?APP_ATHENA_SECRET_KEY is required}
+      APP_ATHENA_SESSION_MAX_AGE: ${APP_ATHENA_SESSION_MAX_AGE:-86400000}
+      APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING: ${APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING:?APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING is required}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
       COVERAGE: ${COVERAGE:-}
-      POSTGRESQL_DB_CONNECT_STRING: ${POSTGRESQL_DB_CONNECT_STRING}
-    ports:
-      - "8080:8080"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://127.0.0.1:8080/_status/check >/dev/null",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.athena-api.rule=Host(`athenabe.localhost`)
-      - traefik.http.routers.athena-api.entrypoints=web
-      - traefik.http.services.athena-api.loadbalancer.server.port=8080
-
-  athena:
-    build:
-      context: ./app
-    depends_on:
-      athenabe:
-        condition: service_healthy
-    environment:
-      VITE_BACKEND_PROXY_TARGET: http://athenabe:8080
-      COVERAGE: ${COVERAGE:-}
-    command:
-      - /bin/sh
-      - -c
-      - npm run dev:fe
+    extra_hosts:
+      - "dex.localhost:host-gateway"
     volumes:
-      - ./app/src:/app/src
-      - ./app/vite.config.ts:/app/vite.config.ts:ro
+      - ./src:/app/src
+      - ./vite.config.ts:/app/vite.config.ts:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./tsconfig.server.json:/app/tsconfig.server.json:ro
+      - ./nodemon.json:/app/nodemon.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5173 >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/_status/check >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -101,7 +99,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.athena.rule=Host(`athena.localhost`)
       - traefik.http.routers.athena.entrypoints=web
-      - traefik.http.services.athena.loadbalancer.server.port=5173
+      - traefik.http.services.athena.loadbalancer.server.port=8000
 
 volumes:
   athena-postgres-data:

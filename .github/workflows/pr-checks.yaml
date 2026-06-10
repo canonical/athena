@@ -28,14 +28,15 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        working-directory: app
         run: npm ci
 
+      - name: Install Playwright browser dependencies
+        run: npx playwright install --with-deps chromium
+
       - name: Run checks
-        working-directory: app
         run: npm run check
 
   test:
@@ -57,17 +58,18 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        working-directory: app
         run: npm ci
+
+      - name: Install Playwright browser dependencies
+        run: npx playwright install --with-deps chromium
 
       - name: Prepare compose environment file
         run: cp .example.env .env
 
       - name: Run tests with coverage
-        working-directory: app
         run: npm run test:ci
 
       - name: Upload coverage artifact
@@ -75,29 +77,34 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: athena-coverage-report
-          path: app/testing/output/coverage
+          path: testing/results/coverage
           if-no-files-found: error
           retention-days: 7
 
       - name: Evaluate coverage delta against baseline
         id: coverage_delta
-        working-directory: app
         continue-on-error: true
         run: |
           node --experimental-strip-types ./testing/evaluate-coverage-delta.ts \
-            ./testing/output/coverage/coverage-summary.json \
+            ./testing/results/coverage/coverage-summary.json \
             ./testing/coverage-baseline.json \
-            ./testing/output/coverage/coverage-comment.md
+            ./testing/results/coverage/coverage-comment.md
 
       - name: Post coverage comment
-        if: ${{ github.event_name == 'pull_request' && !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ github.event_name == 'pull_request' && !cancelled() && github.event.pull_request.head.repo.full_name == github.repository && steps.coverage_delta.outcome != 'skipped' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
-          COVERAGE_COMMENT_PATH: app/testing/output/coverage/coverage-comment.md
+          COVERAGE_COMMENT_PATH: testing/results/coverage/coverage-comment.md
         with:
           script: |
             const fs = require('node:fs');
             const marker = '<!-- athena-coverage-report -->';
+
+            if (!fs.existsSync(process.env.COVERAGE_COMMENT_PATH)) {
+              core.warning(`Coverage comment file not found at ${process.env.COVERAGE_COMMENT_PATH}; skipping PR comment update.`);
+              return;
+            }
+
             const body = fs.readFileSync(process.env.COVERAGE_COMMENT_PATH, 'utf8');
 
             const { data: comments } = await github.rest.issues.listComments({
@@ -128,7 +135,7 @@ jobs:
       - name: Fail on coverage regression
         if: ${{ steps.coverage_delta.outputs.has_regression == 'true' }}
         run: |
-          echo "Coverage regression detected compared to app/testing/coverage-baseline.json"
+          echo "Coverage regression detected compared to testing/coverage-baseline.json"
           exit 1
 
       - name: Fail on coverage evaluation error

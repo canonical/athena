@@ -4,16 +4,16 @@ This document is the source of truth for source layout and file organization.
 
 ## Folder structure standard
 
-1. Use component-based co-location under `app/src/components`.
+1. Use component-based co-location under `src/components`.
 2. Each component owns both UI and server-side files for its feature.
 3. Each component folder must be flat: files only, no nested folders.
-4. Do not create new top-level source split folders like `app/src/frontend` or `app/src/backend`.
-5. Keep bootstrap entrypoints `app/src/index.html` and `app/src/server.ts` side-by-side at `app/src`.
+4. Do not create new top-level source split folders like `src/frontend` or `src/backend`.
+5. Keep bootstrap entrypoints `src/index.html` and `src/server.ts` side-by-side at `src`.
 
 Preferred pattern:
 
 ```text
-app/src/components/
+src/components/
   <component-name>/
     <ComponentName>.tsx
     <componentName>.scss
@@ -30,7 +30,7 @@ app/src/components/
 Bootstrap entrypoints:
 
 ```text
-app/src/
+src/
   index.html
   server.ts
 ```
@@ -42,6 +42,8 @@ Notes:
 - Avoid global styling wherever possible. Introduce global styles only when there is no practical component-scoped alternative.
 - `<componentName>.schema.ts` is the only allowed location for that component's TypeScript types and Zod schemas.
 - `<componentName>.controller.ts` owns business logic and database interaction for that component.
+- `<componentName>.controller.ts` should stay transport-agnostic and must not depend on Express imports except when absolutely necessary.
+- `<componentName>.router.ts` owns Express route definitions and all request/response handling.
 - `<componentName>.query.ts` owns TanStack Query definitions and uses `<componentName>.client.ts` for HTTP calls.
 - Shared cross-component code should live in a clearly named shared location and stay minimal.
 
@@ -50,4 +52,9 @@ Notes:
 1. Use `git mv` whenever possible for tracked files and folders.
 2. After moves, update all path-based config (for example, Vite root paths and compose bind mounts).
 3. Keep moves and behavior changes in separate commits when practical.
+
+## Formatting standard
+
+1. Use spaces instead of tabs for indentation.
+2. In Markdown files, indent nested list items with two spaces so GitHub renders lists consistently.
 
