@@ -15,13 +15,7 @@ import type {
   RunLoopResponse,
   ValidatedRunLoopRequest,
 } from "./loop.schema.js";
-import {
-  athenaPersonaId,
-  engineeringManagerPersonaId,
-  executionPersonaIds,
-  loopSourceTypes,
-  personaIds,
-} from "./loop.schema.js";
+import { athenaPersonaId, engineeringManagerPersonaId, executionPersonaIds, loopSourceTypes, personaIds } from "./loop.schema.js";
 
 const loopEventColumns = `
   "id",
@@ -268,7 +262,7 @@ export const validateRunLoopRequest = (value: unknown): ValidatedRunLoopRequest 
   const sourceType = normalizeString(value.sourceType);
   const workItemUrl = normalizeString(value.workItemUrl);
   const requestedOutcome = normalizeString(value.requestedOutcome);
-  const assignedPersona = normalizeString(value.assignedPersona);
+  const assignedPersonaValue = normalizeString(value.assignedPersona);
 
   if (!sourceType || !isLoopSourceType(sourceType)) {
     throw new LoopValidationError(`sourceType must be one of: ${loopSourceTypes.join(`, `)}.`);
@@ -282,9 +276,11 @@ export const validateRunLoopRequest = (value: unknown): ValidatedRunLoopRequest 
     throw new LoopValidationError(`requestedOutcome is required.`);
   }
 
-  if (assignedPersona && !isPersonaId(assignedPersona)) {
+  if (assignedPersonaValue && !isPersonaId(assignedPersonaValue)) {
     throw new LoopValidationError(`assignedPersona must be one of: ${personaIds.join(`, `)}.`);
   }
+
+  const assignedPersona = assignedPersonaValue && isPersonaId(assignedPersonaValue) ? assignedPersonaValue : undefined;
 
   return {
     sourceType,
