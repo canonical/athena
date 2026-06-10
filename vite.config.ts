@@ -27,5 +27,13 @@ export default defineConfig(({ mode }) => {
       outDir: "../dist/public",
       emptyOutDir: true,
     },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        quietDeps: true,
+        silenceDeprecations: [`global-builtin`, `import`],
+      },
+    },
+  },
   };
 });
