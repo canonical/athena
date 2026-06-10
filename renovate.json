@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "dependencyDashboard": true,
+  "extends": ["github>canonical/renovate-apps"],
+  "labels": ["bot", "dependencies"],
+  "reviewersFromCodeOwners": true,
+  "ignorePaths": ["**/node_modules/**", "**/bower_components/**", "**/examples/**", "**/__tests__/**", "**/test/**", "**/tests/**", "**/__fixtures__/**"],
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "matchFileNames": [".github/**"],
+      "groupName": "github workflow dependencies",
+      "groupSlug": "github-workflow-dependencies",
+      "schedule": ["at any time"]
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchFileNames": ["**/Dockerfile"],
+      "groupName": "dockerfile dependencies",
+      "groupSlug": "dockerfile-dependencies",
+      "schedule": ["at any time"]
+    }
+  ]
+}
