@@ -30,11 +30,6 @@ BEGIN
 END
 $$;
 
-ALTER TABLE "event" ADD COLUMN IF NOT EXISTS "user" TEXT REFERENCES "user"("id") ON DELETE CASCADE;
--- Note: The ALTER TABLE above handles upgrades for existing tables where the column does not yet exist.
--- On a fresh database the CREATE TABLE above defines "user" as NOT NULL; on existing tables
--- the column is added as nullable to avoid failing on pre-existing rows without a user value.
-
 COMMENT ON TABLE "event" IS 'Athena loop events.';
 COMMENT ON COLUMN "event"."id" IS 'Event identifier.';
 COMMENT ON COLUMN "event"."user" IS 'User who submitted the loop request.';
