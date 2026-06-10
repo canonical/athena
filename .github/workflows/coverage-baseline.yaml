@@ -30,28 +30,24 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        working-directory: app
         run: npm ci
 
       - name: Install Playwright browser dependencies
-        working-directory: app
         run: npx playwright install --with-deps chromium
 
       - name: Prepare compose environment file
         run: cp .example.env .env
 
       - name: Run coverage tests
-        working-directory: app
         run: npm run test:ci
 
       - name: Update coverage baseline file
-        working-directory: app
         run: |
           node --experimental-strip-types ./testing/write-coverage-baseline.ts \
-            ./testing/output/coverage/coverage-summary.json \
+            ./testing/results/coverage/coverage-summary.json \
             ./testing/coverage-baseline.json
 
       - name: Commit baseline update to CI branch and open PR
@@ -61,7 +57,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet -- app/testing/coverage-baseline.json; then
+          if git diff --quiet -- testing/coverage-baseline.json; then
             echo "Coverage baseline already up to date"
             exit 0
           fi
@@ -69,7 +65,7 @@ jobs:
           branch="ci/coverage-baseline"
 
           git checkout -B "$branch"
-          git add app/testing/coverage-baseline.json
+          git add testing/coverage-baseline.json
           git commit -m "ci: update coverage baseline [skip coverage-baseline]"
           git push --force-with-lease origin "$branch"
 

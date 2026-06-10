@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-const currentSummaryPath = process.argv[2] ?? `./testing/output/coverage/coverage-summary.json`;
+const currentSummaryPath = process.argv[2] ?? `./testing/results/coverage/coverage-summary.json`;
 const baselinePath = process.argv[3] ?? `./testing/coverage-baseline.json`;
 
 const currentSummary = JSON.parse(readFileSync(currentSummaryPath, `utf8`));

@@ -8,21 +8,21 @@ At the moment, the implementation is still early-stage. The application now incl
 
 - Service name: Athena
 - Version: 0.0.1
-- Runtime: Node.js and TypeScript in [app](./app)
+- Runtime: Node.js and TypeScript in the repository root
 - Packaging: Rockcraft in [rockcraft.yaml](./rockcraft.yaml)
 - Operator packaging: Juju charm in [charm](./charm)
 - Current API surface: `GET /_status/check`
 
 ## Repository layout
 
-- [app](./app): Express-based Athena service, personas, definitions, and database migrations for the application runtime.
+- Runtime sources and build configs in repository root (`src`, `testing`, and top-level Node/TypeScript config files)
 - [charm](./charm): Juju charm sources for deploying Athena.
 - [migrations](./migrations): Repository-level PostgreSQL schema and seed files.
 - [rockcraft.yaml](./rockcraft.yaml): Rock packaging definition for Athena.
 
 ## Coding standards
 
-Athena uses a co-located, flat component structure in [app/src/components](./app/src/components): frontend and backend files for the same feature live side-by-side in the same component folder, and component folders contain files only.
+Athena uses a co-located, flat component structure in [src/components](./src/components): frontend and backend files for the same feature live side-by-side in the same component folder, and component folders contain files only.
 
 See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rules, including file move conventions.
 
@@ -48,33 +48,29 @@ The current service starts an Express server with session-based authentication:
 
 ## Local development
 
-The application code lives under [app](./app).
+The application code lives in the repository root.
 
 Install dependencies:
 
 ```bash
-cd app
 npm install
 ```
 
 Run the TypeScript watcher for local development:
 
 ```bash
-cd app
 npm run watch
 ```
 
 Build the service:
 
 ```bash
-cd app
 npm run build
 ```
 
 Start the built service:
 
 ```bash
-cd app
 npm run start
 ```
 
@@ -106,18 +102,17 @@ Container runtime is controlled by `APP_ATHENA_DEV_MODE`:
 
 ## E2E testing
 
-Athena uses Playwright E2E tests with a local wrapper in [app/testing/playwright](./app/testing/playwright), mirroring the lightweight shared-fixture pattern used in Portal.
+Athena uses Playwright E2E tests with a local wrapper in [testing/playwright](./testing/playwright), mirroring the lightweight shared-fixture pattern used in Portal.
 
 See [docs/testing-standards.md](./docs/testing-standards.md) for the canonical test strategy and coverage expectations.
 
-Run the E2E suite from [app](./app):
+Run the E2E suite from repository root:
 
 ```bash
-cd app
 npm run test
 ```
 
-This uses [app/playwright.config.ts](./app/playwright.config.ts), starts the local Compose stack in global setup, runs the migration `prepare` service, waits for Athena to become healthy, and then executes co-located `*.spec.ts` tests under [app](./app).
+This uses [playwright.config.ts](./playwright.config.ts), starts the local Compose stack in global setup, runs the migration `prepare` service, waits for Athena to become healthy, and then executes co-located `*.spec.ts` tests under [src](./src).
 
 ## Default runtime configuration
 

@@ -14,7 +14,7 @@ services:
     image: dexidp/dex:v2.45.1
     command: ["dex", "serve", "/etc/dex/config.yaml"]
     volumes:
-      - ./app/scripts/dex-config.yaml:/etc/dex/config.yaml:ro
+      - ./scripts/dex-config.yaml:/etc/dex/config.yaml:ro
     ports:
       - "5556:5556"
     labels:
@@ -58,7 +58,7 @@ services:
 
   athena:
     build:
-      context: ./app
+      context: .
     depends_on:
       dex:
         condition: service_started
@@ -84,11 +84,11 @@ services:
     extra_hosts:
       - "dex.localhost:host-gateway"
     volumes:
-      - ./app/src:/app/src
-      - ./app/vite.config.ts:/app/vite.config.ts:ro
-      - ./app/tsconfig.json:/app/tsconfig.json:ro
-      - ./app/tsconfig.server.json:/app/tsconfig.server.json:ro
-      - ./app/nodemon.json:/app/nodemon.json:ro
+      - ./src:/app/src
+      - ./vite.config.ts:/app/vite.config.ts:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./tsconfig.server.json:/app/tsconfig.server.json:ro
+      - ./nodemon.json:/app/nodemon.json:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/_status/check >/dev/null"]
       interval: 10s

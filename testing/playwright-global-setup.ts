@@ -4,8 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const repoRoot = join(__dirname, `..`);
-const workspaceRoot = join(repoRoot, `..`);
+const workspaceRoot = join(__dirname, `..`);
 const statusUrl = `http://athena.localhost/_status/check`;
 const dexDiscoveryUrl = `http://dex.localhost/dex/.well-known/openid-configuration`;
 const frontendUrl = `http://athena.localhost`;

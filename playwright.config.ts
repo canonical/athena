@@ -3,6 +3,7 @@ import { defineConfig } from "@playwright/test";
 const config = defineConfig({
   testDir: `./src`,
   testMatch: [`**/*.spec.ts`],
+  outputDir: `./testing/results/playwright`,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

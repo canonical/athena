@@ -4,16 +4,16 @@ This document is the source of truth for source layout and file organization.
 
 ## Folder structure standard
 
-1. Use component-based co-location under `app/src/components`.
+1. Use component-based co-location under `src/components`.
 2. Each component owns both UI and server-side files for its feature.
 3. Each component folder must be flat: files only, no nested folders.
-4. Do not create new top-level source split folders like `app/src/frontend` or `app/src/backend`.
-5. Keep bootstrap entrypoints `app/src/index.html` and `app/src/server.ts` side-by-side at `app/src`.
+4. Do not create new top-level source split folders like `src/frontend` or `src/backend`.
+5. Keep bootstrap entrypoints `src/index.html` and `src/server.ts` side-by-side at `src`.
 
 Preferred pattern:
 
 ```text
-app/src/components/
+src/components/
   <component-name>/
     <ComponentName>.tsx
     <componentName>.scss
@@ -30,7 +30,7 @@ app/src/components/
 Bootstrap entrypoints:
 
 ```text
-app/src/
+src/
   index.html
   server.ts
 ```

@@ -10,9 +10,9 @@ type CoverageEntry = {
   path?: string;
 };
 
-const backendCoverageDirectory = path.join(process.cwd(), `testing/output/.nyc_backend`);
-const frontendCoverageDirectory = path.join(process.cwd(), `testing/output/.nyc_frontend`);
-const mergedCoverageDirectory = path.join(process.cwd(), `testing/output/.nyc_merged`);
+const backendCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_backend`);
+const frontendCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_frontend`);
+const mergedCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_merged`);
 
 const remapPath = (filePath: string): string => filePath.replace(/^\/app\//, `${process.cwd()}/`);
 

@@ -18,7 +18,7 @@ declare global {
   }
 }
 
-const frontendCoverageDirectory = path.join(process.cwd(), `testing/output/.nyc_frontend`);
+const frontendCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_frontend`);
 let coverageFileSequence = 0;
 
 const remapContainerCoveragePaths = (coverage: IstanbulCoverage): IstanbulCoverage => {

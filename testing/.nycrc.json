@@ -5,6 +5,6 @@
   "exclude": ["node_modules", "testing/**", "src/**/*.spec.ts", "src/types/**"],
   "instrument": false,
   "skipEmpty": false,
-  "report-dir": "testing/output/coverage",
-  "temp-dir": "testing/output/.nyc_merged"
+  "report-dir": "testing/results/coverage",
+  "temp-dir": "testing/results/.nyc_merged"
 }

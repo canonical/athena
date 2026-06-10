@@ -1,9 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-const currentSummaryPath = process.argv[2] ?? `./testing/output/coverage/coverage-summary.json`;
+const currentSummaryPath = process.argv[2] ?? `./testing/results/coverage/coverage-summary.json`;
 const baselinePath = process.argv[3] ?? `./testing/coverage-baseline.json`;
-const markdownOutputPath = process.argv[4] ?? `./testing/output/coverage/coverage-comment.md`;
+const markdownOutputPath = process.argv[4] ?? `./testing/results/coverage/coverage-comment.md`;
 
 const metricNames = ["lines", "statements", "functions", "branches"];
 
