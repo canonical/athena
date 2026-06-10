@@ -1,7 +1,7 @@
 export const athenaPersonaId = `athena` as const;
 export const engineeringManagerPersonaId = `em.diana` as const;
 export const personaIds = [engineeringManagerPersonaId, `pm.alice`, `pm.beatrice`, `ic.clara`, `cr.elena`, `ux.fiona`, `qa.grace`] as const;
-export const executionPersonaIds = personaIds.filter((personaId) => personaId !== engineeringManagerPersonaId);
+export const executionPersonaIds = personaIds.filter((persona) => persona !== engineeringManagerPersonaId);
 export const loopSourceTypes = [`github`, `jira`, `human-chat`] as const;
 export const loopEventStatuses = [`created`, `routed`, `completed`, `blocked`] as const;
 export const loopOutcomes = [`completed`, `blocked`] as const;
@@ -88,7 +88,7 @@ export type LoopPersonaBlockedResult = {
 export type LoopPersonaResult = LoopPersonaRoutedResult | LoopPersonaCompletedResult | LoopPersonaBlockedResult;
 
 export type LoopPersonaHandler = {
-  personaId: PersonaId;
+  persona: PersonaId;
   handle: (event: LoopEventRecord) => LoopPersonaResult;
 };
 

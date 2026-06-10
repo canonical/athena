@@ -53,13 +53,13 @@ Notes:
 2. After moves, update all path-based config (for example, Vite root paths and compose bind mounts).
 3. Keep moves and behavior changes in separate commits when practical.
 
-## Event field naming standard
+## Database and type field naming standard
 
-1. Use `event.user` for the user field on event records, not `event.userId`.
-2. This allows simpler, more semantic assignment: `event.user = user.id`.
+1. For Athena-owned database columns and TypeScript fields that store another record's `id`, use the related entity name, not `<entity>Id`.
+2. Examples: `event.user`, `session.user`, `handler.persona`.
+3. This keeps assignments simpler and more semantic: `event.user = user.id`.
 
 ## Formatting standard
 
 1. Use spaces instead of tabs for indentation.
 2. In Markdown files, indent nested list items with two spaces so GitHub renders lists consistently.
-

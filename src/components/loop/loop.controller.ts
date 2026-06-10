@@ -114,17 +114,17 @@ const selectMockAssignee = (event: Pick<LoopEventRecord, "sourceType" | "sourceR
   return executionPersonaIds[hash % executionPersonaIds.length] as ExecutionPersonaId;
 };
 
-const createCompletingPersonaHandler = (personaId: ExecutionPersonaId): LoopPersonaHandler => ({
-  personaId,
+const createCompletingPersonaHandler = (persona: ExecutionPersonaId): LoopPersonaHandler => ({
+  persona,
   handle: (event) => ({
     status: `completed`,
-    note: `${personaId} completed the active responsibility for ${event.requestedOutcome ?? `the requested outcome`}.`,
+    note: `${persona} completed the active responsibility for ${event.requestedOutcome ?? `the requested outcome`}.`,
   }),
 });
 
 const personaHandlers: Record<PersonaId, LoopPersonaHandler> = {
   [engineeringManagerPersonaId]: {
-    personaId: engineeringManagerPersonaId,
+    persona: engineeringManagerPersonaId,
     handle: (event) => {
       const assignee = selectMockAssignee(event);
 
@@ -297,9 +297,9 @@ export const validateRunLoopRequest = (value: unknown): ValidatedRunLoopRequest 
   };
 };
 
-const createInitialEvent = async (request: ValidatedRunLoopRequest, sourceContext: LoopPayload, sourceRef: string | undefined, userId: string): Promise<LoopEventRecord> =>
+const createInitialEvent = async (request: ValidatedRunLoopRequest, sourceContext: LoopPayload, sourceRef: string | undefined, user: string): Promise<LoopEventRecord> =>
   insertLoopEvent({
-    user: userId,
+    user,
     sourceType: request.sourceType,
     sourceRef,
     status: `created`,
@@ -327,7 +327,7 @@ const createRoutedEvent = async ({
   request,
   sourceContext,
   sourceRef,
-  userId,
+  user,
 }: {
   assignee: PersonaId;
   emittedByPersona: string;
@@ -335,10 +335,10 @@ const createRoutedEvent = async ({
   request: ValidatedRunLoopRequest;
   sourceContext: LoopPayload;
   sourceRef: string | undefined;
-  userId: string;
+  user: string;
 }): Promise<LoopEventRecord> =>
   insertLoopEvent({
-    user: userId,
+    user,
     sourceType: request.sourceType,
     sourceRef,
     status: `routed`,
@@ -366,17 +366,17 @@ const createCompletedEvent = async ({
   request,
   sourceContext,
   sourceRef,
-  userId,
+  user,
 }: {
   assignee: PersonaId;
   note: string;
   request: ValidatedRunLoopRequest;
   sourceContext: LoopPayload;
   sourceRef: string | undefined;
-  userId: string;
+  user: string;
 }): Promise<LoopEventRecord> =>
   insertLoopEvent({
-    user: userId,
+    user,
     sourceType: request.sourceType,
     sourceRef,
     status: `completed`,
@@ -406,7 +406,7 @@ const createBlockedEvent = async ({
   request,
   sourceContext,
   sourceRef,
-  userId,
+  user,
 }: {
   assignee: PersonaId;
   blocker: string;
@@ -414,10 +414,10 @@ const createBlockedEvent = async ({
   request: ValidatedRunLoopRequest;
   sourceContext: LoopPayload;
   sourceRef: string | undefined;
-  userId: string;
+  user: string;
 }): Promise<LoopEventRecord> =>
   insertLoopEvent({
-    user: userId,
+    user,
     sourceType: request.sourceType,
     sourceRef,
     status: `blocked`,
@@ -447,14 +447,14 @@ const resolveLoopOutcome = async ({
   sourceContext,
   sourceRef,
   timeline,
-  userId,
+  user,
 }: {
   request: ValidatedRunLoopRequest;
   result: LoopPersonaResult;
   sourceContext: LoopPayload;
   sourceRef: string | undefined;
   timeline: LoopEventRecord[];
-  userId: string;
+  user: string;
 }): Promise<{ outcome: LoopOutcome; finalEvent: LoopEventRecord }> => {
   if (result.status === `completed`) {
     const assignee = timeline.at(-1)?.assignee;
@@ -469,7 +469,7 @@ const resolveLoopOutcome = async ({
       request,
       sourceContext,
       sourceRef,
-      userId,
+      user,
     });
 
     timeline.push(finalEvent);
@@ -490,7 +490,7 @@ const resolveLoopOutcome = async ({
       request,
       sourceContext,
       sourceRef,
-      userId,
+      user,
     });
 
     timeline.push(finalEvent);
@@ -504,7 +504,7 @@ const resolveLoopOutcome = async ({
     request,
     sourceContext,
     sourceRef,
-    userId,
+    user,
   });
 
   timeline.push(routedEvent);
@@ -516,18 +516,18 @@ const resolveLoopOutcome = async ({
     sourceContext,
     sourceRef,
     timeline,
-    userId,
+    user,
   });
 };
 
-export const runLoop = async (input: RunLoopRequest, userId: string): Promise<RunLoopResponse> => {
+export const runLoop = async (input: RunLoopRequest, user: string): Promise<RunLoopResponse> => {
   const request = validateRunLoopRequest(input);
   const sourceAdapter = sourceAdapters[request.sourceType];
   const sourceContext = sourceAdapter.buildContext(request);
   const sourceRef = sourceAdapter.buildSourceRef(request);
   const events: LoopEventRecord[] = [];
 
-  const initialEvent = await createInitialEvent(request, sourceContext, sourceRef, userId);
+  const initialEvent = await createInitialEvent(request, sourceContext, sourceRef, user);
   events.push(initialEvent);
 
   if (request.assignedPersona) {
@@ -538,7 +538,7 @@ export const runLoop = async (input: RunLoopRequest, userId: string): Promise<Ru
       request,
       sourceContext,
       sourceRef,
-      userId,
+      user,
     });
 
     events.push(routedEvent);
@@ -549,7 +549,7 @@ export const runLoop = async (input: RunLoopRequest, userId: string): Promise<Ru
       sourceContext,
       sourceRef,
       timeline: events,
-      userId,
+      user,
     });
 
     return {
@@ -566,7 +566,7 @@ export const runLoop = async (input: RunLoopRequest, userId: string): Promise<Ru
     sourceContext,
     sourceRef,
     timeline: events,
-    userId,
+    user,
   });
 
   return {
@@ -576,7 +576,7 @@ export const runLoop = async (input: RunLoopRequest, userId: string): Promise<Ru
   };
 };
 
-export const listLoopEvents = async (userId: string): Promise<LoopEventRecord[]> => {
+export const listLoopEvents = async (user: string): Promise<LoopEventRecord[]> => {
   const result = await getPool().query<LoopEventRecord>(
     `
       SELECT ${loopEventColumns}
@@ -584,7 +584,7 @@ export const listLoopEvents = async (userId: string): Promise<LoopEventRecord[]>
       WHERE "user" = $1
       ORDER BY "emittedAt" DESC
     `,
-    [userId],
+    [user],
   );
 
   return result.rows;
