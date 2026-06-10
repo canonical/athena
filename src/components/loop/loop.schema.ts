@@ -17,6 +17,7 @@ export type LoopApprovals = unknown[];
 
 export type LoopEventRecord = {
   id: string;
+  userId: string;
   sourceType: string;
   sourceRef: string | null;
   status: string;
@@ -92,6 +93,7 @@ export type LoopPersonaHandler = {
 };
 
 export type LoopEventInsert = {
+  userId: string;
   sourceType: LoopSourceType;
   sourceRef?: string;
   status: LoopEventStatus;

@@ -70,6 +70,12 @@ test(`loop events require authentication`, async ({ request }) => {
   expect(response.status()).toBe(401);
 });
 
+test(`loop events list requires authentication`, async ({ request }) => {
+  const response = await request.get(`/api/loop/events`);
+
+  expect(response.status()).toBe(401);
+});
+
 for (const sourceFixture of sourceFixtures) {
   test(`${sourceFixture.sourceType} mock events complete through the loop`, async ({ page }) => {
     await authenticate(page);
@@ -89,6 +95,7 @@ for (const sourceFixture of sourceFixtures) {
     const body = (await response.json()) as {
       outcome: string;
       events: Array<{
+        userId: string;
         sourceType: string;
         sourceRef: string | null;
         status: string;
@@ -107,6 +114,9 @@ for (const sourceFixture of sourceFixtures) {
     expect(body.outcome).toBe(`completed`);
     expect(body.events).toHaveLength(3);
     expect(body.events.map((event) => event.status)).toEqual([`created`, `routed`, `completed`]);
+    expect(body.events[0]?.userId).toBe(dexEmail);
+    expect(body.events[1]?.userId).toBe(dexEmail);
+    expect(body.events[2]?.userId).toBe(dexEmail);
     expect(body.events[0]?.sourceType).toBe(sourceFixture.sourceType);
     expect(body.events[0]?.sourceRef).toBe(sourceFixture.expectedSourceRef);
     expect(body.events[0]?.assignee).toBeNull();
@@ -184,3 +194,59 @@ test(`loop events reject unknown source types`, async ({ page }) => {
     error: `sourceType must be one of: github, jira, human-chat.`,
   });
 });
+
+test(`GET loop events returns events for the authenticated user`, async ({ page }) => {
+  await authenticate(page);
+
+  await page.request.post(`http://athena.localhost/api/loop/events`, {
+    data: {
+      sourceType: `github`,
+      workItemUrl: `https://jira.example.com/browse/ATH-400`,
+      requestedOutcome: `List events for the current user`,
+      payload: {
+        repository: `canonical/athena`,
+        action: `opened`,
+        pullRequest: 99,
+        title: `List events test`,
+      },
+    },
+  });
+
+  const listResponse = await page.request.get(`http://athena.localhost/api/loop/events`);
+
+  expect(listResponse.status()).toBe(200);
+
+  const events = (await listResponse.json()) as Array<{
+    userId: string;
+    status: string;
+    workItemUrl: string | null;
+  }>;
+
+  expect(Array.isArray(events)).toBe(true);
+  expect(events.length).toBeGreaterThan(0);
+  expect(events.every((e) => e.userId === dexEmail)).toBe(true);
+});
+
+test(`loop page shows events in the UI`, async ({ page }) => {
+  await authenticate(page);
+
+  await page.request.post(`http://athena.localhost/api/loop/events`, {
+    data: {
+      sourceType: `jira`,
+      workItemUrl: `https://jira.example.com/browse/ATH-500`,
+      requestedOutcome: `Visible in loop UI`,
+      payload: {
+        issueKey: `ATH-500`,
+        transition: `in-progress`,
+        summary: `Visible in loop UI`,
+      },
+    },
+  });
+
+  await page.goto(`http://athena.localhost/loop`);
+
+  await expect(page.getByRole(`heading`, { name: `Loop events` })).toBeVisible();
+  await expect(page.getByRole(`table`)).toBeVisible();
+  await expect(page.getByText(`Completed`).first()).toBeVisible();
+});
+
