@@ -249,4 +249,3 @@ test(`loop page shows events in the UI`, async ({ page }) => {
   await expect(page.getByRole(`table`)).toBeVisible();
   await expect(page.getByText(`Completed`).first()).toBeVisible();
 });
-

@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS "event" (
 );
 
 ALTER TABLE "event" ADD COLUMN IF NOT EXISTS "userId" TEXT REFERENCES "user"("id") ON DELETE CASCADE;
+-- Note: The ALTER TABLE above handles upgrades for existing tables where the column does not yet exist.
+-- On a fresh database the CREATE TABLE above defines "userId" as NOT NULL; on existing tables
+-- the column is added as nullable to avoid failing on pre-existing rows without a userId value.
 
 COMMENT ON TABLE "event" IS 'Athena loop events.';
 COMMENT ON COLUMN "event"."id" IS 'Event identifier.';
