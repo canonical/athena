@@ -66,5 +66,7 @@ Notes:
 3. Use the entity name directly when a component displays or manages that entity: `Loop` not `LoopView`, `Event` not `EventView`.
 4. Use a descriptive suffix only when multiple components coexist in the same folder: `EventList`, `EventEdit`, `EventLayout`.
 
+## Formatting standard
+
 1. Use spaces instead of tabs for indentation.
 2. In Markdown files, indent nested list items with two spaces so GitHub renders lists consistently.
