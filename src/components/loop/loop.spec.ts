@@ -219,6 +219,6 @@ test(`loop page shows events in the UI`, async ({ page }) => {
   await page.goto(`http://athena.localhost/loop`);
 
   await expect(page.getByRole(`heading`, { name: `Loop events` })).toBeVisible();
-  await expect(page.getByRole(`table`)).toBeVisible();
+  await expect(page.getByRole(`grid`)).toBeVisible();
   await expect(page.getByText(`Completed`).first()).toBeVisible();
 });
