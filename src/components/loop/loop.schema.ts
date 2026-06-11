@@ -15,8 +15,20 @@ export type LoopOutcome = (typeof loopOutcomes)[number];
 export type LoopPayload = Record<string, unknown>;
 export type LoopApprovals = unknown[];
 
-export type LoopEventRecord = {
+export type Loop = {
   id: string;
+  user: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type LoopInsert = {
+  user: string;
+};
+
+export type Event = {
+  id: string;
+  loop: string;
   user: string;
   sourceType: string;
   sourceRef: string | null;
@@ -58,8 +70,9 @@ export type ValidatedRunLoopRequest = {
 
 export type RunLoopResponse = {
   outcome: LoopOutcome;
-  events: LoopEventRecord[];
-  finalEvent: LoopEventRecord;
+  loop: Loop;
+  events: Event[];
+  finalEvent: Event;
 };
 
 export type LoopSourceAdapter = {
@@ -89,10 +102,11 @@ export type LoopPersonaResult = LoopPersonaRoutedResult | LoopPersonaCompletedRe
 
 export type LoopPersonaHandler = {
   persona: PersonaId;
-  handle: (event: LoopEventRecord) => LoopPersonaResult;
+  handle: (event: Event) => LoopPersonaResult;
 };
 
-export type LoopEventInsert = {
+export type EventInsert = {
+  loop: string;
   user: string;
   sourceType: LoopSourceType;
   sourceRef?: string;

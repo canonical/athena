@@ -59,7 +59,12 @@ Notes:
 2. Examples: `event.user`, `session.user`, `handler.persona`.
 3. This keeps assignments simpler and more semantic: `event.user = user.id`.
 
-## Formatting standard
+## Component naming standard
+
+1. Name components after the entity or responsibility they represent, not after their role in the UI.
+2. Avoid `View`, `Page`, `Screen`, and similar suffixes unless a component folder contains multiple components that need disambiguation.
+3. Use the entity name directly when a component displays or manages that entity: `Loop` not `LoopView`, `Event` not `EventView`.
+4. Use a descriptive suffix only when multiple components coexist in the same folder: `EventList`, `EventEdit`, `EventLayout`.
 
 1. Use spaces instead of tabs for indentation.
 2. In Markdown files, indent nested list items with two spaces so GitHub renders lists consistently.

@@ -11,6 +11,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 \echo >>> Running Athena DDL migrations
 \ir ./ddls/000100.user.sql
+\ir ./ddls/000150.loop.sql
 \ir ./ddls/000200.event.sql
 \ir ./ddls/000300.session.sql
 \ir ./ddls/999999.cleanup.sql

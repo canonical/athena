@@ -6,6 +6,7 @@ export const loopApiPaths = {
 
 export type LoopEventSummary = {
   id: string;
+  loop: string;
   user: string;
   sourceType: string;
   sourceRef: string | null;

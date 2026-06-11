@@ -8,7 +8,7 @@ const statusLabel: Record<string, string> = {
   blocked: "Blocked",
 };
 
-export function LoopView() {
+export function Loop() {
   const state = useLoopEvents();
 
   if (state.status === "loading") {

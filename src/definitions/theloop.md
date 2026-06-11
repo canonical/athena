@@ -42,7 +42,15 @@
 	- interaction.protocol.md
 	- handoff.definition.md
 
-## Event Sources
+## Loops
+
+A user can own multiple loops, one per project or work context. Each loop groups the events that belong to that orchestration run.
+
+- A loop is created when a user submits a new loop request.
+- All events within that orchestration run belong to the same loop.
+- Listing loops for a user returns all loops the user has created.
+
+
 
 1. User request
 2. Jira event

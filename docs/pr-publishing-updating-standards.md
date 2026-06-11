@@ -13,12 +13,11 @@ This document is the source of truth for pull request publishing and update expe
 ## PR content requirements
 
 1. Keep the PR focused on a single change set or objective.
-2. Include a clear summary of what changed and why.
+2. Include a clear summary of what changed and why, not only from the last push, but about the whole PR.
 3. Include test/validation evidence in the PR description (at minimum, `npm run check` and `npm test` outcomes).
 4. Update or add relevant documentation when behavior, workflows, or standards change.
 
 ## Update discipline requirements
 
-1. Re-run required validation after each meaningful change before pushing a PR update.
-2. Resolve review feedback with code and validation updates together so the PR stays releasable.
-3. Do not merge or request final review while required validations are failing.
+1. Resolve review feedback with code and validation updates together so the PR stays releasable.
+2. Do not commit or push a PR update while required validations are failing.
