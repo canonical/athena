@@ -26,6 +26,12 @@ Athena uses a co-located, flat component structure in [src/components](./src/com
 
 See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rules, including file move conventions.
 
+## PR publishing and updating standards
+
+Athena requires validation before creating and updating pull requests.
+
+See [docs/pr-publishing-updating-standards.md](./docs/pr-publishing-updating-standards.md) for the canonical pull request publishing and update requirements.
+
 ## What the app does today
 
 The current service starts an Express server with session-based authentication:
