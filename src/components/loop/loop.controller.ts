@@ -228,7 +228,7 @@ const insertLoop = async (insert: LoopInsert): Promise<Loop> => {
     throw new Error(`Loop was not created.`);
   }
 
-  await pool.query(`INSERT INTO "loop_user" ("loop", "user") VALUES ($1, $2)`, [created.id, insert.user]);
+  await pool.query(`INSERT INTO "loopUser" ("loop", "user") VALUES ($1, $2)`, [created.id, insert.user]);
 
   return created;
 };

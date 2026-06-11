@@ -8,6 +8,7 @@ Read these documents before making changes:
 
 - [README](./README.md): project scope, runtime overview, and developer workflows.
 - [Coding standards](./docs/coding-standards.md): canonical source layout and file move conventions.
+- [Database standards](./docs/database-standards.md): canonical database naming, identifier, and migration rules.
 - [Testing standards](./docs/testing-standards.md): canonical test strategy, E2E scope, and coverage expectations.
 - [PR publishing and updating standards](./docs/pr-publishing-updating-standards.md): canonical pull request validation and update requirements.
 
