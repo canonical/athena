@@ -47,8 +47,21 @@
 A user can own multiple loops, one per project or work context. Each loop groups the events that belong to that orchestration run.
 
 - A loop is created when a user submits a new loop request.
+- A loop has a human-readable name and an optional description to identify the work context.
+- A loop can be related to multiple users. The creator is recorded as the loop owner and automatically added as a related user. Additional users can be associated via the `loop_user` relation.
 - All events within that orchestration run belong to the same loop.
 - Listing loops for a user returns all loops the user has created.
+- Loops are intended to be long-lived. They do not conclude; they persist as a container for events.
+
+## Events
+
+Events are the first-class unit of work within a loop. Each event records a discrete step in the orchestration process.
+
+- Events emerge when work is submitted or routed.
+- Each event belongs to exactly one loop.
+- Events have outcomes: an event concludes as `completed` or `blocked`.
+- The outcome of an orchestration run is determined by the final event's status, not by the loop itself.
+- Loops do not have outcomes; events do.
 
 
 

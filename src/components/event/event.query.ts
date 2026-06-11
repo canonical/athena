@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
-import { fetchLoopEvents, type LoopEventSummary } from "./loop.client.js";
+import { fetchEvents } from "./event.client.js";
+import type { Event } from "./event.schema.js";
 
-export type LoopEventsState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "success"; events: LoopEventSummary[] };
+export type EventsState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; events: Event[] };
 
-export const useLoopEvents = (): LoopEventsState => {
-  const [state, setState] = useState<LoopEventsState>({ status: "loading" });
+export const useEvents = (): EventsState => {
+  const [state, setState] = useState<EventsState>({ status: "loading" });
 
   useEffect(() => {
     let active = true;
 
-    fetchLoopEvents()
+    fetchEvents()
       .then((events) => {
         if (active) {
           setState({ status: "success", events });

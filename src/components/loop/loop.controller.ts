@@ -211,13 +211,15 @@ const buildEventPayload = ({
 });
 
 const insertLoop = async (insert: LoopInsert): Promise<Loop> => {
-  const result = await getPool().query<Loop>(
+  const pool = getPool();
+
+  const result = await pool.query<Loop>(
     `
-      INSERT INTO "loop" ("user")
-      VALUES ($1)
-      RETURNING "id", "user", "createdAt", "updatedAt"
+      INSERT INTO "loop" ("user", "name", "description")
+      VALUES ($1, $2, $3)
+      RETURNING "id", "user", "name", "description", "createdAt", "updatedAt"
     `,
-    [insert.user],
+    [insert.user, insert.name, insert.description ?? null],
   );
 
   const created = result.rows[0];
@@ -225,6 +227,8 @@ const insertLoop = async (insert: LoopInsert): Promise<Loop> => {
   if (!created) {
     throw new Error(`Loop was not created.`);
   }
+
+  await pool.query(`INSERT INTO "loop_user" ("loop", "user") VALUES ($1, $2)`, [created.id, insert.user]);
 
   return created;
 };
@@ -309,6 +313,8 @@ export const validateRunLoopRequest = (value: unknown): ValidatedRunLoopRequest 
   const assignedPersona = assignedPersonaValue && isPersonaId(assignedPersonaValue) ? assignedPersonaValue : undefined;
 
   return {
+    name: normalizeString(value.name) ?? requestedOutcome,
+    description: normalizeString(value.description),
     sourceType,
     sourceRef: normalizeString(value.sourceRef),
     assignedPersona,
@@ -566,7 +572,7 @@ export const runLoop = async (input: RunLoopRequest, userId: string): Promise<Ru
   const sourceRef = sourceAdapter.buildSourceRef(request);
   const events: Event[] = [];
 
-  const loop = await insertLoop({ user: userId });
+  const loop = await insertLoop({ user: userId, name: request.name, description: request.description });
   const loopId = loop.id;
 
   const initialEvent = await createInitialEvent(request, sourceContext, sourceRef, loopId, userId);
@@ -586,7 +592,7 @@ export const runLoop = async (input: RunLoopRequest, userId: string): Promise<Ru
 
     events.push(routedEvent);
     const completionResult = personaHandlers[request.assignedPersona].handle(routedEvent);
-    const { outcome, finalEvent } = await resolveLoopOutcome({
+    const { finalEvent } = await resolveLoopOutcome({
       loopId,
       request,
       result: completionResult,
@@ -597,7 +603,6 @@ export const runLoop = async (input: RunLoopRequest, userId: string): Promise<Ru
     });
 
     return {
-      outcome,
       loop,
       events,
       finalEvent,
@@ -605,7 +610,7 @@ export const runLoop = async (input: RunLoopRequest, userId: string): Promise<Ru
   }
 
   const assignmentResult = personaHandlers[engineeringManagerPersonaId].handle(initialEvent);
-  const { outcome, finalEvent } = await resolveLoopOutcome({
+  const { finalEvent } = await resolveLoopOutcome({
     loopId,
     request,
     result: assignmentResult,
@@ -616,7 +621,6 @@ export const runLoop = async (input: RunLoopRequest, userId: string): Promise<Ru
   });
 
   return {
-    outcome,
     loop,
     events,
     finalEvent,

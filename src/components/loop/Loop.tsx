@@ -1,5 +1,5 @@
 import { MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
-import { useLoopEvents } from "./loop.query.js";
+import { useEvents } from "@components/event/event.query.js";
 
 const statusLabel: Record<string, string> = {
   created: "Created",
@@ -9,7 +9,7 @@ const statusLabel: Record<string, string> = {
 };
 
 export function Loop() {
-  const state = useLoopEvents();
+  const state = useEvents();
 
   if (state.status === "loading") {
     return (

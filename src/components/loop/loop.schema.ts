@@ -18,12 +18,22 @@ export type LoopApprovals = unknown[];
 export type Loop = {
   id: string;
   user: string;
+  name: string;
+  description: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
 export type LoopInsert = {
   user: string;
+  name: string;
+  description?: string;
+};
+
+export type LoopUser = {
+  loop: string;
+  user: string;
+  createdAt: Date;
 };
 
 export type Event = {
@@ -47,6 +57,8 @@ export type Event = {
 };
 
 export type RunLoopRequest = {
+  name?: string;
+  description?: string;
   sourceType: string;
   sourceRef?: string;
   assignedPersona?: string;
@@ -58,6 +70,8 @@ export type RunLoopRequest = {
 };
 
 export type ValidatedRunLoopRequest = {
+  name: string;
+  description: string | undefined;
   sourceType: LoopSourceType;
   sourceRef?: string;
   assignedPersona?: PersonaId;
@@ -69,7 +83,6 @@ export type ValidatedRunLoopRequest = {
 };
 
 export type RunLoopResponse = {
-  outcome: LoopOutcome;
   loop: Loop;
   events: Event[];
   finalEvent: Event;
