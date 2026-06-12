@@ -1,6 +1,22 @@
 import { getLoopForUser } from "@components/loop/loop.controller.js";
 import { getPool } from "@components/postgres/postgres.js";
-import type { CreateEventRequest, CreateEventResponse, Event, EventApprovals, EventInsert, EventPayload, ExecutionPersonaId, LoopPersonaHandler, LoopPersonaResult, PersonaId, ValidatedCreateEventRequest } from "./event.schema.js";
+import type {
+  BlockedEventCreation,
+  ConcludedEventCreation,
+  CreateEventRequest,
+  CreateEventResponse,
+  Event,
+  EventFollowUpRequest,
+  EventInsert,
+  EventPayload,
+  EventPayloadBuildInput,
+  EventSourceContext,
+  ExecutionPersonaId,
+  LoopPersonaHandler,
+  PersonaId,
+  RoutedEventCreation,
+  ValidatedCreateEventRequest,
+} from "./event.schema.js";
 import { athenaPersonaId, engineeringManagerPersonaId, executionPersonaIds, personaIds } from "./event.schema.js";
 
 const eventColumnNames = [`id`, `loop`, `sourceType`, `sourceRef`, `status`, `assignee`, `requestedOutcome`, `emittedByPersona`, `blocker`, `approvals`, `payload`, `emittedAt`, `completedAt`, `updatedAt`] as const;
@@ -83,21 +99,7 @@ const personaHandlers: Record<PersonaId, LoopPersonaHandler> = {
   "qa.grace": createCompletingPersonaHandler(`qa.grace`),
 };
 
-const buildHandoff = ({
-  approvals,
-  blocker,
-  context,
-  nextExpectedAction,
-  nextOwningPersona,
-  status,
-}: {
-  approvals: EventApprovals;
-  blocker?: string;
-  context: string;
-  nextExpectedAction: string;
-  nextOwningPersona: string | null;
-  status: string;
-}) => ({
+const buildHandoff = ({ approvals, blocker, context, nextExpectedAction, nextOwningPersona, status }: Omit<EventPayloadBuildInput, "note" | "request" | "sourceContext">) => ({
   currentStatus: status,
   relevantContextAndDecisions: context,
   dependenciesAndBlockers: blocker ? [blocker] : [],
@@ -106,27 +108,7 @@ const buildHandoff = ({
   nextOwningPersona,
 });
 
-const buildEventPayload = ({
-  approvals,
-  blocker,
-  context,
-  nextExpectedAction,
-  nextOwningPersona,
-  note,
-  request,
-  sourceContext,
-  status,
-}: {
-  approvals: EventApprovals;
-  blocker?: string;
-  context: string;
-  nextExpectedAction: string;
-  nextOwningPersona: string | null;
-  note: string;
-  request: ValidatedCreateEventRequest;
-  sourceContext: EventPayload;
-  status: string;
-}): EventPayload => ({
+const buildEventPayload = ({ approvals, blocker, context, nextExpectedAction, nextOwningPersona, note, request, sourceContext, status }: EventPayloadBuildInput): EventPayload => ({
   source: sourceContext,
   handoff: buildHandoff({
     approvals,
@@ -225,7 +207,15 @@ export const validateCreateEventRequest = (value: unknown): ValidatedCreateEvent
   };
 };
 
-const createInitialEvent = async (request: ValidatedCreateEventRequest, sourceContext: EventPayload, sourceRef: string | undefined): Promise<Event> =>
+const getAssignedPersona = (event: Event): PersonaId => {
+  if (!event.assignee || !isPersonaId(event.assignee)) {
+    throw new Error(`A concluding event requires an assigned persona.`);
+  }
+
+  return event.assignee;
+};
+
+const createInitialEvent = async ({ request, sourceContext, sourceRef }: EventSourceContext): Promise<Event> =>
   insertEvent({
     loop: request.loop,
     sourceType: request.sourceType,
@@ -246,21 +236,7 @@ const createInitialEvent = async (request: ValidatedCreateEventRequest, sourceCo
     }),
   });
 
-const createRoutedEvent = async ({
-  assignee,
-  emittedByPersona,
-  note,
-  request,
-  sourceContext,
-  sourceRef,
-}: {
-  assignee: PersonaId;
-  emittedByPersona: string;
-  note: string;
-  request: ValidatedCreateEventRequest;
-  sourceContext: EventPayload;
-  sourceRef: string | undefined;
-}): Promise<Event> =>
+const createRoutedEvent = async ({ assignee, emittedByPersona, note, request, sourceContext, sourceRef }: RoutedEventCreation): Promise<Event> =>
   insertEvent({
     loop: request.loop,
     sourceType: request.sourceType,
@@ -282,19 +258,7 @@ const createRoutedEvent = async ({
     }),
   });
 
-const createCompletedEvent = async ({
-  assignee,
-  note,
-  request,
-  sourceContext,
-  sourceRef,
-}: {
-  assignee: PersonaId;
-  note: string;
-  request: ValidatedCreateEventRequest;
-  sourceContext: EventPayload;
-  sourceRef: string | undefined;
-}): Promise<Event> =>
+const createCompletedEvent = async ({ assignee, note, request, sourceContext, sourceRef }: ConcludedEventCreation): Promise<Event> =>
   insertEvent({
     loop: request.loop,
     sourceType: request.sourceType,
@@ -317,21 +281,7 @@ const createCompletedEvent = async ({
     completedAt: new Date(),
   });
 
-const createBlockedEvent = async ({
-  assignee,
-  blocker,
-  note,
-  request,
-  sourceContext,
-  sourceRef,
-}: {
-  assignee: PersonaId;
-  blocker: string;
-  note: string;
-  request: ValidatedCreateEventRequest;
-  sourceContext: EventPayload;
-  sourceRef: string | undefined;
-}): Promise<Event> =>
+const createBlockedEvent = async ({ assignee, blocker, note, request, sourceContext, sourceRef }: BlockedEventCreation): Promise<Event> =>
   insertEvent({
     loop: request.loop,
     sourceType: request.sourceType,
@@ -355,56 +305,30 @@ const createBlockedEvent = async ({
     }),
   });
 
-const appendConclusionEvents = async ({
-  request,
-  result,
-  sourceContext,
-  sourceRef,
-  timeline,
-}: {
-  request: ValidatedCreateEventRequest;
-  result: LoopPersonaResult;
-  sourceContext: EventPayload;
-  sourceRef: string | undefined;
-  timeline: Event[];
-}): Promise<void> => {
+const createFollowUpEvents = async ({ currentEvent, request, result, sourceContext, sourceRef }: EventFollowUpRequest): Promise<Event[]> => {
   if (result.status === `completed`) {
-    const assignee = timeline.at(-1)?.assignee;
-
-    if (!assignee || !isPersonaId(assignee)) {
-      throw new Error(`A completing event requires an assigned persona.`);
-    }
-
-    timeline.push(
+    return [
       await createCompletedEvent({
-        assignee,
+        assignee: getAssignedPersona(currentEvent),
         note: result.note,
         request,
         sourceContext,
         sourceRef,
       }),
-    );
-    return;
+    ];
   }
 
   if (result.status === `blocked`) {
-    const assignee = timeline.at(-1)?.assignee;
-
-    if (!assignee || !isPersonaId(assignee)) {
-      throw new Error(`A blocked event requires an assigned persona.`);
-    }
-
-    timeline.push(
+    return [
       await createBlockedEvent({
-        assignee,
+        assignee: getAssignedPersona(currentEvent),
         blocker: result.blocker,
         note: result.note,
         request,
         sourceContext,
         sourceRef,
       }),
-    );
-    return;
+    ];
   }
 
   const routedEvent = await createRoutedEvent({
@@ -415,17 +339,18 @@ const appendConclusionEvents = async ({
     sourceContext,
     sourceRef,
   });
-
-  timeline.push(routedEvent);
   const completionResult = personaHandlers[result.assignee].handle(routedEvent);
 
-  await appendConclusionEvents({
-    request,
-    result: completionResult,
-    sourceContext,
-    sourceRef,
-    timeline,
-  });
+  return [
+    routedEvent,
+    ...(await createFollowUpEvents({
+      currentEvent: routedEvent,
+      request,
+      result: completionResult,
+      sourceContext,
+      sourceRef,
+    })),
+  ];
 };
 
 export const createEvent = async (input: CreateEventRequest, userId: string): Promise<CreateEventResponse> => {
@@ -438,49 +363,45 @@ export const createEvent = async (input: CreateEventRequest, userId: string): Pr
 
   const sourceRef = resolveSourceRef(request);
   const sourceContext = buildSourceContext(request, sourceRef);
-  const events: Event[] = [];
+  const eventContext = {
+    request,
+    sourceContext,
+    sourceRef,
+  } satisfies EventSourceContext;
 
-  const initialEvent = await createInitialEvent(request, sourceContext, sourceRef);
-  events.push(initialEvent);
+  const initialEvent = await createInitialEvent(eventContext);
 
   if (request.assignedPersona) {
     const routedEvent = await createRoutedEvent({
+      ...eventContext,
       assignee: request.assignedPersona,
       emittedByPersona: athenaPersonaId,
       note: `${athenaPersonaId} routed the event to ${request.assignedPersona}.`,
-      request,
-      sourceContext,
-      sourceRef,
     });
 
-    events.push(routedEvent);
     const completionResult = personaHandlers[request.assignedPersona].handle(routedEvent);
-    await appendConclusionEvents({
-      request,
+    const followUpEvents = await createFollowUpEvents({
+      ...eventContext,
+      currentEvent: routedEvent,
       result: completionResult,
-      sourceContext,
-      sourceRef,
-      timeline: events,
     });
 
     return {
       loop,
-      events,
+      events: [initialEvent, routedEvent, ...followUpEvents],
     };
   }
 
   const assignmentResult = personaHandlers[engineeringManagerPersonaId].handle(initialEvent);
-  await appendConclusionEvents({
-    request,
+  const followUpEvents = await createFollowUpEvents({
+    ...eventContext,
+    currentEvent: initialEvent,
     result: assignmentResult,
-    sourceContext,
-    sourceRef,
-    timeline: events,
   });
 
   return {
     loop,
-    events,
+    events: [initialEvent, ...followUpEvents],
   };
 };
 

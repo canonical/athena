@@ -50,6 +50,24 @@ export type ValidatedCreateEventRequest = {
   payload: EventPayload;
 };
 
+export type EventSourceContext = {
+  request: ValidatedCreateEventRequest;
+  sourceContext: EventPayload;
+  sourceRef?: string;
+};
+
+export type EventPayloadBuildInput = {
+  approvals: EventApprovals;
+  blocker?: string;
+  context: string;
+  nextExpectedAction: string;
+  nextOwningPersona: string | null;
+  note: string;
+  request: ValidatedCreateEventRequest;
+  sourceContext: EventPayload;
+  status: LoopEventStatus;
+};
+
 export type CreateEventResponse = {
   loop: Loop;
   events: Event[];
@@ -91,4 +109,24 @@ export type EventInsert = {
   approvals: EventApprovals;
   payload: EventPayload;
   completedAt?: Date;
+};
+
+export type RoutedEventCreation = EventSourceContext & {
+  assignee: PersonaId;
+  emittedByPersona: string;
+  note: string;
+};
+
+export type ConcludedEventCreation = EventSourceContext & {
+  assignee: PersonaId;
+  note: string;
+};
+
+export type BlockedEventCreation = ConcludedEventCreation & {
+  blocker: string;
+};
+
+export type EventFollowUpRequest = EventSourceContext & {
+  currentEvent: Event;
+  result: LoopPersonaResult;
 };
