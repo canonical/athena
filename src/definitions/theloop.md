@@ -48,7 +48,7 @@ A user can own multiple loops, one per project or work context. Each loop groups
 
 - A loop is created when a user submits a new loop request.
 - A loop has a human-readable name and an optional description to identify the work context.
-- A loop can be related to multiple users. The creator is recorded as the loop owner and automatically added as a related user. Additional users can be associated via the `loopUser` relation.
+- A loop belongs to exactly one project. Project membership determines which users can create and review the loop.
 - All events within that orchestration run belong to the same loop.
 - Listing loops for a user returns all loops the user has created.
 - Loops are intended to be long-lived. They do not conclude; they persist as a container for events.

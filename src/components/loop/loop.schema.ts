@@ -30,12 +30,6 @@ export type LoopInsert = {
   description?: string;
 };
 
-export type LoopUser = {
-  loop: string;
-  user: string;
-  createdAt: Date;
-};
-
 export type Event = {
   id: string;
   loop: string;
