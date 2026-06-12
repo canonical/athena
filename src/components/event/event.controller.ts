@@ -273,7 +273,7 @@ const createRoutedEvent = async ({
     payload: buildEventPayload({
       approvals: request.approvals,
       context: buildSourceSummary(request.sourceType, sourceContext),
-      nextExpectedAction: `Have ${assignee} complete the current responsibility for the event.`,
+      nextExpectedAction: `Have ${assignee} complete the current responsibility for the work item.`,
       nextOwningPersona: assignee,
       note,
       request,

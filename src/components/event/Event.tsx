@@ -61,25 +61,29 @@ export function Event() {
       ) : (
         <MainTable
           headers={[{ content: "Status" }, { content: "Source" }, { content: "Work item" }, { content: "Requested outcome" }, { content: "Assignee" }, { content: "Emitted at" }]}
-          rows={state.events.map((event) => ({
-            key: event.id,
-            columns: [
-              { content: statusLabel[event.status] ?? event.status },
-              { content: event.sourceRef ? `${event.sourceType} · ${event.sourceRef}` : event.sourceType },
-              {
-                content: readEventUrl(event.payload) ? (
-                  <a href={readEventUrl(event.payload)} rel="noreferrer" target="_blank">
-                    {readEventUrl(event.payload)}
-                  </a>
-                ) : (
-                  "—"
-                ),
-              },
-              { content: event.requestedOutcome ?? "—" },
-              { content: event.assignee ?? "—" },
-              { content: new Date(event.emittedAt).toLocaleString() },
-            ],
-          }))}
+          rows={state.events.map((event) => {
+            const eventUrl = readEventUrl(event.payload);
+
+            return {
+              key: event.id,
+              columns: [
+                { content: statusLabel[event.status] ?? event.status },
+                { content: event.sourceRef ? `${event.sourceType} · ${event.sourceRef}` : event.sourceType },
+                {
+                  content: eventUrl ? (
+                    <a href={eventUrl} rel="noreferrer" target="_blank">
+                      {eventUrl}
+                    </a>
+                  ) : (
+                    "—"
+                  ),
+                },
+                { content: event.requestedOutcome ?? "—" },
+                { content: event.assignee ?? "—" },
+                { content: new Date(event.emittedAt).toLocaleString() },
+              ],
+            };
+          })}
         />
       )}
     </section>
