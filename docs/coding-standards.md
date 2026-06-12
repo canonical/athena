@@ -56,8 +56,8 @@ Notes:
 ## Database and type field naming standard
 
 1. For Athena-owned database columns and TypeScript fields that store another record's `id`, use the related entity name, not `<entity>Id`.
-2. Examples: `event.user`, `session.user`, `handler.persona`.
-3. This keeps assignments simpler and more semantic: `event.user = user.id`.
+2. Examples: `event.loop`, `session.user`, `handler.persona`.
+3. This keeps assignments simpler and more semantic: `event.loop = loop.id`.
 
 ## Component naming standard
 

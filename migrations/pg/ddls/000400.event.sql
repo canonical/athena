@@ -1,8 +1,7 @@
--- Event log and current event state for Athena loop orchestration
+-- Event log for Athena loop orchestration
 CREATE TABLE IF NOT EXISTS "event" (
   "id" UUID PRIMARY KEY DEFAULT uuidv7(),
   "loop" UUID NOT NULL REFERENCES "loop"("id") ON DELETE CASCADE,
-  "user" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "sourceType" TEXT NOT NULL,
   "sourceRef" TEXT,
   "status" TEXT NOT NULL,
@@ -21,7 +20,6 @@ CREATE TABLE IF NOT EXISTS "event" (
 
 CREATE INDEX IF NOT EXISTS "idxEventLoop" ON "event"("loop");
 CREATE INDEX IF NOT EXISTS "idxEventStatus" ON "event"("status");
-CREATE INDEX IF NOT EXISTS "idxEventUser" ON "event"("user");
 CREATE INDEX IF NOT EXISTS "idxEventAssignee" ON "event"("assignee");
 CREATE INDEX IF NOT EXISTS "idxEventWorkItemUrl" ON "event"("workItemUrl");
 CREATE INDEX IF NOT EXISTS "idxEventTopLevelWorkItemUrl" ON "event"("topLevelWorkItemUrl");

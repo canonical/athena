@@ -1,64 +1,8 @@
 import { getPool } from "@components/postgres/postgres.js";
-import { getProjectForUser } from "@components/project/project.controller.js";
-import type {
-  Event,
-  EventInsert,
-  ExecutionPersonaId,
-  Loop,
-  LoopApprovals,
-  LoopInsert,
-  LoopOutcome,
-  LoopPayload,
-  LoopPersonaHandler,
-  LoopPersonaResult,
-  LoopSourceAdapter,
-  LoopSourceType,
-  PersonaId,
-  RunLoopRequest,
-  RunLoopResponse,
-  ValidatedRunLoopRequest,
-} from "./loop.schema.js";
-import { athenaPersonaId, engineeringManagerPersonaId, executionPersonaIds, loopSourceTypes, personaIds } from "./loop.schema.js";
+import type { Loop, LoopInsert, LoopUpdate } from "./loop.schema.js";
 
-const loopEventColumns = `
-  "id",
-  "loop",
-  "user",
-  "sourceType",
-  "sourceRef",
-  "status",
-  "assignee",
-  "workItemUrl",
-  "topLevelWorkItemUrl",
-  "requestedOutcome",
-  "emittedByPersona",
-  "blocker",
-  "approvals",
-  "payload",
-  "emittedAt",
-  "completedAt",
-  "updatedAt"
-`;
-
-const loopEventSelectColumns = `
-  e."id",
-  e."loop",
-  e."user",
-  e."sourceType",
-  e."sourceRef",
-  e."status",
-  e."assignee",
-  e."workItemUrl",
-  e."topLevelWorkItemUrl",
-  e."requestedOutcome",
-  e."emittedByPersona",
-  e."blocker",
-  e."approvals",
-  e."payload",
-  e."emittedAt",
-  e."completedAt",
-  e."updatedAt"
-`;
+const loopColumns = `"id", "name", "description", "createdAt", "updatedAt"`;
+const loopSelectColumns = `l."id", l."name", l."description", l."createdAt", l."updatedAt"`;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
 
@@ -68,609 +12,143 @@ const normalizeString = (value: unknown): string | undefined => {
   }
 
   const normalized = value.trim();
-
   return normalized.length > 0 ? normalized : undefined;
 };
 
-const isLoopSourceType = (value: string): value is LoopSourceType => loopSourceTypes.includes(value as LoopSourceType);
-const isPersonaId = (value: string): value is PersonaId => personaIds.includes(value as PersonaId);
-
-const summarizeObjectValues = (payload: LoopPayload) =>
-  Object.values(payload)
-    .filter((value): value is string | number | boolean => typeof value === `string` || typeof value === `number` || typeof value === `boolean`)
-    .map((value) => String(value))
-    .join(` • `);
-
-const buildSourceSummary = (sourceType: LoopSourceType, context: LoopPayload): string => {
-  const summary = summarizeObjectValues(context);
-
-  return summary ? `${sourceType} mock context: ${summary}` : `${sourceType} mock context received.`;
-};
-
-const extractGitHubPullRequestRef = (payload: LoopPayload): string | undefined => {
-  const repository = normalizeString(payload.repository);
-  const pullRequest = typeof payload.pullRequest === `number` || typeof payload.pullRequest === `string` ? String(payload.pullRequest) : undefined;
-
-  return repository && pullRequest ? `${repository}#${pullRequest}` : repository;
-};
-
-const extractJiraRef = (payload: LoopPayload, workItemUrl: string): string | undefined => normalizeString(payload.issueKey) ?? normalizeString(workItemUrl.split(`/`).at(-1));
-const extractHumanChatRef = (payload: LoopPayload): string | undefined => normalizeString(payload.conversationId) ?? normalizeString(payload.channel);
-
-const sourceAdapters: Record<LoopSourceType, LoopSourceAdapter> = {
-  github: {
-    sourceType: `github`,
-    buildSourceRef: (request) => extractGitHubPullRequestRef(request.payload) ?? request.sourceRef,
-    buildContext: (request) => ({
-      sourceType: `github`,
-      repository: normalizeString(request.payload.repository) ?? `canonical/athena`,
-      action: normalizeString(request.payload.action) ?? `opened`,
-      pullRequest: request.payload.pullRequest ?? 0,
-      title: normalizeString(request.payload.title) ?? request.requestedOutcome,
-    }),
-  },
-  jira: {
-    sourceType: `jira`,
-    buildSourceRef: (request) => extractJiraRef(request.payload, request.workItemUrl) ?? request.sourceRef,
-    buildContext: (request) => ({
-      sourceType: `jira`,
-      issueKey: extractJiraRef(request.payload, request.workItemUrl) ?? `ATH-0`,
-      transition: normalizeString(request.payload.transition) ?? `updated`,
-      summary: normalizeString(request.payload.summary) ?? request.requestedOutcome,
-    }),
-  },
-  "human-chat": {
-    sourceType: `human-chat`,
-    buildSourceRef: (request) => extractHumanChatRef(request.payload) ?? request.sourceRef,
-    buildContext: (request) => ({
-      sourceType: `human-chat`,
-      author: normalizeString(request.payload.author) ?? `user`,
-      channel: normalizeString(request.payload.channel) ?? `web-chat`,
-      message: normalizeString(request.payload.message) ?? request.requestedOutcome,
-    }),
-  },
-};
-
-const selectMockAssignee = (event: Pick<Event, "sourceType" | "sourceRef" | "requestedOutcome" | "workItemUrl">): ExecutionPersonaId => {
-  const seed = `${event.sourceType}:${event.sourceRef ?? ``}:${event.requestedOutcome ?? ``}:${event.workItemUrl ?? ``}`;
-  const hash = [...seed].reduce((total, character, index) => total + character.charCodeAt(0) * (index + 1), 0);
-
-  return executionPersonaIds[hash % executionPersonaIds.length] as ExecutionPersonaId;
-};
-
-const createCompletingPersonaHandler = (persona: ExecutionPersonaId): LoopPersonaHandler => ({
-  persona,
-  handle: (event) => ({
-    status: `completed`,
-    note: `${persona} completed the active responsibility for ${event.requestedOutcome ?? `the requested outcome`}.`,
-  }),
-});
-const personaHandlers: Record<PersonaId, LoopPersonaHandler> = {
-  [engineeringManagerPersonaId]: {
-    persona: engineeringManagerPersonaId,
-    handle: (event) => {
-      const assignee = selectMockAssignee(event);
-
-      return {
-        status: `routed`,
-        assignee,
-        note: `${engineeringManagerPersonaId} assigned the work to ${assignee}.`,
-      };
-    },
-  },
-  "pm.alice": createCompletingPersonaHandler(`pm.alice`),
-  "pm.beatrice": createCompletingPersonaHandler(`pm.beatrice`),
-  "ic.clara": createCompletingPersonaHandler(`ic.clara`),
-  "cr.elena": createCompletingPersonaHandler(`cr.elena`),
-  "ux.fiona": createCompletingPersonaHandler(`ux.fiona`),
-  "qa.grace": createCompletingPersonaHandler(`qa.grace`),
-};
-
-const buildHandoff = ({
-  approvals,
-  blocker,
-  context,
-  nextExpectedAction,
-  nextOwningPersona,
-  status,
-  workItemUrl,
-}: {
-  approvals: LoopApprovals;
-  blocker?: string;
-  context: string;
-  nextExpectedAction: string;
-  nextOwningPersona: string | null;
-  status: string;
-  workItemUrl: string;
-}) => ({
-  jiraItem: workItemUrl,
-  currentStatus: status,
-  relevantContextAndDecisions: context,
-  dependenciesAndBlockers: blocker ? [blocker] : [],
-  requiredApprovalsAlreadyObtained: approvals,
-  nextExpectedAction,
-  nextOwningPersona,
-});
-
-const buildEventPayload = ({
-  approvals,
-  blocker,
-  context,
-  nextExpectedAction,
-  nextOwningPersona,
-  note,
-  request,
-  sourceContext,
-  status,
-}: {
-  approvals: LoopApprovals;
-  blocker?: string;
-  context: string;
-  nextExpectedAction: string;
-  nextOwningPersona: string | null;
-  note: string;
-  request: ValidatedRunLoopRequest;
-  sourceContext: LoopPayload;
-  status: string;
-}): LoopPayload => ({
-  source: sourceContext,
-  handoff: buildHandoff({
-    approvals,
-    blocker,
-    context,
-    nextExpectedAction,
-    nextOwningPersona,
-    status,
-    workItemUrl: request.workItemUrl,
-  }),
-  mock: {
-    note,
-    requestedOutcome: request.requestedOutcome,
-    topLevelWorkItemUrl: request.topLevelWorkItemUrl,
-  },
-  input: request.payload,
-});
-
-const insertLoop = async (insert: LoopInsert): Promise<Loop> => {
-  const pool = getPool();
-
-  const result = await pool.query<Loop>(
-    `
-      INSERT INTO "loop" ("project", "name", "description")
-      VALUES ($1, $2, $3)
-      RETURNING "id", "project", "name", "description", "createdAt", "updatedAt"
-    `,
-    [insert.project, insert.name, insert.description ?? null],
-  );
-
-  const created = result.rows[0];
-
-  if (!created) {
-    throw new Error(`Loop was not created.`);
-  }
-
-  return created;
-};
-
-const insertEvent = async (event: EventInsert): Promise<Event> => {
-  const result = await getPool().query<Event>(
-    `
-      INSERT INTO "event" (
-        "loop",
-        "user",
-        "sourceType",
-        "sourceRef",
-        "status",
-        "assignee",
-        "workItemUrl",
-        "topLevelWorkItemUrl",
-        "requestedOutcome",
-        "emittedByPersona",
-        "blocker",
-        "approvals",
-        "payload",
-        "completedAt"
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14)
-      RETURNING ${loopEventColumns}
-    `,
-    [
-      event.loop,
-      event.user,
-      event.sourceType,
-      event.sourceRef ?? null,
-      event.status,
-      event.assignee ?? null,
-      event.workItemUrl,
-      event.topLevelWorkItemUrl,
-      event.requestedOutcome,
-      event.emittedByPersona,
-      event.blocker ?? null,
-      JSON.stringify(event.approvals),
-      JSON.stringify(event.payload),
-      event.completedAt ?? null,
-    ],
-  );
-
-  const createdEvent = result.rows[0];
-
-  if (!createdEvent) {
-    throw new Error(`Loop event was not created.`);
-  }
-
-  return createdEvent;
-};
-
-export class LoopValidationError extends Error {}
-export class LoopAccessError extends Error {}
-
-export const validateRunLoopRequest = (value: unknown): ValidatedRunLoopRequest => {
+const validateLoopInput = (value: unknown): LoopInsert | LoopUpdate => {
   if (!isRecord(value)) {
     throw new LoopValidationError(`Loop request body must be an object.`);
   }
 
-  const project = normalizeString(value.project);
-  const sourceType = normalizeString(value.sourceType);
-  const workItemUrl = normalizeString(value.workItemUrl);
-  const requestedOutcome = normalizeString(value.requestedOutcome);
-  const assignedPersonaValue = normalizeString(value.assignedPersona);
+  const name = normalizeString(value.name);
 
-  if (!project) {
-    throw new LoopValidationError(`project is required.`);
+  if (!name) {
+    throw new LoopValidationError(`name is required.`);
   }
-
-  if (!sourceType || !isLoopSourceType(sourceType)) {
-    throw new LoopValidationError(`sourceType must be one of: ${loopSourceTypes.join(`, `)}.`);
-  }
-
-  if (!workItemUrl) {
-    throw new LoopValidationError(`workItemUrl is required.`);
-  }
-
-  if (!requestedOutcome) {
-    throw new LoopValidationError(`requestedOutcome is required.`);
-  }
-
-  if (assignedPersonaValue && !isPersonaId(assignedPersonaValue)) {
-    throw new LoopValidationError(`assignedPersona must be one of: ${personaIds.join(`, `)}.`);
-  }
-
-  const assignedPersona = assignedPersonaValue && isPersonaId(assignedPersonaValue) ? assignedPersonaValue : undefined;
 
   return {
-    project,
-    name: normalizeString(value.name) ?? requestedOutcome,
+    name,
     description: normalizeString(value.description),
-    sourceType,
-    sourceRef: normalizeString(value.sourceRef),
-    assignedPersona,
-    workItemUrl,
-    topLevelWorkItemUrl: normalizeString(value.topLevelWorkItemUrl) ?? workItemUrl,
-    requestedOutcome,
-    approvals: Array.isArray(value.approvals) ? value.approvals : [],
-    payload: isRecord(value.payload) ? value.payload : {},
   };
 };
 
-const createInitialEvent = async (request: ValidatedRunLoopRequest, sourceContext: LoopPayload, sourceRef: string | undefined, loopId: string, userId: string): Promise<Event> =>
-  insertEvent({
-    loop: loopId,
-    user: userId,
-    sourceType: request.sourceType,
-    sourceRef,
-    status: `created`,
-    workItemUrl: request.workItemUrl,
-    topLevelWorkItemUrl: request.topLevelWorkItemUrl,
-    requestedOutcome: request.requestedOutcome,
-    emittedByPersona: athenaPersonaId,
-    approvals: request.approvals,
-    payload: buildEventPayload({
-      approvals: request.approvals,
-      context: buildSourceSummary(request.sourceType, sourceContext),
-      nextExpectedAction: request.assignedPersona ? `Route the event to ${request.assignedPersona}.` : `Ask ${engineeringManagerPersonaId} to assign a persona.`,
-      nextOwningPersona: request.assignedPersona ?? engineeringManagerPersonaId,
-      note: `Athena captured the incoming ${request.sourceType} mock event.`,
-      request,
-      sourceContext,
-      status: `created`,
-    }),
-  });
+export class LoopValidationError extends Error {}
+export class LoopNotFoundError extends Error {}
 
-const createRoutedEvent = async ({
-  assignee,
-  emittedByPersona,
-  loopId,
-  note,
-  request,
-  sourceContext,
-  sourceRef,
-  userId,
-}: {
-  assignee: PersonaId;
-  emittedByPersona: string;
-  loopId: string;
-  note: string;
-  request: ValidatedRunLoopRequest;
-  sourceContext: LoopPayload;
-  sourceRef: string | undefined;
-  userId: string;
-}): Promise<Event> =>
-  insertEvent({
-    loop: loopId,
-    user: userId,
-    sourceType: request.sourceType,
-    sourceRef,
-    status: `routed`,
-    assignee,
-    workItemUrl: request.workItemUrl,
-    topLevelWorkItemUrl: request.topLevelWorkItemUrl,
-    requestedOutcome: request.requestedOutcome,
-    emittedByPersona,
-    approvals: request.approvals,
-    payload: buildEventPayload({
-      approvals: request.approvals,
-      context: buildSourceSummary(request.sourceType, sourceContext),
-      nextExpectedAction: `Have ${assignee} complete the current responsibility for the Jira item.`,
-      nextOwningPersona: assignee,
-      note,
-      request,
-      sourceContext,
-      status: `routed`,
-    }),
-  });
+export const validateCreateLoopRequest = (value: unknown): LoopInsert => validateLoopInput(value);
+export const validateUpdateLoopRequest = (value: unknown): LoopUpdate => validateLoopInput(value);
 
-const createCompletedEvent = async ({
-  assignee,
-  loopId,
-  note,
-  request,
-  sourceContext,
-  sourceRef,
-  userId,
-}: {
-  assignee: PersonaId;
-  loopId: string;
-  note: string;
-  request: ValidatedRunLoopRequest;
-  sourceContext: LoopPayload;
-  sourceRef: string | undefined;
-  userId: string;
-}): Promise<Event> =>
-  insertEvent({
-    loop: loopId,
-    user: userId,
-    sourceType: request.sourceType,
-    sourceRef,
-    status: `completed`,
-    assignee,
-    workItemUrl: request.workItemUrl,
-    topLevelWorkItemUrl: request.topLevelWorkItemUrl,
-    requestedOutcome: request.requestedOutcome,
-    emittedByPersona: assignee,
-    approvals: request.approvals,
-    payload: buildEventPayload({
-      approvals: request.approvals,
-      context: buildSourceSummary(request.sourceType, sourceContext),
-      nextExpectedAction: `Notify the user that the requested outcome is complete.`,
-      nextOwningPersona: null,
-      note,
-      request,
-      sourceContext,
-      status: `completed`,
-    }),
-    completedAt: new Date(),
-  });
-
-const createBlockedEvent = async ({
-  assignee,
-  blocker,
-  loopId,
-  note,
-  request,
-  sourceContext,
-  sourceRef,
-  userId,
-}: {
-  assignee: PersonaId;
-  blocker: string;
-  loopId: string;
-  note: string;
-  request: ValidatedRunLoopRequest;
-  sourceContext: LoopPayload;
-  sourceRef: string | undefined;
-  userId: string;
-}): Promise<Event> =>
-  insertEvent({
-    loop: loopId,
-    user: userId,
-    sourceType: request.sourceType,
-    sourceRef,
-    status: `blocked`,
-    assignee,
-    workItemUrl: request.workItemUrl,
-    topLevelWorkItemUrl: request.topLevelWorkItemUrl,
-    requestedOutcome: request.requestedOutcome,
-    emittedByPersona: assignee,
-    blocker,
-    approvals: request.approvals,
-    payload: buildEventPayload({
-      approvals: request.approvals,
-      blocker,
-      context: buildSourceSummary(request.sourceType, sourceContext),
-      nextExpectedAction: assignee === engineeringManagerPersonaId ? `Notify the user that the loop is blocked.` : `Route the blocker through ${engineeringManagerPersonaId}.`,
-      nextOwningPersona: assignee === engineeringManagerPersonaId ? null : engineeringManagerPersonaId,
-      note,
-      request,
-      sourceContext,
-      status: `blocked`,
-    }),
-  });
-
-const resolveLoopOutcome = async ({
-  loopId,
-  request,
-  result,
-  sourceContext,
-  sourceRef,
-  timeline,
-  userId,
-}: {
-  loopId: string;
-  request: ValidatedRunLoopRequest;
-  result: LoopPersonaResult;
-  sourceContext: LoopPayload;
-  sourceRef: string | undefined;
-  timeline: Event[];
-  userId: string;
-}): Promise<{ outcome: LoopOutcome; finalEvent: Event }> => {
-  if (result.status === `completed`) {
-    const assignee = timeline.at(-1)?.assignee;
-
-    if (!assignee || !isPersonaId(assignee)) {
-      throw new Error(`A completing loop event requires an assigned persona.`);
-    }
-
-    const finalEvent = await createCompletedEvent({
-      assignee,
-      loopId,
-      note: result.note,
-      request,
-      sourceContext,
-      sourceRef,
-      userId,
-    });
-
-    timeline.push(finalEvent);
-    return { outcome: `completed`, finalEvent };
-  }
-
-  if (result.status === `blocked`) {
-    const assignee = timeline.at(-1)?.assignee;
-
-    if (!assignee || !isPersonaId(assignee)) {
-      throw new Error(`A blocked loop event requires an assigned persona.`);
-    }
-
-    const finalEvent = await createBlockedEvent({
-      assignee,
-      blocker: result.blocker,
-      loopId,
-      note: result.note,
-      request,
-      sourceContext,
-      sourceRef,
-      userId,
-    });
-
-    timeline.push(finalEvent);
-    return { outcome: `blocked`, finalEvent };
-  }
-
-  const routedEvent = await createRoutedEvent({
-    assignee: result.assignee,
-    emittedByPersona: engineeringManagerPersonaId,
-    loopId,
-    note: result.note,
-    request,
-    sourceContext,
-    sourceRef,
-    userId,
-  });
-
-  timeline.push(routedEvent);
-  const completionResult = personaHandlers[result.assignee].handle(routedEvent);
-
-  return resolveLoopOutcome({
-    loopId,
-    request,
-    result: completionResult,
-    sourceContext,
-    sourceRef,
-    timeline,
-    userId,
-  });
-};
-
-export const runLoop = async (input: RunLoopRequest, userId: string): Promise<RunLoopResponse> => {
-  const request = validateRunLoopRequest(input);
-  const project = await getProjectForUser(request.project, userId);
-
-  if (!project) {
-    throw new LoopAccessError(`Project not found.`);
-  }
-
-  const sourceAdapter = sourceAdapters[request.sourceType];
-  const sourceContext = sourceAdapter.buildContext(request);
-  const sourceRef = sourceAdapter.buildSourceRef(request);
-  const events: Event[] = [];
-
-  const loop = await insertLoop({ project: project.id, name: request.name, description: request.description });
-  const loopId = loop.id;
-
-  const initialEvent = await createInitialEvent(request, sourceContext, sourceRef, loopId, userId);
-  events.push(initialEvent);
-
-  if (request.assignedPersona) {
-    const routedEvent = await createRoutedEvent({
-      assignee: request.assignedPersona,
-      emittedByPersona: athenaPersonaId,
-      loopId,
-      note: `${athenaPersonaId} routed the event to ${request.assignedPersona}.`,
-      request,
-      sourceContext,
-      sourceRef,
-      userId,
-    });
-
-    events.push(routedEvent);
-    const completionResult = personaHandlers[request.assignedPersona].handle(routedEvent);
-    const { finalEvent } = await resolveLoopOutcome({
-      loopId,
-      request,
-      result: completionResult,
-      sourceContext,
-      sourceRef,
-      timeline: events,
-      userId,
-    });
-
-    return {
-      loop,
-      events,
-      finalEvent,
-    };
-  }
-
-  const assignmentResult = personaHandlers[engineeringManagerPersonaId].handle(initialEvent);
-  const { finalEvent } = await resolveLoopOutcome({
-    loopId,
-    request,
-    result: assignmentResult,
-    sourceContext,
-    sourceRef,
-    timeline: events,
-    userId,
-  });
-
-  return {
-    loop,
-    events,
-    finalEvent,
-  };
-};
-
-export const listLoopEvents = async (userId: string): Promise<Event[]> => {
-  const result = await getPool().query<Event>(
+export const getLoopForUser = async (loopId: string, userId: string): Promise<Loop | undefined> => {
+  const result = await getPool().query<Loop>(
     `
-      SELECT ${loopEventSelectColumns}
-      FROM "event" e
-      JOIN "loop" l ON l."id" = e."loop"
-      JOIN "projectUser" pu ON pu."project" = l."project"
-      WHERE pu."user" = $1
-      ORDER BY e."emittedAt" DESC
+      SELECT ${loopSelectColumns}
+      FROM "loop" l
+      JOIN "loopUser" lu ON lu."loop" = l."id"
+      WHERE l."id" = $1
+        AND lu."user" = $2
+    `,
+    [loopId, userId],
+  );
+
+  return result.rows[0];
+};
+
+export const listLoops = async (userId: string): Promise<Loop[]> => {
+  const result = await getPool().query<Loop>(
+    `
+      SELECT ${loopSelectColumns}
+      FROM "loop" l
+      JOIN "loopUser" lu ON lu."loop" = l."id"
+      WHERE lu."user" = $1
+      ORDER BY l."updatedAt" DESC, l."createdAt" DESC
     `,
     [userId],
   );
 
   return result.rows;
+};
+
+export const getLoop = async (loopId: string, userId: string): Promise<Loop> => {
+  const loop = await getLoopForUser(loopId, userId);
+
+  if (!loop) {
+    throw new LoopNotFoundError(`Loop not found.`);
+  }
+
+  return loop;
+};
+
+export const createLoop = async (input: LoopInsert, userId: string): Promise<Loop> => {
+  const client = await getPool().connect();
+
+  try {
+    await client.query(`BEGIN`);
+
+    const result = await client.query<Loop>(
+      `
+        INSERT INTO "loop" ("name", "description")
+        VALUES ($1, $2)
+        RETURNING ${loopColumns}
+      `,
+      [input.name, input.description ?? null],
+    );
+
+    const loop = result.rows[0];
+
+    if (!loop) {
+      throw new Error(`Loop was not created.`);
+    }
+
+    await client.query(`INSERT INTO "loopUser" ("loop", "user") VALUES ($1, $2)`, [loop.id, userId]);
+    await client.query(`COMMIT`);
+
+    return loop;
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+export const updateLoop = async (loopId: string, input: LoopUpdate, userId: string): Promise<Loop> => {
+  const result = await getPool().query<Loop>(
+    `
+      UPDATE "loop" AS l
+      SET
+        "name" = $1,
+        "description" = $2
+      FROM "loopUser" AS lu
+      WHERE l."id" = $3
+        AND lu."loop" = l."id"
+        AND lu."user" = $4
+      RETURNING l."id", l."name", l."description", l."createdAt", l."updatedAt"
+    `,
+    [input.name, input.description ?? null, loopId, userId],
+  );
+
+  const loop = result.rows[0];
+
+  if (!loop) {
+    throw new LoopNotFoundError(`Loop not found.`);
+  }
+
+  return loop;
+};
+
+export const deleteLoop = async (loopId: string, userId: string): Promise<void> => {
+  const result = await getPool().query(
+    `
+      DELETE FROM "loop" AS l
+      USING "loopUser" AS lu
+      WHERE l."id" = $1
+        AND lu."loop" = l."id"
+        AND lu."user" = $2
+    `,
+    [loopId, userId],
+  );
+
+  if (!result.rowCount) {
+    throw new LoopNotFoundError(`Loop not found.`);
+  }
 };

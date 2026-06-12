@@ -18,7 +18,7 @@ The `user` table uses the OIDC email address as its primary key (`TEXT`). This i
 2. All column names are camelCase: `id`, `createdAt`, `workItemUrl`.
 3. Do not use snake_case, PascalCase, or UPPER_CASE for table or column names.
 4. Junction table names are the camelCase concatenation of the two related table names: `loopUser` (not `loop_user`).
-5. Foreign key columns use the referenced table name as the column name, not `<table>Id`. Examples: `event.loop`, `event.user`, `loopUser.loop`.
+5. Foreign key columns use the referenced table name as the column name, not `<table>Id`. Examples: `event.loop`, `session.user`, `loopUser.loop`.
 
 ## Timestamp standard
 
@@ -40,10 +40,11 @@ The `user` table uses the OIDC email address as its primary key (`TEXT`). This i
 
 ## Migration file naming standard
 
-1. Migration files are named `{sequence}.{table}.sql` where sequence is a zero-padded six-digit integer.
-2. Sequence numbers are multiples of 100 (000100, 000200, 000300, …). This leaves room to insert future migrations between existing ones without renumbering.
-3. Tables that depend on another table must have a higher sequence number than the table they reference: `loopUser` (000200, same file as `loop`) depends on `loop` which depends on `user` (000100).
-4. All DDL migrations run inside a single transaction defined in `migrate.sql`. Every migration must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`).
+1. Use one migration file per table.
+2. Migration files are named `{sequence}.{table}.sql` where sequence is a zero-padded six-digit integer.
+3. Sequence numbers are multiples of 100 (000100, 000200, 000300, …). This leaves room to insert future migrations between existing ones without renumbering.
+4. Tables that depend on another table must have a higher sequence number than the tables they reference: `loopUser` (000300) depends on `loop` (000200) and `user` (000100).
+5. All DDL migrations run inside a single transaction defined in `migrate.sql`. Every migration must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`).
 
 ## Proposed additions
 

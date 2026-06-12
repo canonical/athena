@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchProjects } from "./project.client.js";
-import type { Project } from "./project.schema.js";
+import { fetchLoops } from "./loop.client.js";
+import type { Loop } from "./loop.schema.js";
 
-export type ProjectsState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; projects: Project[] };
+export type LoopsState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; loops: Loop[] };
 
-export const useProjects = () => {
-  const [state, setState] = useState<ProjectsState>({ status: `loading` });
+export const useLoops = () => {
+  const [state, setState] = useState<LoopsState>({ status: `loading` });
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
 
-    fetchProjects()
-      .then((projects) => {
+    fetchLoops()
+      .then((loops) => {
         if (active) {
-          setState({ status: `success`, projects });
+          setState({ status: `success`, loops });
         }
       })
       .catch((error: unknown) => {

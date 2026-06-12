@@ -19,13 +19,13 @@ export const sideNavigationItems: SideNavigationProps["items"] = [
       },
       {
         icon: "applications",
-        label: "Projects",
-        href: `/projects`,
+        label: "Loops",
+        href: `/loops`,
       },
       {
         icon: "queue",
-        label: "Loop",
-        href: `/loop`,
+        label: "Events",
+        href: `/events`,
       },
       {
         icon: "user-group",
