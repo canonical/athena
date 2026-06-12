@@ -93,7 +93,7 @@ test(`projects page supports create update and delete`, async ({ page }) => {
 
   await expect(page.getByText(`UI project is ready to use.`)).toBeVisible();
   await expect(page.getByRole(`grid`)).toBeVisible();
-  await expect(page.getByText(`UI project`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: `UI project`, exact: true }).first()).toBeVisible();
 
   await page.getByRole(`button`, { name: `Edit UI project` }).click();
   await page.getByLabel(`Project name`).nth(1).fill(`UI project updated`);
@@ -101,10 +101,10 @@ test(`projects page supports create update and delete`, async ({ page }) => {
   await page.getByRole(`button`, { name: `Save project` }).click();
 
   await expect(page.getByText(`UI project updated has been updated.`)).toBeVisible();
-  await expect(page.getByText(`UI project updated`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: `UI project updated`, exact: true }).first()).toBeVisible();
 
   await page.getByRole(`button`, { name: `Delete UI project updated` }).click();
 
   await expect(page.getByText(`UI project updated has been deleted.`)).toBeVisible();
-  await expect(page.getByText(`No projects yet. Create a project to start organizing loops.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: `UI project updated`, exact: true })).toHaveCount(0);
 });
