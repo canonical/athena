@@ -45,8 +45,8 @@ const summarizeObjectValues = (payload: EventPayload) =>
     .map((value) => String(value))
     .join(` • `);
 
-const buildSourceSummary = (sourceType: string, context: EventPayload): string => {
-  const summary = summarizeObjectValues(context);
+const buildSourceSummary = (sourceType: string, payload: EventPayload): string => {
+  const summary = summarizeObjectValues(payload);
 
   return summary ? `${sourceType} context: ${summary}` : `${sourceType} context received.`;
 };

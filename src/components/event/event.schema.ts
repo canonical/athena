@@ -107,7 +107,7 @@ export type EventInsert = {
   status: LoopEventStatus;
   assignee?: string;
   requestedOutcome: string;
-  emittedByPersona: string;
+  emittedByPersona: AthenaPersonaId | PersonaId;
   blocker?: string;
   approvals: EventApprovals;
   payload: EventPayload;
@@ -116,7 +116,7 @@ export type EventInsert = {
 
 export type RoutedEventCreation = EventSourceContext & {
   assignee: PersonaId;
-  emittedByPersona: string;
+  emittedByPersona: AthenaPersonaId | PersonaId;
   note: string;
 };
 
