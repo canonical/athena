@@ -39,14 +39,7 @@ export function Loop() {
         <p className="p-text--default">No loop events yet. Submit a loop request to get started.</p>
       ) : (
         <MainTable
-          headers={[
-            { content: "Status" },
-            { content: "Source" },
-            { content: "Work item" },
-            { content: "Requested outcome" },
-            { content: "Assignee" },
-            { content: "Emitted at" },
-          ]}
+          headers={[{ content: "Status" }, { content: "Source" }, { content: "Work item" }, { content: "Requested outcome" }, { content: "Assignee" }, { content: "Emitted at" }]}
           rows={state.events.map((event) => ({
             key: event.id,
             columns: [

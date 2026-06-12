@@ -1,6 +1,7 @@
 import { ApplicationLayout, Chip, Notification, NotificationSeverity } from "@canonical/react-components";
 import { AuthenticationView } from "@components/authentication/Authentication.js";
 import { Loop } from "@components/loop/Loop.js";
+import { Project } from "@components/project/Project.js";
 import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
 
 import athenaLogo from "./athena-logo.svg";
@@ -10,6 +11,7 @@ import "./shell.scss";
 
 const rootPath = `/`;
 const authenticationPath = `/authentication`;
+const projectPath = `/projects`;
 const loopPath = `/loop`;
 
 type AuthenticationSearch = {
@@ -89,13 +91,19 @@ const authenticationRoute = createRoute({
   component: AuthenticationRouteView,
 });
 
+const projectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: projectPath,
+  component: Project,
+});
+
 const loopRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: loopPath,
   component: Loop,
 });
 
-const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopRoute]);
+const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, projectRoute, loopRoute]);
 
 export const router = createRouter({
   routeTree,

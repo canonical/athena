@@ -18,6 +18,11 @@ export const sideNavigationItems: SideNavigationProps["items"] = [
         href: `/authentication`,
       },
       {
+        icon: "applications",
+        label: "Projects",
+        href: `/projects`,
+      },
+      {
         icon: "queue",
         label: "Loop",
         href: `/loop`,

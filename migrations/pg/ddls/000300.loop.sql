@@ -1,13 +1,13 @@
 CREATE TABLE IF NOT EXISTS "loop" (
   "id" UUID PRIMARY KEY DEFAULT uuidv7(),
-  "user" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+  "project" UUID NOT NULL REFERENCES "project"("id") ON DELETE CASCADE,
   "name" TEXT NOT NULL,
   "description" TEXT,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS "idxLoopUser" ON "loop"("user");
+CREATE INDEX IF NOT EXISTS "idxLoopProject" ON "loop"("project");
 CREATE INDEX IF NOT EXISTS "idxLoopCreatedAt" ON "loop"("createdAt" DESC);
 
 SELECT ensureUpdatedAtTrigger('loop');

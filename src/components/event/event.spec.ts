@@ -1,5 +1,17 @@
 import { authenticate, dexEmail, expect, test } from "../../../testing/playwright/index.js";
 
+const createProject = async (page: Parameters<typeof authenticate>[0], name: string) => {
+  const response = await page.request.post(`http://athena.localhost/api/projects`, {
+    data: {
+      name,
+      description: `${name} description`,
+    },
+  });
+
+  expect(response.status()).toBe(201);
+  return (await response.json()) as { id: string; name: string };
+};
+
 const sourceFixtures = [
   {
     sourceType: `github`,
@@ -34,6 +46,7 @@ const sourceFixtures = [
 test(`event creation requires authentication`, async ({ request }) => {
   const response = await request.post(`/api/loop/events`, {
     data: {
+      project: `00000000-0000-7000-8000-000000000000`,
       sourceType: `github`,
       workItemUrl: `https://jira.example.com/browse/ATH-100`,
       requestedOutcome: `Implement the loop skeleton`,
@@ -52,9 +65,11 @@ test(`event list requires authentication`, async ({ request }) => {
 for (const sourceFixture of sourceFixtures) {
   test(`${sourceFixture.sourceType} mock events complete through the loop`, async ({ page }) => {
     await authenticate(page);
+    const project = await createProject(page, `${sourceFixture.sourceType} project`);
 
     const response = await page.request.post(`http://athena.localhost/api/loop/events`, {
       data: {
+        project: project.id,
         sourceType: sourceFixture.sourceType,
         workItemUrl: `https://jira.example.com/browse/ATH-100`,
         requestedOutcome: `Implement the loop skeleton`,
@@ -66,7 +81,7 @@ for (const sourceFixture of sourceFixtures) {
     expect(response.status()).toBe(201);
 
     const body = (await response.json()) as {
-      loop: { id: string; user: string; name: string };
+      loop: { id: string; project: string; name: string };
       events: Array<{
         loop: string;
         user: string;
@@ -88,7 +103,7 @@ for (const sourceFixture of sourceFixtures) {
 
     expect(body.finalEvent.status).toBe(`completed`);
     expect(body.loop).toBeDefined();
-    expect(body.loop.user).toBe(dexEmail);
+    expect(body.loop.project).toBe(project.id);
     expect(body.events).toHaveLength(3);
     expect(body.events.map((event) => event.status)).toEqual([`created`, `routed`, `completed`]);
     expect(body.events[0]?.loop).toBe(body.loop.id);
@@ -116,9 +131,11 @@ for (const sourceFixture of sourceFixtures) {
 
 test(`events respect explicitly assigned personas`, async ({ page }) => {
   await authenticate(page);
+  const project = await createProject(page, `Assigned events project`);
 
   const response = await page.request.post(`http://athena.localhost/api/loop/events`, {
     data: {
+      project: project.id,
       sourceType: `human-chat`,
       assignedPersona: `ic.clara`,
       workItemUrl: `https://jira.example.com/browse/ATH-200`,
@@ -134,7 +151,7 @@ test(`events respect explicitly assigned personas`, async ({ page }) => {
   expect(response.status()).toBe(201);
 
   const body = (await response.json()) as {
-    loop: { id: string; user: string };
+    loop: { id: string; project: string };
     events: Array<{
       status: string;
       assignee: string | null;
@@ -145,6 +162,7 @@ test(`events respect explicitly assigned personas`, async ({ page }) => {
 
   expect(body.finalEvent.status).toBe(`completed`);
   expect(body.loop).toBeDefined();
+  expect(body.loop.project).toBe(project.id);
   expect(body.events).toHaveLength(3);
   expect(body.events[1]).toMatchObject({
     status: `routed`,
@@ -160,9 +178,11 @@ test(`events respect explicitly assigned personas`, async ({ page }) => {
 
 test(`events reject unknown source types`, async ({ page }) => {
   await authenticate(page);
+  const project = await createProject(page, `Unknown event source project`);
 
   const response = await page.request.post(`http://athena.localhost/api/loop/events`, {
     data: {
+      project: project.id,
       sourceType: `manual-override`,
       workItemUrl: `https://jira.example.com/browse/ATH-300`,
       requestedOutcome: `Reject an unsupported loop source`,
@@ -177,9 +197,11 @@ test(`events reject unknown source types`, async ({ page }) => {
 
 test(`GET events returns events for the authenticated user`, async ({ page }) => {
   await authenticate(page);
+  const project = await createProject(page, `Listed events project`);
 
   await page.request.post(`http://athena.localhost/api/loop/events`, {
     data: {
+      project: project.id,
       sourceType: `github`,
       workItemUrl: `https://jira.example.com/browse/ATH-400`,
       requestedOutcome: `List events for the current user`,
@@ -205,6 +227,6 @@ test(`GET events returns events for the authenticated user`, async ({ page }) =>
 
   expect(Array.isArray(events)).toBe(true);
   expect(events.length).toBeGreaterThan(0);
-  expect(events.every((e) => e.user === dexEmail)).toBe(true);
-  expect(events.every((e) => typeof e.loop === `string`)).toBe(true);
+  expect(events.every((event) => event.user === dexEmail)).toBe(true);
+  expect(events.every((event) => typeof event.loop === `string`)).toBe(true);
 });

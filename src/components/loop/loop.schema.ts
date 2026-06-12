@@ -17,7 +17,7 @@ export type LoopApprovals = unknown[];
 
 export type Loop = {
   id: string;
-  user: string;
+  project: string;
   name: string;
   description: string | null;
   createdAt: Date;
@@ -25,7 +25,7 @@ export type Loop = {
 };
 
 export type LoopInsert = {
-  user: string;
+  project: string;
   name: string;
   description?: string;
 };
@@ -57,6 +57,7 @@ export type Event = {
 };
 
 export type RunLoopRequest = {
+  project: string;
   name?: string;
   description?: string;
   sourceType: string;
@@ -70,6 +71,7 @@ export type RunLoopRequest = {
 };
 
 export type ValidatedRunLoopRequest = {
+  project: string;
   name: string;
   description: string | undefined;
   sourceType: LoopSourceType;

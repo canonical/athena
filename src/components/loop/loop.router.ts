@@ -1,8 +1,7 @@
-import { type Request, type Response, Router } from "express";
-
 import { getAuthenticatedUser } from "@components/authentication/authentication.controller.js";
 import { getSessionId } from "@components/authentication/session.js";
-import { LoopValidationError, listLoopEvents, runLoop } from "./loop.controller.js";
+import { type Request, type Response, Router } from "express";
+import { LoopAccessError, LoopValidationError, listLoopEvents, runLoop } from "./loop.controller.js";
 
 export const loopRouter = Router();
 
@@ -21,6 +20,11 @@ loopRouter.post(`/loop/events`, async (request: Request, response: Response) => 
   } catch (error) {
     if (error instanceof LoopValidationError) {
       response.status(400).json({ error: error.message });
+      return;
+    }
+
+    if (error instanceof LoopAccessError) {
+      response.status(404).json({ error: error.message });
       return;
     }
 

@@ -1,4 +1,5 @@
 import { getPool } from "@components/postgres/postgres.js";
+import { getProjectForUser } from "@components/project/project.controller.js";
 import type {
   Event,
   EventInsert,
@@ -37,6 +38,26 @@ const loopEventColumns = `
   "emittedAt",
   "completedAt",
   "updatedAt"
+`;
+
+const loopEventSelectColumns = `
+  e."id",
+  e."loop",
+  e."user",
+  e."sourceType",
+  e."sourceRef",
+  e."status",
+  e."assignee",
+  e."workItemUrl",
+  e."topLevelWorkItemUrl",
+  e."requestedOutcome",
+  e."emittedByPersona",
+  e."blocker",
+  e."approvals",
+  e."payload",
+  e."emittedAt",
+  e."completedAt",
+  e."updatedAt"
 `;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
@@ -215,11 +236,11 @@ const insertLoop = async (insert: LoopInsert): Promise<Loop> => {
 
   const result = await pool.query<Loop>(
     `
-      INSERT INTO "loop" ("user", "name", "description")
+      INSERT INTO "loop" ("project", "name", "description")
       VALUES ($1, $2, $3)
-      RETURNING "id", "user", "name", "description", "createdAt", "updatedAt"
+      RETURNING "id", "project", "name", "description", "createdAt", "updatedAt"
     `,
-    [insert.user, insert.name, insert.description ?? null],
+    [insert.project, insert.name, insert.description ?? null],
   );
 
   const created = result.rows[0];
@@ -227,8 +248,6 @@ const insertLoop = async (insert: LoopInsert): Promise<Loop> => {
   if (!created) {
     throw new Error(`Loop was not created.`);
   }
-
-  await pool.query(`INSERT INTO "loopUser" ("loop", "user") VALUES ($1, $2)`, [created.id, insert.user]);
 
   return created;
 };
@@ -283,16 +302,22 @@ const insertEvent = async (event: EventInsert): Promise<Event> => {
 };
 
 export class LoopValidationError extends Error {}
+export class LoopAccessError extends Error {}
 
 export const validateRunLoopRequest = (value: unknown): ValidatedRunLoopRequest => {
   if (!isRecord(value)) {
     throw new LoopValidationError(`Loop request body must be an object.`);
   }
 
+  const project = normalizeString(value.project);
   const sourceType = normalizeString(value.sourceType);
   const workItemUrl = normalizeString(value.workItemUrl);
   const requestedOutcome = normalizeString(value.requestedOutcome);
   const assignedPersonaValue = normalizeString(value.assignedPersona);
+
+  if (!project) {
+    throw new LoopValidationError(`project is required.`);
+  }
 
   if (!sourceType || !isLoopSourceType(sourceType)) {
     throw new LoopValidationError(`sourceType must be one of: ${loopSourceTypes.join(`, `)}.`);
@@ -313,6 +338,7 @@ export const validateRunLoopRequest = (value: unknown): ValidatedRunLoopRequest 
   const assignedPersona = assignedPersonaValue && isPersonaId(assignedPersonaValue) ? assignedPersonaValue : undefined;
 
   return {
+    project,
     name: normalizeString(value.name) ?? requestedOutcome,
     description: normalizeString(value.description),
     sourceType,
@@ -567,12 +593,18 @@ const resolveLoopOutcome = async ({
 
 export const runLoop = async (input: RunLoopRequest, userId: string): Promise<RunLoopResponse> => {
   const request = validateRunLoopRequest(input);
+  const project = await getProjectForUser(request.project, userId);
+
+  if (!project) {
+    throw new LoopAccessError(`Project not found.`);
+  }
+
   const sourceAdapter = sourceAdapters[request.sourceType];
   const sourceContext = sourceAdapter.buildContext(request);
   const sourceRef = sourceAdapter.buildSourceRef(request);
   const events: Event[] = [];
 
-  const loop = await insertLoop({ user: userId, name: request.name, description: request.description });
+  const loop = await insertLoop({ project: project.id, name: request.name, description: request.description });
   const loopId = loop.id;
 
   const initialEvent = await createInitialEvent(request, sourceContext, sourceRef, loopId, userId);
@@ -630,10 +662,12 @@ export const runLoop = async (input: RunLoopRequest, userId: string): Promise<Ru
 export const listLoopEvents = async (userId: string): Promise<Event[]> => {
   const result = await getPool().query<Event>(
     `
-      SELECT ${loopEventColumns}
-      FROM "event"
-      WHERE "user" = $1
-      ORDER BY "emittedAt" DESC
+      SELECT ${loopEventSelectColumns}
+      FROM "event" e
+      JOIN "loop" l ON l."id" = e."loop"
+      JOIN "projectUser" pu ON pu."project" = l."project"
+      WHERE pu."user" = $1
+      ORDER BY e."emittedAt" DESC
     `,
     [userId],
   );
