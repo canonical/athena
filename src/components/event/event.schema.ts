@@ -52,20 +52,23 @@ export type ValidatedCreateEventRequest = {
 
 export type EventSourceContext = {
   request: ValidatedCreateEventRequest;
-  sourceContext: EventPayload;
+  sourcePayload: EventPayload;
   sourceRef?: string;
 };
 
-export type EventPayloadBuildInput = {
+export type HandoffBuildInput = {
   approvals: EventApprovals;
   blocker?: string;
   context: string;
   nextExpectedAction: string;
   nextOwningPersona: string | null;
+  status: LoopEventStatus;
+};
+
+export type EventPayloadBuildInput = HandoffBuildInput & {
   note: string;
   request: ValidatedCreateEventRequest;
-  sourceContext: EventPayload;
-  status: LoopEventStatus;
+  sourcePayload: EventPayload;
 };
 
 export type CreateEventResponse = {

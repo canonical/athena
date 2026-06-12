@@ -12,6 +12,7 @@ import type {
   EventPayloadBuildInput,
   EventSourceContext,
   ExecutionPersonaId,
+  HandoffBuildInput,
   LoopPersonaHandler,
   PersonaId,
   RoutedEventCreation,
@@ -99,7 +100,7 @@ const personaHandlers: Record<PersonaId, LoopPersonaHandler> = {
   "qa.grace": createCompletingPersonaHandler(`qa.grace`),
 };
 
-const buildHandoff = ({ approvals, blocker, context, nextExpectedAction, nextOwningPersona, status }: Omit<EventPayloadBuildInput, "note" | "request" | "sourceContext">) => ({
+const buildHandoff = ({ approvals, blocker, context, nextExpectedAction, nextOwningPersona, status }: HandoffBuildInput) => ({
   currentStatus: status,
   relevantContextAndDecisions: context,
   dependenciesAndBlockers: blocker ? [blocker] : [],
@@ -108,8 +109,8 @@ const buildHandoff = ({ approvals, blocker, context, nextExpectedAction, nextOwn
   nextOwningPersona,
 });
 
-const buildEventPayload = ({ approvals, blocker, context, nextExpectedAction, nextOwningPersona, note, request, sourceContext, status }: EventPayloadBuildInput): EventPayload => ({
-  source: sourceContext,
+const buildEventPayload = ({ approvals, blocker, context, nextExpectedAction, nextOwningPersona, note, request, sourcePayload, status }: EventPayloadBuildInput): EventPayload => ({
+  source: sourcePayload,
   handoff: buildHandoff({
     approvals,
     blocker,
@@ -215,7 +216,7 @@ const getAssignedPersona = (event: Event): PersonaId => {
   return event.assignee;
 };
 
-const createInitialEvent = async ({ request, sourceContext, sourceRef }: EventSourceContext): Promise<Event> =>
+const createInitialEvent = async ({ request, sourcePayload, sourceRef }: EventSourceContext): Promise<Event> =>
   insertEvent({
     loop: request.loop,
     sourceType: request.sourceType,
@@ -226,17 +227,17 @@ const createInitialEvent = async ({ request, sourceContext, sourceRef }: EventSo
     approvals: request.approvals,
     payload: buildEventPayload({
       approvals: request.approvals,
-      context: buildSourceSummary(request.sourceType, sourceContext),
+      context: buildSourceSummary(request.sourceType, sourcePayload),
       nextExpectedAction: request.assignedPersona ? `Route the event to ${request.assignedPersona}.` : `Ask ${engineeringManagerPersonaId} to assign a persona.`,
       nextOwningPersona: request.assignedPersona ?? engineeringManagerPersonaId,
       note: `Athena captured the incoming ${request.sourceType} event.`,
       request,
-      sourceContext,
+      sourcePayload,
       status: `created`,
     }),
   });
 
-const createRoutedEvent = async ({ assignee, emittedByPersona, note, request, sourceContext, sourceRef }: RoutedEventCreation): Promise<Event> =>
+const createRoutedEvent = async ({ assignee, emittedByPersona, note, request, sourcePayload, sourceRef }: RoutedEventCreation): Promise<Event> =>
   insertEvent({
     loop: request.loop,
     sourceType: request.sourceType,
@@ -248,17 +249,17 @@ const createRoutedEvent = async ({ assignee, emittedByPersona, note, request, so
     approvals: request.approvals,
     payload: buildEventPayload({
       approvals: request.approvals,
-      context: buildSourceSummary(request.sourceType, sourceContext),
+      context: buildSourceSummary(request.sourceType, sourcePayload),
       nextExpectedAction: `Have ${assignee} complete the current responsibility for the work item.`,
       nextOwningPersona: assignee,
       note,
       request,
-      sourceContext,
+      sourcePayload,
       status: `routed`,
     }),
   });
 
-const createCompletedEvent = async ({ assignee, note, request, sourceContext, sourceRef }: ConcludedEventCreation): Promise<Event> =>
+const createCompletedEvent = async ({ assignee, note, request, sourcePayload, sourceRef }: ConcludedEventCreation): Promise<Event> =>
   insertEvent({
     loop: request.loop,
     sourceType: request.sourceType,
@@ -270,18 +271,18 @@ const createCompletedEvent = async ({ assignee, note, request, sourceContext, so
     approvals: request.approvals,
     payload: buildEventPayload({
       approvals: request.approvals,
-      context: buildSourceSummary(request.sourceType, sourceContext),
+      context: buildSourceSummary(request.sourceType, sourcePayload),
       nextExpectedAction: `Notify the user that the requested outcome is complete.`,
       nextOwningPersona: null,
       note,
       request,
-      sourceContext,
+      sourcePayload,
       status: `completed`,
     }),
     completedAt: new Date(),
   });
 
-const createBlockedEvent = async ({ assignee, blocker, note, request, sourceContext, sourceRef }: BlockedEventCreation): Promise<Event> =>
+const createBlockedEvent = async ({ assignee, blocker, note, request, sourcePayload, sourceRef }: BlockedEventCreation): Promise<Event> =>
   insertEvent({
     loop: request.loop,
     sourceType: request.sourceType,
@@ -295,24 +296,24 @@ const createBlockedEvent = async ({ assignee, blocker, note, request, sourceCont
     payload: buildEventPayload({
       approvals: request.approvals,
       blocker,
-      context: buildSourceSummary(request.sourceType, sourceContext),
+      context: buildSourceSummary(request.sourceType, sourcePayload),
       nextExpectedAction: assignee === engineeringManagerPersonaId ? `Notify the user that the event is blocked.` : `Route the blocker through ${engineeringManagerPersonaId}.`,
       nextOwningPersona: assignee === engineeringManagerPersonaId ? null : engineeringManagerPersonaId,
       note,
       request,
-      sourceContext,
+      sourcePayload,
       status: `blocked`,
     }),
   });
 
-const createFollowUpEvents = async ({ currentEvent, request, result, sourceContext, sourceRef }: EventFollowUpRequest): Promise<Event[]> => {
+const createFollowUpEvents = async ({ currentEvent, request, result, sourcePayload, sourceRef }: EventFollowUpRequest): Promise<Event[]> => {
   if (result.status === `completed`) {
     return [
       await createCompletedEvent({
         assignee: getAssignedPersona(currentEvent),
         note: result.note,
         request,
-        sourceContext,
+        sourcePayload,
         sourceRef,
       }),
     ];
@@ -325,7 +326,7 @@ const createFollowUpEvents = async ({ currentEvent, request, result, sourceConte
         blocker: result.blocker,
         note: result.note,
         request,
-        sourceContext,
+        sourcePayload,
         sourceRef,
       }),
     ];
@@ -336,7 +337,7 @@ const createFollowUpEvents = async ({ currentEvent, request, result, sourceConte
     emittedByPersona: engineeringManagerPersonaId,
     note: result.note,
     request,
-    sourceContext,
+    sourcePayload,
     sourceRef,
   });
   const completionResult = personaHandlers[result.assignee].handle(routedEvent);
@@ -347,7 +348,7 @@ const createFollowUpEvents = async ({ currentEvent, request, result, sourceConte
       currentEvent: routedEvent,
       request,
       result: completionResult,
-      sourceContext,
+      sourcePayload,
       sourceRef,
     })),
   ];
@@ -362,10 +363,10 @@ export const createEvent = async (input: CreateEventRequest, userId: string): Pr
   }
 
   const sourceRef = resolveSourceRef(request);
-  const sourceContext = buildSourceContext(request, sourceRef);
+  const sourcePayload = buildSourceContext(request, sourceRef);
   const eventContext = {
     request,
-    sourceContext,
+    sourcePayload,
     sourceRef,
   } satisfies EventSourceContext;
 
