@@ -12,6 +12,7 @@ export type ExecutionPersonaId = (typeof executionPersonaIds)[number];
 export type LoopEventStatus = (typeof loopEventStatuses)[number];
 export type EventPayload = Record<string, unknown>;
 export type EventApprovals = unknown[];
+export type EmittingPersonaId = AthenaPersonaId | PersonaId;
 
 export type Event = {
   id: string;
@@ -107,7 +108,7 @@ export type EventInsert = {
   status: LoopEventStatus;
   assignee?: string;
   requestedOutcome: string;
-  emittedByPersona: AthenaPersonaId | PersonaId;
+  emittedByPersona: EmittingPersonaId;
   blocker?: string;
   approvals: EventApprovals;
   payload: EventPayload;
@@ -116,7 +117,7 @@ export type EventInsert = {
 
 export type RoutedEventCreation = EventSourceContext & {
   assignee: PersonaId;
-  emittedByPersona: AthenaPersonaId | PersonaId;
+  emittedByPersona: EmittingPersonaId;
   note: string;
 };
 

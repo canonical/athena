@@ -45,10 +45,10 @@ const summarizeObjectValues = (payload: EventPayload) =>
     .map((value) => String(value))
     .join(` • `);
 
-const buildSourceSummary = (sourceType: string, payload: EventPayload): string => {
-  const summary = summarizeObjectValues(payload);
+const buildSourceSummary = (sourceType: string, sourcePayload: EventPayload): string => {
+  const summary = summarizeObjectValues(sourcePayload);
 
-  return summary ? `${sourceType} context: ${summary}` : `${sourceType} context received.`;
+  return summary ? `${sourceType} payload: ${summary}` : `${sourceType} payload received.`;
 };
 
 const resolveSourceRef = (request: ValidatedCreateEventRequest): string | undefined =>
@@ -98,6 +98,16 @@ const personaHandlers: Record<PersonaId, LoopPersonaHandler> = {
   "cr.elena": createCompletingPersonaHandler(`cr.elena`),
   "ux.fiona": createCompletingPersonaHandler(`ux.fiona`),
   "qa.grace": createCompletingPersonaHandler(`qa.grace`),
+};
+
+const getPersonaHandler = (persona: PersonaId): LoopPersonaHandler => {
+  const handler = personaHandlers[persona];
+
+  if (!handler) {
+    throw new Error(`Unsupported persona: ${persona}.`);
+  }
+
+  return handler;
 };
 
 const buildHandoff = ({ approvals, blocker, context, nextExpectedAction, nextOwningPersona, status }: HandoffBuildInput) => ({
@@ -340,7 +350,7 @@ const createFollowUpEvents = async ({ currentEvent, request, result, sourcePaylo
     sourcePayload,
     sourceRef,
   });
-  const completionResult = personaHandlers[result.assignee].handle(routedEvent);
+  const completionResult = getPersonaHandler(result.assignee).handle(routedEvent);
 
   return [
     routedEvent,
@@ -380,7 +390,7 @@ export const createEvent = async (input: CreateEventRequest, userId: string): Pr
       note: `${athenaPersonaId} routed the event to ${request.assignedPersona}.`,
     });
 
-    const completionResult = personaHandlers[request.assignedPersona].handle(routedEvent);
+    const completionResult = getPersonaHandler(request.assignedPersona).handle(routedEvent);
     const followUpEvents = await createFollowUpEvents({
       ...eventContext,
       currentEvent: routedEvent,
@@ -393,7 +403,7 @@ export const createEvent = async (input: CreateEventRequest, userId: string): Pr
     };
   }
 
-  const assignmentResult = personaHandlers[engineeringManagerPersonaId].handle(initialEvent);
+  const assignmentResult = getPersonaHandler(engineeringManagerPersonaId).handle(initialEvent);
   const followUpEvents = await createFollowUpEvents({
     ...eventContext,
     currentEvent: initialEvent,
