@@ -299,5 +299,6 @@ test(`events page shows events in the UI`, async ({ page }) => {
 
   await expect(page.getByRole(`heading`, { name: `Events` })).toBeVisible();
   await expect(page.getByRole(`grid`)).toBeVisible();
+  await expect(page.getByRole(`link`, { name: `https://tracker.example.com/work-items/ATH-500` }).first()).toBeVisible();
   await expect(page.getByText(`Completed`).first()).toBeVisible();
 });
