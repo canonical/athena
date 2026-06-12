@@ -99,7 +99,7 @@ export const createLoop = async (input: LoopInsert, userId: string): Promise<Loo
       throw new Error(`Loop was not created.`);
     }
 
-    await client.query(`INSERT INTO "loopUser" ("loop", "user") VALUES ($1, $2)`, [loop.id, userId]);
+    await client.query(`INSERT INTO "loopUser" ("loop", "user", "isAdmin") VALUES ($1, $2, TRUE)`, [loop.id, userId]);
     await client.query(`COMMIT`);
 
     return loop;
@@ -122,6 +122,7 @@ export const updateLoop = async (loopId: string, input: LoopUpdate, userId: stri
       WHERE l."id" = $3
         AND lu."loop" = l."id"
         AND lu."user" = $4
+       AND lu."isAdmin" = TRUE
       RETURNING l."id", l."name", l."description", l."createdAt", l."updatedAt"
     `,
     [input.name, input.description ?? null, loopId, userId],
@@ -144,6 +145,7 @@ export const deleteLoop = async (loopId: string, userId: string): Promise<void> 
       WHERE l."id" = $1
         AND lu."loop" = l."id"
         AND lu."user" = $2
+        AND lu."isAdmin" = TRUE
     `,
     [loopId, userId],
   );

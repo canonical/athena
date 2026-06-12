@@ -1,59 +1,10 @@
 import { getLoopForUser } from "@components/loop/loop.controller.js";
 import { getPool } from "@components/postgres/postgres.js";
-import type {
-  CreateEventRequest,
-  CreateEventResponse,
-  Event,
-  EventApprovals,
-  EventInsert,
-  EventPayload,
-  ExecutionPersonaId,
-  LoopPersonaHandler,
-  LoopPersonaResult,
-  LoopSourceAdapter,
-  LoopSourceType,
-  PersonaId,
-  ValidatedCreateEventRequest,
-} from "./event.schema.js";
-import { athenaPersonaId, engineeringManagerPersonaId, executionPersonaIds, loopSourceTypes, personaIds } from "./event.schema.js";
+import type { CreateEventRequest, CreateEventResponse, Event, EventApprovals, EventInsert, EventPayload, ExecutionPersonaId, LoopPersonaHandler, LoopPersonaResult, PersonaId, ValidatedCreateEventRequest } from "./event.schema.js";
+import { athenaPersonaId, engineeringManagerPersonaId, executionPersonaIds, personaIds } from "./event.schema.js";
 
-const eventColumns = `
-  "id",
-  "loop",
-  "sourceType",
-  "sourceRef",
-  "status",
-  "assignee",
-  "workItemUrl",
-  "topLevelWorkItemUrl",
-  "requestedOutcome",
-  "emittedByPersona",
-  "blocker",
-  "approvals",
-  "payload",
-  "emittedAt",
-  "completedAt",
-  "updatedAt"
-`;
-
-const eventSelectColumns = `
-  e."id",
-  e."loop",
-  e."sourceType",
-  e."sourceRef",
-  e."status",
-  e."assignee",
-  e."workItemUrl",
-  e."topLevelWorkItemUrl",
-  e."requestedOutcome",
-  e."emittedByPersona",
-  e."blocker",
-  e."approvals",
-  e."payload",
-  e."emittedAt",
-  e."completedAt",
-  e."updatedAt"
-`;
+const eventColumnNames = [`id`, `loop`, `sourceType`, `sourceRef`, `status`, `assignee`, `requestedOutcome`, `emittedByPersona`, `blocker`, `approvals`, `payload`, `emittedAt`, `completedAt`, `updatedAt`] as const;
+const getEventColumns = (tableAlias?: string): string => eventColumnNames.map((column) => `${tableAlias ? `${tableAlias}.` : ``}"${column}"`).join(`, `);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
 
@@ -67,8 +18,9 @@ const normalizeString = (value: unknown): string | undefined => {
   return normalized.length > 0 ? normalized : undefined;
 };
 
-const isLoopSourceType = (value: string): value is LoopSourceType => loopSourceTypes.includes(value as LoopSourceType);
 const isPersonaId = (value: string): value is PersonaId => personaIds.includes(value as PersonaId);
+
+const readPayloadString = (payload: EventPayload, key: string): string | undefined => normalizeString(payload[key]);
 
 const summarizeObjectValues = (payload: EventPayload) =>
   Object.values(payload)
@@ -76,58 +28,27 @@ const summarizeObjectValues = (payload: EventPayload) =>
     .map((value) => String(value))
     .join(` • `);
 
-const buildSourceSummary = (sourceType: LoopSourceType, context: EventPayload): string => {
+const buildSourceSummary = (sourceType: string, context: EventPayload): string => {
   const summary = summarizeObjectValues(context);
 
   return summary ? `${sourceType} context: ${summary}` : `${sourceType} context received.`;
 };
 
-const extractGitHubPullRequestRef = (payload: EventPayload): string | undefined => {
-  const repository = normalizeString(payload.repository);
-  const pullRequest = typeof payload.pullRequest === `number` || typeof payload.pullRequest === `string` ? String(payload.pullRequest) : undefined;
+const resolveSourceRef = (request: ValidatedCreateEventRequest): string | undefined =>
+  request.sourceRef ??
+  readPayloadString(request.payload, `sourceRef`) ??
+  readPayloadString(request.payload, `reference`) ??
+  readPayloadString(request.payload, `externalId`) ??
+  (request.sourceType === `human-chat` ? readPayloadString(request.payload, `channel`) : undefined);
 
-  return repository && pullRequest ? `${repository}#${pullRequest}` : repository;
-};
+const buildSourceContext = (request: ValidatedCreateEventRequest, sourceRef: string | undefined): EventPayload => ({
+  sourceType: request.sourceType,
+  ...(sourceRef ? { sourceRef } : {}),
+  ...request.payload,
+});
 
-const extractJiraRef = (payload: EventPayload, workItemUrl: string): string | undefined => normalizeString(payload.issueKey) ?? normalizeString(workItemUrl.split(`/`).at(-1));
-const extractHumanChatRef = (payload: EventPayload): string | undefined => normalizeString(payload.channel);
-
-const sourceAdapters: Record<LoopSourceType, LoopSourceAdapter> = {
-  github: {
-    sourceType: `github`,
-    buildSourceRef: (request) => extractGitHubPullRequestRef(request.payload) ?? request.sourceRef,
-    buildContext: (request) => ({
-      sourceType: `github`,
-      repository: normalizeString(request.payload.repository) ?? `canonical/athena`,
-      action: normalizeString(request.payload.action) ?? `opened`,
-      pullRequest: request.payload.pullRequest ?? 0,
-      title: normalizeString(request.payload.title) ?? request.requestedOutcome,
-    }),
-  },
-  jira: {
-    sourceType: `jira`,
-    buildSourceRef: (request) => extractJiraRef(request.payload, request.workItemUrl) ?? request.sourceRef,
-    buildContext: (request) => ({
-      sourceType: `jira`,
-      issueKey: extractJiraRef(request.payload, request.workItemUrl) ?? `ATH-0`,
-      transition: normalizeString(request.payload.transition) ?? `updated`,
-      summary: normalizeString(request.payload.summary) ?? request.requestedOutcome,
-    }),
-  },
-  "human-chat": {
-    sourceType: `human-chat`,
-    buildSourceRef: (request) => extractHumanChatRef(request.payload) ?? request.sourceRef,
-    buildContext: (request) => ({
-      sourceType: `human-chat`,
-      author: normalizeString(request.payload.author) ?? `user`,
-      channel: normalizeString(request.payload.channel) ?? `web-chat`,
-      message: normalizeString(request.payload.message) ?? request.requestedOutcome,
-    }),
-  },
-};
-
-const selectAssignee = (event: Pick<Event, "sourceType" | "sourceRef" | "requestedOutcome" | "workItemUrl">): ExecutionPersonaId => {
-  const seed = `${event.sourceType}:${event.sourceRef ?? ``}:${event.requestedOutcome ?? ``}:${event.workItemUrl ?? ``}`;
+const selectAssignee = (event: Pick<Event, "sourceType" | "sourceRef" | "requestedOutcome">): ExecutionPersonaId => {
+  const seed = `${event.sourceType}:${event.sourceRef ?? ``}:${event.requestedOutcome ?? ``}`;
   const hash = [...seed].reduce((total, character, index) => total + character.charCodeAt(0) * (index + 1), 0);
 
   return executionPersonaIds[hash % executionPersonaIds.length] as ExecutionPersonaId;
@@ -169,7 +90,6 @@ const buildHandoff = ({
   nextExpectedAction,
   nextOwningPersona,
   status,
-  workItemUrl,
 }: {
   approvals: EventApprovals;
   blocker?: string;
@@ -177,9 +97,7 @@ const buildHandoff = ({
   nextExpectedAction: string;
   nextOwningPersona: string | null;
   status: string;
-  workItemUrl: string;
 }) => ({
-  jiraItem: workItemUrl,
   currentStatus: status,
   relevantContextAndDecisions: context,
   dependenciesAndBlockers: blocker ? [blocker] : [],
@@ -217,7 +135,6 @@ const buildEventPayload = ({
     nextExpectedAction,
     nextOwningPersona,
     status,
-    workItemUrl: request.workItemUrl,
   }),
   note,
   input: request.payload,
@@ -232,8 +149,6 @@ const insertEvent = async (event: EventInsert): Promise<Event> => {
         "sourceRef",
         "status",
         "assignee",
-        "workItemUrl",
-        "topLevelWorkItemUrl",
         "requestedOutcome",
         "emittedByPersona",
         "blocker",
@@ -241,8 +156,8 @@ const insertEvent = async (event: EventInsert): Promise<Event> => {
         "payload",
         "completedAt"
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13)
-      RETURNING ${eventColumns}
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11)
+      RETURNING ${getEventColumns()}
     `,
     [
       event.loop,
@@ -250,8 +165,6 @@ const insertEvent = async (event: EventInsert): Promise<Event> => {
       event.sourceRef ?? null,
       event.status,
       event.assignee ?? null,
-      event.workItemUrl,
-      event.topLevelWorkItemUrl,
       event.requestedOutcome,
       event.emittedByPersona,
       event.blocker ?? null,
@@ -280,7 +193,6 @@ export const validateCreateEventRequest = (value: unknown): ValidatedCreateEvent
 
   const loop = normalizeString(value.loop);
   const sourceType = normalizeString(value.sourceType);
-  const workItemUrl = normalizeString(value.workItemUrl);
   const requestedOutcome = normalizeString(value.requestedOutcome);
   const assignedPersonaValue = normalizeString(value.assignedPersona);
 
@@ -288,12 +200,8 @@ export const validateCreateEventRequest = (value: unknown): ValidatedCreateEvent
     throw new EventValidationError(`loop is required.`);
   }
 
-  if (!sourceType || !isLoopSourceType(sourceType)) {
-    throw new EventValidationError(`sourceType must be one of: ${loopSourceTypes.join(`, `)}.`);
-  }
-
-  if (!workItemUrl) {
-    throw new EventValidationError(`workItemUrl is required.`);
+  if (!sourceType) {
+    throw new EventValidationError(`sourceType is required.`);
   }
 
   if (!requestedOutcome) {
@@ -311,8 +219,6 @@ export const validateCreateEventRequest = (value: unknown): ValidatedCreateEvent
     sourceType,
     sourceRef: normalizeString(value.sourceRef),
     assignedPersona,
-    workItemUrl,
-    topLevelWorkItemUrl: normalizeString(value.topLevelWorkItemUrl) ?? workItemUrl,
     requestedOutcome,
     approvals: Array.isArray(value.approvals) ? value.approvals : [],
     payload: isRecord(value.payload) ? value.payload : {},
@@ -325,8 +231,6 @@ const createInitialEvent = async (request: ValidatedCreateEventRequest, sourceCo
     sourceType: request.sourceType,
     sourceRef,
     status: `created`,
-    workItemUrl: request.workItemUrl,
-    topLevelWorkItemUrl: request.topLevelWorkItemUrl,
     requestedOutcome: request.requestedOutcome,
     emittedByPersona: athenaPersonaId,
     approvals: request.approvals,
@@ -363,15 +267,13 @@ const createRoutedEvent = async ({
     sourceRef,
     status: `routed`,
     assignee,
-    workItemUrl: request.workItemUrl,
-    topLevelWorkItemUrl: request.topLevelWorkItemUrl,
     requestedOutcome: request.requestedOutcome,
     emittedByPersona,
     approvals: request.approvals,
     payload: buildEventPayload({
       approvals: request.approvals,
       context: buildSourceSummary(request.sourceType, sourceContext),
-      nextExpectedAction: `Have ${assignee} complete the current responsibility for the Jira item.`,
+      nextExpectedAction: `Have ${assignee} complete the current responsibility for the event.`,
       nextOwningPersona: assignee,
       note,
       request,
@@ -399,8 +301,6 @@ const createCompletedEvent = async ({
     sourceRef,
     status: `completed`,
     assignee,
-    workItemUrl: request.workItemUrl,
-    topLevelWorkItemUrl: request.topLevelWorkItemUrl,
     requestedOutcome: request.requestedOutcome,
     emittedByPersona: assignee,
     approvals: request.approvals,
@@ -438,8 +338,6 @@ const createBlockedEvent = async ({
     sourceRef,
     status: `blocked`,
     assignee,
-    workItemUrl: request.workItemUrl,
-    topLevelWorkItemUrl: request.topLevelWorkItemUrl,
     requestedOutcome: request.requestedOutcome,
     emittedByPersona: assignee,
     blocker,
@@ -538,9 +436,8 @@ export const createEvent = async (input: CreateEventRequest, userId: string): Pr
     throw new EventAccessError(`Loop not found.`);
   }
 
-  const sourceAdapter = sourceAdapters[request.sourceType];
-  const sourceContext = sourceAdapter.buildContext(request);
-  const sourceRef = sourceAdapter.buildSourceRef(request);
+  const sourceRef = resolveSourceRef(request);
+  const sourceContext = buildSourceContext(request, sourceRef);
   const events: Event[] = [];
 
   const initialEvent = await createInitialEvent(request, sourceContext, sourceRef);
@@ -590,7 +487,7 @@ export const createEvent = async (input: CreateEventRequest, userId: string): Pr
 export const listEvents = async (userId: string): Promise<Event[]> => {
   const result = await getPool().query<Event>(
     `
-      SELECT ${eventSelectColumns}
+      SELECT ${getEventColumns(`e`)}
       FROM "event" e
       JOIN "loopUser" lu ON lu."loop" = e."loop"
       WHERE lu."user" = $1

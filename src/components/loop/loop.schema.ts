@@ -19,5 +19,6 @@ export type LoopUpdate = {
 export type LoopUser = {
   loop: string;
   user: string;
+  isAdmin: boolean;
   createdAt: Date | string;
 };

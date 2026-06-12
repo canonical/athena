@@ -6,8 +6,6 @@ CREATE TABLE IF NOT EXISTS "event" (
   "sourceRef" TEXT,
   "status" TEXT NOT NULL,
   "assignee" TEXT,
-  "workItemUrl" TEXT,
-  "topLevelWorkItemUrl" TEXT,
   "requestedOutcome" TEXT,
   "emittedByPersona" TEXT,
   "blocker" TEXT,
@@ -21,8 +19,6 @@ CREATE TABLE IF NOT EXISTS "event" (
 CREATE INDEX IF NOT EXISTS "idxEventLoop" ON "event"("loop");
 CREATE INDEX IF NOT EXISTS "idxEventStatus" ON "event"("status");
 CREATE INDEX IF NOT EXISTS "idxEventAssignee" ON "event"("assignee");
-CREATE INDEX IF NOT EXISTS "idxEventWorkItemUrl" ON "event"("workItemUrl");
-CREATE INDEX IF NOT EXISTS "idxEventTopLevelWorkItemUrl" ON "event"("topLevelWorkItemUrl");
 CREATE INDEX IF NOT EXISTS "idxEventSourceType" ON "event"("sourceType");
 CREATE INDEX IF NOT EXISTS "idxEventEmittedAt" ON "event"("emittedAt" DESC);
 

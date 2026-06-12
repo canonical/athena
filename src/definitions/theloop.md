@@ -9,7 +9,7 @@
   - handoff.definition.md
   - approval.matrix.md
 
-2. Athena routes the event to the assigned persona together with the active Jira item and the required context. At the end of the step, either a new event is emitted for another persona, or a completion event is emitted. Completion events notify the user.
+2. Athena routes the event to the assigned persona together with the active work item or source context and the required details. At the end of the step, either a new event is emitted for another persona, or a completion event is emitted. Completion events notify the user.
   Personas:
   - Assigned persona
   Files:
@@ -18,7 +18,7 @@
   - handoff.definition.md
   - jira.dod.md
 
-3. Each event must include the active Jira item, the assigned persona, the event type, the current status, and any relevant blockers or approvals.
+3. Each event must include the active work item or source context, the assigned persona, the event type, the current status, and any relevant blockers or approvals.
 
 4. If a persona cannot continue because of ambiguity, dependency, or missing approval, Athena emits a blocked event and routes it through the engineering manager persona. If the engineering manager persona cannot resolve the block, Athena notifies the user.
   Personas:
@@ -28,7 +28,7 @@
   - interaction.protocol.md
   - handoff.definition.md
 
-5. A completion event means the assigned persona has finished its current responsibility for the active Jira item and no more work is required from that persona for that step.
+5. A completion event means the assigned persona has finished its current responsibility for the active work item or source context and no more work is required from that persona for that step.
   Personas:
   - Assigned persona
   Files:
@@ -48,6 +48,7 @@ A user can belong to multiple loops. Each loop groups the events that belong to 
 
 - A loop has a human-readable name and an optional description to identify the work context.
 - A loop can belong to multiple users through loop membership.
+- The user who creates a loop becomes an admin member of that loop.
 - Listing loops for a user returns the loops they belong to.
 - Loops are long-lived. They stay available after events are completed or blocked.
 

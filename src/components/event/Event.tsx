@@ -1,11 +1,32 @@
 import { MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { useEvents } from "./event.query.js";
+import type { EventPayload } from "./event.schema.js";
 
 const statusLabel: Record<string, string> = {
   created: "Created",
   routed: "Routed",
   completed: "Completed",
   blocked: "Blocked",
+};
+
+const isRecord = (value: unknown): value is EventPayload => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const readEventUrl = (payload: EventPayload): string | undefined => {
+  const directUrl = payload.workItemUrl ?? payload.topLevelWorkItemUrl ?? payload.url;
+
+  if (typeof directUrl === "string" && directUrl.trim().length > 0) {
+    return directUrl;
+  }
+
+  const source = payload.source;
+
+  if (!isRecord(source)) {
+    return undefined;
+  }
+
+  const sourceUrl = source.workItemUrl ?? source.topLevelWorkItemUrl ?? source.url;
+
+  return typeof sourceUrl === "string" && sourceUrl.trim().length > 0 ? sourceUrl : undefined;
 };
 
 export function Event() {
@@ -46,9 +67,9 @@ export function Event() {
               { content: statusLabel[event.status] ?? event.status },
               { content: event.sourceRef ? `${event.sourceType} · ${event.sourceRef}` : event.sourceType },
               {
-                content: event.workItemUrl ? (
-                  <a href={event.workItemUrl} rel="noreferrer" target="_blank">
-                    {event.workItemUrl}
+                content: readEventUrl(event.payload) ? (
+                  <a href={readEventUrl(event.payload)} rel="noreferrer" target="_blank">
+                    {readEventUrl(event.payload)}
                   </a>
                 ) : (
                   "—"
