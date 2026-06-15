@@ -1,5 +1,5 @@
 import { z } from "zod";
 
-const uuidSchema = z.uuid();
+const uuidV7Schema = z.uuid({ version: "v7" });
 
-export const isValidUuid = (value: string): boolean => uuidSchema.safeParse(value).success;
+export const isValidUuid = (value: string): boolean => uuidV7Schema.safeParse(value).success;
