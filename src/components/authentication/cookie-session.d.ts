@@ -1,4 +1,4 @@
-import type { Session, User as AthenaUser } from "@components/authentication/session.schema.js";
+import type { User as AthenaUser, Session } from "@components/authentication/session.schema.js";
 
 declare global {
   namespace Express {

@@ -1,3 +1,15 @@
+import { z } from "zod";
+
+const requiredString = (message: string) =>
+  z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string({ required_error: message }));
+
+export const loopInsertSchema = z.object({
+  name: requiredString("name is required."),
+  description: z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string().optional()),
+});
+
+export const loopUpdateSchema = loopInsertSchema;
+
 export type Loop = {
   id: string;
   name: string;
@@ -6,15 +18,9 @@ export type Loop = {
   updatedAt: Date | string;
 };
 
-export type LoopInsert = {
-  name: string;
-  description?: string;
-};
+export type LoopInsert = z.infer<typeof loopInsertSchema>;
 
-export type LoopUpdate = {
-  name: string;
-  description?: string;
-};
+export type LoopUpdate = z.infer<typeof loopUpdateSchema>;
 
 export type LoopUser = {
   loop: string;

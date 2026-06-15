@@ -1,5 +1,5 @@
-import { type Request, type Response, Router } from "express";
 import { isValidUuid } from "@components/utilities/validation.js";
+import { type Request, type Response, Router } from "express";
 import { LoopNotFoundError, LoopValidationError, loopCreate, loopDelete, loopGet, loopList, loopUpdate, validateCreateLoopRequest, validateUpdateLoopRequest } from "./loop.controller.js";
 
 export const loopRouter = Router();
@@ -99,4 +99,3 @@ loopRouter.delete(`/loops/:loopId`, async (request: Request, response: Response)
     }
   }
 });
-

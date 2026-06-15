@@ -1,39 +1,29 @@
 import type { Loop, LoopInsert, LoopUpdate } from "./loop.schema.js";
+import { loopInsertSchema, loopUpdateSchema } from "./loop.schema.js";
 import { queryLoopCreate, queryLoopDelete, queryLoopForUser, queryLoopList, queryLoopUpdate } from "./loop.service.js";
-
-const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
-
-const normalizeString = (value: unknown): string | undefined => {
-  if (typeof value !== `string`) {
-    return undefined;
-  }
-
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : undefined;
-};
-
-const validateLoopInput = (value: unknown): LoopInsert | LoopUpdate => {
-  if (!isRecord(value)) {
-    throw new LoopValidationError(`Loop request body must be an object.`);
-  }
-
-  const name = normalizeString(value.name);
-
-  if (!name) {
-    throw new LoopValidationError(`name is required.`);
-  }
-
-  return {
-    name,
-    description: normalizeString(value.description),
-  };
-};
 
 export class LoopValidationError extends Error {}
 export class LoopNotFoundError extends Error {}
 
-export const validateCreateLoopRequest = (value: unknown): LoopInsert => validateLoopInput(value);
-export const validateUpdateLoopRequest = (value: unknown): LoopUpdate => validateLoopInput(value);
+export const validateCreateLoopRequest = (value: unknown): LoopInsert => {
+  const result = loopInsertSchema.safeParse(value);
+
+  if (!result.success) {
+    throw new LoopValidationError(result.error.errors[0]?.message ?? "Invalid loop request.");
+  }
+
+  return result.data;
+};
+
+export const validateUpdateLoopRequest = (value: unknown): LoopUpdate => {
+  const result = loopUpdateSchema.safeParse(value);
+
+  if (!result.success) {
+    throw new LoopValidationError(result.error.errors[0]?.message ?? "Invalid loop request.");
+  }
+
+  return result.data;
+};
 
 export const loopList = async (userId: string): Promise<Loop[]> => queryLoopList(userId);
 

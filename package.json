@@ -58,6 +58,7 @@
     "pg": "^8.21.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "vanilla-framework": "^4.51.0"
+    "vanilla-framework": "^4.51.0",
+    "zod": "4.4.3"
   }
 }
