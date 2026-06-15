@@ -1,5 +1,4 @@
-import { getLoopForUser } from "@components/loop/loop.controller.js";
-import { getPool } from "@components/postgres/postgres.js";
+import { queryLoopForUser } from "@components/loop/loop.service.js";
 import type {
   BlockedEventCreation,
   ConcludedEventCreation,
@@ -7,7 +6,6 @@ import type {
   CreateEventResponse,
   Event,
   EventFollowUpRequest,
-  EventInsert,
   EventPayload,
   EventPayloadBuildInput,
   EventSourceContext,
@@ -19,9 +17,7 @@ import type {
   ValidatedCreateEventRequest,
 } from "./event.schema.js";
 import { athenaPersonaId, engineeringManagerPersonaId, executionPersonaIds, personaIds } from "./event.schema.js";
-
-const eventColumnNames = [`id`, `loop`, `sourceType`, `sourceRef`, `status`, `assignee`, `requestedOutcome`, `emittedByPersona`, `blocker`, `approvals`, `payload`, `emittedAt`, `completedAt`, `updatedAt`] as const;
-const getEventColumns = (tableAlias?: string): string => eventColumnNames.map((column) => `${tableAlias ? `${tableAlias}.` : ``}"${column}"`).join(`, `);
+import { queryEventCreate, queryEventList } from "./event.service.js";
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
 
@@ -133,49 +129,6 @@ const buildEventPayload = ({ approvals, blocker, context, nextExpectedAction, ne
   input: request.payload,
 });
 
-const insertEvent = async (event: EventInsert): Promise<Event> => {
-  const result = await getPool().query<Event>(
-    `
-      INSERT INTO "event" (
-        "loop",
-        "sourceType",
-        "sourceRef",
-        "status",
-        "assignee",
-        "requestedOutcome",
-        "emittedByPersona",
-        "blocker",
-        "approvals",
-        "payload",
-        "completedAt"
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11)
-      RETURNING ${getEventColumns()}
-    `,
-    [
-      event.loop,
-      event.sourceType,
-      event.sourceRef ?? null,
-      event.status,
-      event.assignee ?? null,
-      event.requestedOutcome,
-      event.emittedByPersona,
-      event.blocker ?? null,
-      JSON.stringify(event.approvals),
-      JSON.stringify(event.payload),
-      event.completedAt ?? null,
-    ],
-  );
-
-  const createdEvent = result.rows[0];
-
-  if (!createdEvent) {
-    throw new Error(`Event was not created.`);
-  }
-
-  return createdEvent;
-};
-
 export class EventValidationError extends Error {}
 export class EventAccessError extends Error {}
 
@@ -227,7 +180,7 @@ const getAssignedPersona = (event: Event): PersonaId => {
 };
 
 const createInitialEvent = async ({ request, sourcePayload, sourceRef }: EventSourceContext): Promise<Event> =>
-  insertEvent({
+  queryEventCreate({
     loop: request.loop,
     sourceType: request.sourceType,
     sourceRef,
@@ -248,7 +201,7 @@ const createInitialEvent = async ({ request, sourcePayload, sourceRef }: EventSo
   });
 
 const createRoutedEvent = async ({ assignee, emittedByPersona, note, request, sourcePayload, sourceRef }: RoutedEventCreation): Promise<Event> =>
-  insertEvent({
+  queryEventCreate({
     loop: request.loop,
     sourceType: request.sourceType,
     sourceRef,
@@ -270,7 +223,7 @@ const createRoutedEvent = async ({ assignee, emittedByPersona, note, request, so
   });
 
 const createCompletedEvent = async ({ assignee, note, request, sourcePayload, sourceRef }: ConcludedEventCreation): Promise<Event> =>
-  insertEvent({
+  queryEventCreate({
     loop: request.loop,
     sourceType: request.sourceType,
     sourceRef,
@@ -293,7 +246,7 @@ const createCompletedEvent = async ({ assignee, note, request, sourcePayload, so
   });
 
 const createBlockedEvent = async ({ assignee, blocker, note, request, sourcePayload, sourceRef }: BlockedEventCreation): Promise<Event> =>
-  insertEvent({
+  queryEventCreate({
     loop: request.loop,
     sourceType: request.sourceType,
     sourceRef,
@@ -364,9 +317,9 @@ const createFollowUpEvents = async ({ currentEvent, request, result, sourcePaylo
   ];
 };
 
-export const createEvent = async (input: CreateEventRequest, userId: string): Promise<CreateEventResponse> => {
+export const eventCreate = async (input: CreateEventRequest, userId: string): Promise<CreateEventResponse> => {
   const request = validateCreateEventRequest(input);
-  const loop = await getLoopForUser(request.loop, userId);
+  const loop = await queryLoopForUser(request.loop, userId);
 
   if (!loop) {
     throw new EventAccessError(`Loop not found.`);
@@ -416,17 +369,4 @@ export const createEvent = async (input: CreateEventRequest, userId: string): Pr
   };
 };
 
-export const listEvents = async (userId: string): Promise<Event[]> => {
-  const result = await getPool().query<Event>(
-    `
-      SELECT ${getEventColumns(`e`)}
-      FROM "event" e
-      JOIN "loopUser" lu ON lu."loop" = e."loop"
-      WHERE lu."user" = $1
-      ORDER BY e."emittedAt" DESC
-    `,
-    [userId],
-  );
-
-  return result.rows;
-};
+export const eventList = async (userId: string): Promise<Event[]> => queryEventList(userId);

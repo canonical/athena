@@ -20,6 +20,7 @@ src/components/
     <componentName>.router.ts
     <componentName>.schema.ts
     <componentName>.controller.ts
+    <componentName>.service.ts
     <ComponentName>List.tsx
     <ComponentName>Edit.tsx
     <ComponentName>Layout.tsx
@@ -41,8 +42,12 @@ Notes:
 - Styles should be component-local. Use `<componentName>.scss` inside each component folder when styling is needed.
 - Avoid global styling wherever possible. Introduce global styles only when there is no practical component-scoped alternative.
 - `<componentName>.schema.ts` is the only allowed location for that component's TypeScript types and Zod schemas.
-- `<componentName>.controller.ts` owns business logic and database interaction for that component.
+- `<componentName>.controller.ts` owns business logic and orchestration for that component.
 - `<componentName>.controller.ts` should stay transport-agnostic and must not depend on Express imports except when absolutely necessary.
+- Controllers must not query the database directly or fetch other applications/services directly; move that work into service files.
+- Use `<componentName>.service.ts` when a component has one service dependency target, or `<componentName>.<target>.service.ts` when multiple service targets need separate files.
+- Prefix controller entrypoint names with the component name, for example `loopGet`, `loopList`, and `eventCreate`.
+- Name service functions after their source and action, for example `queryLoopList` for database queries and `fetchLoopList` for external API calls.
 - When controller helpers need structured inputs beyond a couple of primitive arguments, define and reuse a named type in `<componentName>.schema.ts` instead of repeating inline object signatures.
 - Prefer controller helpers that return explicit values over helpers that mutate shared in-memory state.
 - `<componentName>.router.ts` owns Express route definitions and all request/response handling.

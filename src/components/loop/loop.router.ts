@@ -1,7 +1,7 @@
 import { getAuthenticatedUser } from "@components/authentication/authentication.controller.js";
 import { getSessionId } from "@components/authentication/session.js";
 import { type Request, type Response, Router } from "express";
-import { createLoop, deleteLoop, getLoop, LoopNotFoundError, LoopValidationError, listLoops, updateLoop, validateCreateLoopRequest, validateUpdateLoopRequest } from "./loop.controller.js";
+import { LoopNotFoundError, LoopValidationError, loopCreate, loopDelete, loopGet, loopList, loopUpdate, validateCreateLoopRequest, validateUpdateLoopRequest } from "./loop.controller.js";
 
 export const loopRouter = Router();
 
@@ -44,7 +44,7 @@ loopRouter.post(`/loops`, async (request: Request, response: Response) => {
       return;
     }
 
-    const loop = await createLoop(validateCreateLoopRequest(request.body), user.id);
+    const loop = await loopCreate(validateCreateLoopRequest(request.body), user.id);
     response.status(201).json(loop);
   } catch (error) {
     if (!sendLoopError(error, response)) {
@@ -60,7 +60,7 @@ loopRouter.get(`/loops`, async (request: Request, response: Response) => {
     return;
   }
 
-  response.status(200).json(await listLoops(user.id));
+  response.status(200).json(await loopList(user.id));
 });
 
 loopRouter.get(`/loops/:loopId`, async (request: Request, response: Response) => {
@@ -71,7 +71,7 @@ loopRouter.get(`/loops/:loopId`, async (request: Request, response: Response) =>
       return;
     }
 
-    response.status(200).json(await getLoop(getLoopId(request), user.id));
+    response.status(200).json(await loopGet(getLoopId(request), user.id));
   } catch (error) {
     if (!sendLoopError(error, response)) {
       throw error;
@@ -87,7 +87,7 @@ loopRouter.put(`/loops/:loopId`, async (request: Request, response: Response) =>
       return;
     }
 
-    const loop = await updateLoop(getLoopId(request), validateUpdateLoopRequest(request.body), user.id);
+    const loop = await loopUpdate(getLoopId(request), validateUpdateLoopRequest(request.body), user.id);
     response.status(200).json(loop);
   } catch (error) {
     if (!sendLoopError(error, response)) {
@@ -104,7 +104,7 @@ loopRouter.delete(`/loops/:loopId`, async (request: Request, response: Response)
       return;
     }
 
-    await deleteLoop(getLoopId(request), user.id);
+    await loopDelete(getLoopId(request), user.id);
     response.sendStatus(204);
   } catch (error) {
     if (!sendLoopError(error, response)) {

@@ -1,7 +1,7 @@
 import { getAuthenticatedUser } from "@components/authentication/authentication.controller.js";
 import { getSessionId } from "@components/authentication/session.js";
 import { type Request, type Response, Router } from "express";
-import { createEvent, EventAccessError, EventValidationError, listEvents } from "./event.controller.js";
+import { EventAccessError, EventValidationError, eventCreate, eventList } from "./event.controller.js";
 
 export const eventRouter = Router();
 
@@ -14,7 +14,7 @@ eventRouter.post(`/loop/events`, async (request: Request, response: Response) =>
       return;
     }
 
-    const result = await createEvent(request.body, user.id);
+    const result = await eventCreate(request.body, user.id);
 
     response.status(201).json(result);
   } catch (error) {
@@ -40,7 +40,7 @@ eventRouter.get(`/loop/events`, async (request: Request, response: Response) => 
     return;
   }
 
-  const events = await listEvents(user.id);
+  const events = await eventList(user.id);
 
   response.status(200).json(events);
 });
