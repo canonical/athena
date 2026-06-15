@@ -1,8 +1,9 @@
 import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { type FormEvent, useState } from "react";
 import { createLoop, deleteLoop, updateLoop } from "./loop.client.js";
+import type { LoopsState } from "./loop.query.js";
 import { useLoops } from "./loop.query.js";
-import type { Loop as LoopRecord } from "./loop.schema.js";
+import { loopInsertSchema, loopUpdateSchema } from "./loop.schema.js";
 
 type Feedback = {
   severity: NotificationSeverity;
@@ -10,13 +11,15 @@ type Feedback = {
   message: string;
 };
 
+type LoopItem = Extract<LoopsState, { status: "success" }>["loops"][number];
+
 const formatTimestamp = (value: Date | string) => new Date(value).toLocaleString();
 
 export function Loop() {
   const { state, reload } = useLoops();
   const [createName, setCreateName] = useState(``);
   const [createDescription, setCreateDescription] = useState(``);
-  const [editingLoop, setEditingLoop] = useState<LoopRecord | null>(null);
+  const [editingLoop, setEditingLoop] = useState<LoopItem | null>(null);
   const [editName, setEditName] = useState(``);
   const [editDescription, setEditDescription] = useState(``);
   const [busyLoopId, setBusyLoopId] = useState<string | null>(null);
@@ -31,7 +34,7 @@ export function Loop() {
     setIsSaving(false);
   };
 
-  const startEditing = (loop: LoopRecord) => {
+  const startEditing = (loop: LoopItem) => {
     setEditingLoop(loop);
     setEditName(loop.name);
     setEditDescription(loop.description ?? ``);
@@ -40,6 +43,18 @@ export function Loop() {
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    const parseResult = loopInsertSchema.safeParse({ name: createName, description: createDescription });
+
+    if (!parseResult.success) {
+      setFeedback({
+        severity: NotificationSeverity.NEGATIVE,
+        title: `Unable to create loop`,
+        message: parseResult.error.errors[0]?.message ?? `Invalid input.`,
+      });
+      return;
+    }
+
     setIsCreating(true);
     setFeedback(null);
 
@@ -76,6 +91,17 @@ export function Loop() {
       return;
     }
 
+    const parseResult = loopUpdateSchema.safeParse({ name: editName, description: editDescription });
+
+    if (!parseResult.success) {
+      setFeedback({
+        severity: NotificationSeverity.NEGATIVE,
+        title: `Unable to update loop`,
+        message: parseResult.error.errors[0]?.message ?? `Invalid input.`,
+      });
+      return;
+    }
+
     setIsSaving(true);
     setFeedback(null);
 
@@ -103,7 +129,7 @@ export function Loop() {
     }
   };
 
-  const handleDelete = async (loop: LoopRecord) => {
+  const handleDelete = async (loop: LoopItem) => {
     setBusyLoopId(loop.id);
     setFeedback(null);
 

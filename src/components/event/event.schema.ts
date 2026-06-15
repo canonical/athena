@@ -1,4 +1,5 @@
 import type { Loop } from "@components/loop/loop.schema.js";
+import { z } from "zod";
 
 export const athenaPersonaId = `athena` as const;
 export const engineeringManagerPersonaId = `em.diana` as const;
@@ -13,6 +14,20 @@ export type LoopEventStatus = (typeof loopEventStatuses)[number];
 export type EventPayload = Record<string, unknown>;
 export type EventApprovals = unknown[];
 export type EmittingPersonaId = AthenaPersonaId | PersonaId;
+
+const normalizedString = z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string().optional());
+
+const requiredString = (message: string) => z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string(message));
+
+export const createEventRequestSchema = z.object({
+  loop: z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string(`loop is required.`).uuid(`loop must be a valid UUID.`)),
+  sourceType: requiredString(`sourceType is required.`),
+  requestedOutcome: requiredString(`requestedOutcome is required.`),
+  sourceRef: normalizedString,
+  assignedPersona: z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.enum(personaIds).optional()),
+  approvals: z.array(z.unknown()).optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
+});
 
 export type Event = {
   id: string;

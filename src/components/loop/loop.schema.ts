@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-const requiredString = (message: string) =>
-  z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string({ required_error: message }));
+const requiredString = (message: string) => z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string(message));
 
 export const loopInsertSchema = z.object({
   name: requiredString("name is required."),

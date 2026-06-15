@@ -1,5 +1,4 @@
 import { queryLoopForUser } from "@components/loop/loop.service.js";
-import { isValidUuid } from "@components/utilities/validation.js";
 import type {
   BlockedEventCreation,
   ConcludedEventCreation,
@@ -17,10 +16,8 @@ import type {
   RoutedEventCreation,
   ValidatedCreateEventRequest,
 } from "./event.schema.js";
-import { athenaPersonaId, engineeringManagerPersonaId, executionPersonaIds, personaIds } from "./event.schema.js";
+import { athenaPersonaId, createEventRequestSchema, engineeringManagerPersonaId, executionPersonaIds, personaIds } from "./event.schema.js";
 import { queryEventCreate, queryEventList } from "./event.service.js";
-
-const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
 
 const normalizeString = (value: unknown): string | undefined => {
   if (typeof value !== `string`) {
@@ -134,45 +131,16 @@ export class EventValidationError extends Error {}
 export class EventAccessError extends Error {}
 
 export const validateCreateEventRequest = (value: unknown): ValidatedCreateEventRequest => {
-  if (!isRecord(value)) {
-    throw new EventValidationError(`Event request body must be an object.`);
+  const result = createEventRequestSchema.safeParse(value);
+
+  if (!result.success) {
+    throw new EventValidationError(result.error.issues[0]?.message ?? `Invalid event request.`);
   }
-
-  const loop = normalizeString(value.loop);
-  const sourceType = normalizeString(value.sourceType);
-  const requestedOutcome = normalizeString(value.requestedOutcome);
-  const assignedPersonaValue = normalizeString(value.assignedPersona);
-
-  if (!loop) {
-    throw new EventValidationError(`loop is required.`);
-  }
-
-  if (!isValidUuid(loop)) {
-    throw new EventValidationError(`loop must be a valid UUID.`);
-  }
-
-  if (!sourceType) {
-    throw new EventValidationError(`sourceType is required.`);
-  }
-
-  if (!requestedOutcome) {
-    throw new EventValidationError(`requestedOutcome is required.`);
-  }
-
-  if (assignedPersonaValue && !isPersonaId(assignedPersonaValue)) {
-    throw new EventValidationError(`assignedPersona must be one of: ${personaIds.join(`, `)}.`);
-  }
-
-  const assignedPersona = assignedPersonaValue && isPersonaId(assignedPersonaValue) ? assignedPersonaValue : undefined;
 
   return {
-    loop,
-    sourceType,
-    sourceRef: normalizeString(value.sourceRef),
-    assignedPersona,
-    requestedOutcome,
-    approvals: Array.isArray(value.approvals) ? value.approvals : [],
-    payload: isRecord(value.payload) ? value.payload : {},
+    ...result.data,
+    approvals: result.data.approvals ?? [],
+    payload: result.data.payload ?? {},
   };
 };
 

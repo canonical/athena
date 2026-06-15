@@ -1,5 +1,5 @@
 import type { OIDCUserInfo } from "@components/authentication/authentication.schema.js";
-import type { AuthenticatedUser, Session, User } from "@components/authentication/session.schema.js";
+import type { AthenaUser, AuthenticatedUser, Session } from "@components/authentication/session.schema.js";
 import { config } from "@components/config/config.js";
 import { getPool } from "@components/postgres/postgres.js";
 import { retry } from "@components/utilities/perseverance.js";
@@ -266,12 +266,12 @@ export const storeAuthenticatedUser = async (session: Session | null, user: unkn
   }
 };
 
-export const getAuthenticatedUser = async (sessionId: string | undefined): Promise<User | undefined> => {
+export const getAuthenticatedUser = async (sessionId: string | undefined): Promise<AthenaUser | undefined> => {
   if (!sessionId) {
     return undefined;
   }
 
-  const result = await getPool().query<User>(
+  const result = await getPool().query<AthenaUser>(
     `
       SELECT
         u."id",
@@ -309,7 +309,7 @@ export const consumeReturnTo = (session: Session | null): string => {
 
 export const clearSession = (): null => null;
 
-export const buildProfileResponse = (user: User | undefined): { isAuthenticated: boolean; user: User | null } => {
+export const buildProfileResponse = (user: AthenaUser | undefined): { isAuthenticated: boolean; user: AthenaUser | null } => {
   if (user) {
     return {
       isAuthenticated: true,

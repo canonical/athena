@@ -9,7 +9,7 @@ export const validateCreateLoopRequest = (value: unknown): LoopInsert => {
   const result = loopInsertSchema.safeParse(value);
 
   if (!result.success) {
-    throw new LoopValidationError(result.error.errors[0]?.message ?? "Invalid loop request.");
+    throw new LoopValidationError(result.error.issues[0]?.message ?? "Invalid loop request.");
   }
 
   return result.data;
@@ -19,7 +19,7 @@ export const validateUpdateLoopRequest = (value: unknown): LoopUpdate => {
   const result = loopUpdateSchema.safeParse(value);
 
   if (!result.success) {
-    throw new LoopValidationError(result.error.errors[0]?.message ?? "Invalid loop request.");
+    throw new LoopValidationError(result.error.issues[0]?.message ?? "Invalid loop request.");
   }
 
   return result.data;
