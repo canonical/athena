@@ -1,4 +1,4 @@
-import type { AthenaUser, Session } from "@components/authentication/session.schema.js";
+import type { User, Session } from "@components/authentication/session.schema.js";
 
 declare global {
   namespace Express {
@@ -7,7 +7,7 @@ declare global {
     }
 
     interface Locals {
-      authenticatedUser?: AthenaUser;
+      authenticatedUser?: User;
     }
   }
 }

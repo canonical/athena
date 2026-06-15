@@ -1,11 +1,11 @@
-export type AthenaUser = {
+export type User = {
   id: string;
   name: string;
   email: string;
   picture: string;
 };
 
-export type AuthenticatedUser = AthenaUser & {
+export type AuthenticatedUser = User & {
   subject: string;
 };
 
