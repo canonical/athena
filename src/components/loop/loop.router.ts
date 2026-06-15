@@ -32,7 +32,7 @@ const getLoopId = (request: Request, response: Response): string | undefined => 
 
 loopRouter.post(`/loops`, async (request: Request, response: Response) => {
   try {
-    const user = response.locals.authenticatedUser!;
+    const user = response.locals.user!;
     const loop = await loopCreate(validateCreateLoopRequest(request.body), user.id);
     response.status(201).json(loop);
   } catch (error) {
@@ -43,7 +43,7 @@ loopRouter.post(`/loops`, async (request: Request, response: Response) => {
 });
 
 loopRouter.get(`/loops`, async (request: Request, response: Response) => {
-  const user = response.locals.authenticatedUser!;
+  const user = response.locals.user!;
   response.status(200).json(await loopList(user.id));
 });
 
@@ -55,7 +55,7 @@ loopRouter.get(`/loops/:loopId`, async (request: Request, response: Response) =>
       return;
     }
 
-    const user = response.locals.authenticatedUser!;
+    const user = response.locals.user!;
     response.status(200).json(await loopGet(loopId, user.id));
   } catch (error) {
     if (!sendLoopError(error, response)) {
@@ -72,7 +72,7 @@ loopRouter.put(`/loops/:loopId`, async (request: Request, response: Response) =>
       return;
     }
 
-    const user = response.locals.authenticatedUser!;
+    const user = response.locals.user!;
     const loop = await loopUpdate(loopId, validateUpdateLoopRequest(request.body), user.id);
     response.status(200).json(loop);
   } catch (error) {
@@ -90,7 +90,7 @@ loopRouter.delete(`/loops/:loopId`, async (request: Request, response: Response)
       return;
     }
 
-    const user = response.locals.authenticatedUser!;
+    const user = response.locals.user!;
     await loopDelete(loopId, user.id);
     response.sendStatus(204);
   } catch (error) {

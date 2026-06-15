@@ -9,6 +9,6 @@ export async function requireAuthentication(req: Request, res: Response, next: N
     return res.sendStatus(401);
   }
 
-  res.locals.authenticatedUser = user;
+  res.locals.user = user;
   next();
 }

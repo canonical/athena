@@ -7,7 +7,7 @@ declare global {
     }
 
     interface Locals {
-      authenticatedUser?: User;
+      user?: User;
     }
   }
 }

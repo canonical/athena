@@ -5,7 +5,7 @@ export const eventRouter = Router();
 
 eventRouter.post(`/loop/events`, async (request: Request, response: Response) => {
   try {
-    const user = response.locals.authenticatedUser!;
+    const user = response.locals.user!;
     const result = await eventCreate(request.body, user.id);
 
     response.status(201).json(result);
@@ -25,7 +25,7 @@ eventRouter.post(`/loop/events`, async (request: Request, response: Response) =>
 });
 
 eventRouter.get(`/loop/events`, async (request: Request, response: Response) => {
-  const user = response.locals.authenticatedUser!;
+  const user = response.locals.user!;
   const events = await eventList(user.id);
 
   response.status(200).json(events);
