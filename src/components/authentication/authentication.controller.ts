@@ -1,5 +1,5 @@
 import type { OIDCUserInfo } from "@components/authentication/authentication.schema.js";
-import type { User, AuthenticatedUser, Session } from "@components/authentication/session.schema.js";
+import type { AuthenticatedUser, Session, User } from "@components/authentication/session.schema.js";
 import { config } from "@components/config/config.js";
 import { getPool } from "@components/postgres/postgres.js";
 import { retry } from "@components/utilities/perseverance.js";
@@ -266,15 +266,16 @@ export const storeAuthenticatedUser = async (session: Session | null, user: unkn
   }
 };
 
-export const getAuthenticatedUser = async (sessionId: string | undefined): Promise<User | undefined> => {
+export const getAuthenticatedUser = async (sessionId: string | undefined): Promise<AuthenticatedUser | undefined> => {
   if (!sessionId) {
     return undefined;
   }
 
-  const result = await getPool().query<User>(
+  const result = await getPool().query<AuthenticatedUser>(
     `
       SELECT
         u."id",
+        u."subject",
         u."name",
         u."id" AS "email",
         u."picture"
