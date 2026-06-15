@@ -11,11 +11,20 @@ const statusLabel: Record<string, string> = {
 
 const isRecord = (value: unknown): value is EventPayload => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
+const isSafeUrl = (url: string): boolean => {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
 const readEventUrl = (payload: EventPayload): string | undefined => {
   const directUrl = payload.workItemUrl ?? payload.topLevelWorkItemUrl ?? payload.url;
 
-  if (typeof directUrl === "string" && directUrl.trim().length > 0) {
-    return directUrl;
+  if (typeof directUrl === "string" && directUrl.trim().length > 0 && isSafeUrl(directUrl.trim())) {
+    return directUrl.trim();
   }
 
   const source = payload.source;
@@ -26,7 +35,7 @@ const readEventUrl = (payload: EventPayload): string | undefined => {
 
   const sourceUrl = source.workItemUrl ?? source.topLevelWorkItemUrl ?? source.url;
 
-  return typeof sourceUrl === "string" && sourceUrl.trim().length > 0 ? sourceUrl : undefined;
+  return typeof sourceUrl === "string" && sourceUrl.trim().length > 0 && isSafeUrl(sourceUrl.trim()) ? sourceUrl.trim() : undefined;
 };
 
 export function Event() {

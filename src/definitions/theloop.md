@@ -1,46 +1,56 @@
 # The Loop
 
 1. When an event is created with no assigned persona, Athena asks the engineering manager persona for an assignment.
-  Personas:
-  - Engineering manager persona
-  Files:
-  - responsibility.rules.md
-  - interaction.protocol.md
-  - handoff.definition.md
-  - approval.matrix.md
+
+   Personas:
+   - Engineering manager persona
+
+   Files:
+   - responsibility.rules.md
+   - interaction.protocol.md
+   - handoff.definition.md
+   - approval.matrix.md
 
 2. Athena routes the event to the assigned persona together with the active work item or source context and the required details. At the end of the step, either a new event is emitted for another persona, or a completion event is emitted. Completion events notify the user.
-  Personas:
-  - Assigned persona
-  Files:
-  - responsibility.rules.md
-  - interaction.protocol.md
-  - handoff.definition.md
-  - jira.dod.md
+
+   Personas:
+   - Assigned persona
+
+   Files:
+   - responsibility.rules.md
+   - interaction.protocol.md
+   - handoff.definition.md
+   - jira.dod.md
 
 3. Each event must include the active work item or source context, the assigned persona, the event type, the current status, and any relevant blockers or approvals.
 
 4. If a persona cannot continue because of ambiguity, dependency, or missing approval, Athena emits a blocked event and routes it through the engineering manager persona. If the engineering manager persona cannot resolve the block, Athena notifies the user.
-  Personas:
-  - Assigned persona
-  - Engineering manager persona
-  Files:
-  - interaction.protocol.md
-  - handoff.definition.md
+
+   Personas:
+   - Assigned persona
+   - Engineering manager persona
+
+   Files:
+   - interaction.protocol.md
+   - handoff.definition.md
 
 5. A completion event means the assigned persona has finished its current responsibility for the active work item or source context and no more work is required from that persona for that step.
-  Personas:
-  - Assigned persona
-  Files:
-  - responsibility.rules.md
-  - handoff.definition.md
+
+   Personas:
+   - Assigned persona
+
+   Files:
+   - responsibility.rules.md
+   - handoff.definition.md
 
 6. A completion or blocked event concludes only the current step. The loop itself remains available for future events and follow-up work.
-  Personas:
-  - Engineering manager persona
-  Files:
-  - interaction.protocol.md
-  - handoff.definition.md
+
+   Personas:
+   - Engineering manager persona
+
+   Files:
+   - interaction.protocol.md
+   - handoff.definition.md
 
 ## Loops
 

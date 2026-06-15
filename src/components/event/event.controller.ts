@@ -21,6 +21,10 @@ import { queryEventCreate, queryEventList } from "./event.service.js";
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isValidUuid = (value: string): boolean => uuidPattern.test(value);
+
 const normalizeString = (value: unknown): string | undefined => {
   if (typeof value !== `string`) {
     return undefined;
@@ -55,9 +59,9 @@ const resolveSourceRef = (request: ValidatedCreateEventRequest): string | undefi
   (request.sourceType === `human-chat` ? readPayloadString(request.payload, `channel`) : undefined);
 
 const buildSourceContext = (request: ValidatedCreateEventRequest, sourceRef: string | undefined): EventPayload => ({
+  ...request.payload,
   sourceType: request.sourceType,
   ...(sourceRef ? { sourceRef } : {}),
-  ...request.payload,
 });
 
 const selectAssignee = (event: Pick<Event, "sourceType" | "sourceRef" | "requestedOutcome">): ExecutionPersonaId => {
@@ -144,6 +148,10 @@ export const validateCreateEventRequest = (value: unknown): ValidatedCreateEvent
 
   if (!loop) {
     throw new EventValidationError(`loop is required.`);
+  }
+
+  if (!isValidUuid(loop)) {
+    throw new EventValidationError(`loop must be a valid UUID.`);
   }
 
   if (!sourceType) {

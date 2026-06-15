@@ -3,7 +3,7 @@ import type { Loop } from "./loop.schema.js";
 
 export type LoopPayload = {
   name: string;
-  description: string;
+  description?: string;
 };
 
 export const loopApiPaths = {
