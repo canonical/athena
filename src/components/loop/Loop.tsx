@@ -50,7 +50,7 @@ export function Loop() {
       setFeedback({
         severity: NotificationSeverity.NEGATIVE,
         title: `Unable to create loop`,
-        message: parseResult.error.errors[0]?.message ?? `Invalid input.`,
+        message: parseResult.error.issues[0]?.message ?? `Invalid input.`,
       });
       return;
     }
@@ -97,7 +97,7 @@ export function Loop() {
       setFeedback({
         severity: NotificationSeverity.NEGATIVE,
         title: `Unable to update loop`,
-        message: parseResult.error.errors[0]?.message ?? `Invalid input.`,
+        message: parseResult.error.issues[0]?.message ?? `Invalid input.`,
       });
       return;
     }
