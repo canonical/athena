@@ -1,4 +1,5 @@
 import { queryLoopForUser } from "@components/loop/loop.service.js";
+import { isValidUuid } from "@components/utilities/validation.js";
 import type {
   BlockedEventCreation,
   ConcludedEventCreation,
@@ -20,10 +21,6 @@ import { athenaPersonaId, engineeringManagerPersonaId, executionPersonaIds, pers
 import { queryEventCreate, queryEventList } from "./event.service.js";
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
-
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const isValidUuid = (value: string): boolean => uuidPattern.test(value);
 
 const normalizeString = (value: unknown): string | undefined => {
   if (typeof value !== `string`) {
@@ -61,7 +58,7 @@ const resolveSourceRef = (request: ValidatedCreateEventRequest): string | undefi
 const buildSourceContext = (request: ValidatedCreateEventRequest, sourceRef: string | undefined): EventPayload => ({
   ...request.payload,
   sourceType: request.sourceType,
-  ...(sourceRef ? { sourceRef } : {}),
+  ...(sourceRef && { sourceRef }),
 });
 
 const selectAssignee = (event: Pick<Event, "sourceType" | "sourceRef" | "requestedOutcome">): ExecutionPersonaId => {

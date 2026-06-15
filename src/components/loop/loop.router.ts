@@ -1,11 +1,8 @@
 import { type Request, type Response, Router } from "express";
+import { isValidUuid } from "@components/utilities/validation.js";
 import { LoopNotFoundError, LoopValidationError, loopCreate, loopDelete, loopGet, loopList, loopUpdate, validateCreateLoopRequest, validateUpdateLoopRequest } from "./loop.controller.js";
 
 export const loopRouter = Router();
-
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const isValidUuid = (value: string): boolean => uuidPattern.test(value);
 
 const sendLoopError = (error: unknown, response: Response): boolean => {
   if (error instanceof LoopValidationError) {
