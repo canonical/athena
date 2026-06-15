@@ -18,6 +18,16 @@ export const sideNavigationItems: SideNavigationProps["items"] = [
         href: `/authentication`,
       },
       {
+        icon: "applications",
+        label: "Loops",
+        href: `/loops`,
+      },
+      {
+        icon: "queue",
+        label: "Events",
+        href: `/events`,
+      },
+      {
         icon: "user-group",
         label: "Personas",
         nonInteractive: true,

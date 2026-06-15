@@ -266,15 +266,16 @@ export const storeAuthenticatedUser = async (session: Session | null, user: unkn
   }
 };
 
-export const getAuthenticatedUser = async (sessionId: string | undefined): Promise<User | undefined> => {
+export const getAuthenticatedUser = async (sessionId: string | undefined): Promise<AuthenticatedUser | undefined> => {
   if (!sessionId) {
     return undefined;
   }
 
-  const result = await getPool().query<User>(
+  const result = await getPool().query<AuthenticatedUser>(
     `
       SELECT
         u."id",
+        u."subject",
         u."name",
         u."id" AS "email",
         u."picture"

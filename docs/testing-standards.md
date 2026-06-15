@@ -7,6 +7,7 @@ This document is the source of truth for test strategy and test scope.
 1. Athena uses Playwright end-to-end testing only.
 2. We do not introduce unit tests or integration-only test suites unless explicitly requested.
 3. E2E tests are the primary verification mechanism for backend and frontend behavior.
+4. E2E specs must not use mocks, fixtures, or test doubles; they should exercise the real application stack end to end.
 
 ## Scope requirements
 
