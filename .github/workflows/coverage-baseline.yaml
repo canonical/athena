@@ -68,7 +68,7 @@ jobs:
 
           branch_lookup_stderr="$(mktemp)"
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/${branch_ref}" --jq .object.sha >/dev/null 2>"${branch_lookup_stderr}"; then
-            :
+            echo "Using existing branch ${branch}"
           elif grep -q "HTTP 404" "${branch_lookup_stderr}"; then
             create_ref_stderr="$(mktemp)"
             if ! gh api \
@@ -93,7 +93,7 @@ jobs:
           baseline_sha=""
           sha_lookup_stderr="$(mktemp)"
           if baseline_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${baseline_file}?ref=${branch}" --jq .sha 2>"${sha_lookup_stderr}")"; then
-            :
+            echo "Updating existing baseline file on ${branch}"
           elif grep -q "HTTP 404" "${sha_lookup_stderr}"; then
             baseline_sha=""
           else
@@ -103,20 +103,21 @@ jobs:
           fi
           rm -f "${sha_lookup_stderr}"
 
-          sha_field=()
+          update_content_stderr="$(mktemp)"
+          update_command=(
+            gh api
+            --method PUT
+            "repos/${GITHUB_REPOSITORY}/contents/${baseline_file}"
+            --field message="ci: update coverage baseline [skip coverage-baseline]"
+            --field content="${baseline_content}"
+            --field branch="${branch}"
+          )
+
           if [[ -n "$baseline_sha" ]]; then
-            sha_field+=(--field "sha=${baseline_sha}")
+            update_command+=(--field "sha=${baseline_sha}")
           fi
 
-          update_content_stderr="$(mktemp)"
-          if ! gh api \
-            --method PUT \
-            "repos/${GITHUB_REPOSITORY}/contents/${baseline_file}" \
-            --field message="ci: update coverage baseline [skip coverage-baseline]" \
-            --field content="${baseline_content}" \
-            "${sha_field[@]}" \
-            --field branch="${branch}" \
-            >/dev/null 2>"${update_content_stderr}"; then
+          if ! "${update_command[@]}" >/dev/null 2>"${update_content_stderr}"; then
             echo "::warning::Unable to update ${baseline_file} on ${branch}; skipping automated baseline update."
             cat "${update_content_stderr}" >&2
             rm -f "${update_content_stderr}"
