@@ -61,7 +61,18 @@ jobs:
           fi
 
           baseline_content="$(base64 < "$baseline_file" | tr -d '\n')"
-          baseline_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${baseline_file}" --jq .sha 2>/dev/null || true)"
+          baseline_sha=""
+          sha_lookup_stderr="$(mktemp)"
+          if baseline_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${baseline_file}" --jq .sha 2>"${sha_lookup_stderr}")"; then
+            :
+          elif grep -q "HTTP 404" "${sha_lookup_stderr}"; then
+            baseline_sha=""
+          else
+            cat "${sha_lookup_stderr}" >&2
+            rm -f "${sha_lookup_stderr}"
+            exit 1
+          fi
+          rm -f "${sha_lookup_stderr}"
 
           sha_field=()
           if [[ -n "$baseline_sha" ]]; then
