@@ -1,3 +1,5 @@
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { z } from "zod";
 
-export const isValidUuid = (value: string): boolean => uuidPattern.test(value);
+const uuidSchema = z.uuid();
+
+export const isValidUuid = (value: string): boolean => uuidSchema.safeParse(value).success;
