@@ -4,6 +4,9 @@ declare global {
   namespace Express {
     interface Request {
       session?: Session | null;
+    }
+
+    interface Locals {
       authenticatedUser?: AthenaUser;
     }
   }
