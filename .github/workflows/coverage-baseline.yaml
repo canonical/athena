@@ -60,15 +60,20 @@ jobs:
             exit 0
           fi
 
-          baseline_content="$(base64 --wrap=0 "$baseline_file")"
-          baseline_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${baseline_file}" --jq .sha)"
+          baseline_content="$(base64 < "$baseline_file" | tr -d '\n')"
+          baseline_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${baseline_file}" --jq .sha 2>/dev/null || true)"
+
+          sha_field=()
+          if [[ -n "$baseline_sha" ]]; then
+            sha_field+=(--field "sha=${baseline_sha}")
+          fi
 
           gh api \
             --method PUT \
             "repos/${GITHUB_REPOSITORY}/contents/${baseline_file}" \
             --field message="ci: update coverage baseline [skip coverage-baseline]" \
             --field content="${baseline_content}" \
-            --field sha="${baseline_sha}" \
+            "${sha_field[@]}" \
             --field branch="main" \
             >/dev/null
 
