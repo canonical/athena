@@ -32,6 +32,16 @@ Athena requires validation before creating and updating pull requests.
 
 See [docs/pr-publishing-updating-standards.md](./docs/pr-publishing-updating-standards.md) for the canonical pull request publishing and update requirements.
 
+## Development model
+
+Athena development is Jira-first.
+
+- All Athena work is tracked under [PRTL-3872](https://warthogs.atlassian.net/browse/PRTL-3872), the Athena AI Orchestrator objective.
+- Jira tickets are the source of specifications for Athena implementation decisions.
+- While developing Athena, agents use Jira MCP to query work items and gather ticket scope, acceptance criteria, and dependency context.
+
+See [AGENTS.md](./AGENTS.md) for agent workflow guidance.
+
 ## What the app does today
 
 The current service starts an Express server with session-based authentication:

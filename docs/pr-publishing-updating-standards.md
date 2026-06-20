@@ -16,8 +16,11 @@ This document is the source of truth for pull request publishing and update expe
 2. Include a clear summary of what changed and why, not only from the last push, but about the whole PR.
 3. Include test/validation evidence in the PR description (at minimum, `npm run check` and `npm test` outcomes).
 4. Update or add relevant documentation when behavior, workflows, or standards change.
+5. Include the Jira ticket key in the PR description and ensure it belongs to work tracked under [PRTL-3872](https://warthogs.atlassian.net/browse/PRTL-3872).
+6. Map the implemented changes to the ticket acceptance criteria in the PR description.
 
 ## Update discipline requirements
 
 1. Resolve review feedback with code and validation updates together so the PR stays releasable.
 2. Do not commit or push a PR update while required validations are failing.
+3. Before each PR update, verify the active Jira ticket criteria are still satisfied by the current PR state.

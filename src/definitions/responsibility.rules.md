@@ -1,6 +1,6 @@
 # Responsibility Rules
 
-1. Jira tickets are the main source of truth for the work to be done.
+1. Jira tickets are the main source of truth for the work to be done and the source of specifications for Athena implementation.
 2. In Jira, an Objective defines a project.
 3. In Jira, an Epic defines a stream of work that must be accomplishable within six months.
 4. In Jira, a Story is related to design work.
@@ -33,3 +33,5 @@
 31. Once design work finishes, the product manager personas review the design.
 32. Once a Task or an Epic is completed, the QA persona performs quality assurance for each completed item.
 33. The engineering manager persona is responsible for watching over responsibilities and routing.
+34. All Athena work items must roll up under [PRTL-3872](https://warthogs.atlassian.net/browse/PRTL-3872), the Athena AI Orchestrator objective.
+35. While developing Athena, agents must use Jira MCP to retrieve ticket scope, acceptance criteria, dependencies, and status before and during implementation.
