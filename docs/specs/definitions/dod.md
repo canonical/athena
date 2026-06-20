@@ -11,6 +11,6 @@ A spec item is good enough when:
 7. Priority is defined.
 8. The owner is clear.
 9. The content has been reviewed and approved by the required persona and the user where applicable.
-10. All discussions and approvals defined by the responsibility rules have been completed.
+10. All discussions and approvals defined by [responsibility.rules.md](./responsibility.rules.md) have been completed.
 11. The scope is small enough for its spec-item level.
 12. If the item is a lowest-level item, it has an hour-based estimate and clear execution scope.

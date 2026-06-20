@@ -36,3 +36,12 @@
 34. The engineering manager persona is responsible for watching over responsibilities and routing.
 35. All Athena specification and reference content must be maintained under `docs/specs`.
 36. While developing Athena, agents must retrieve scope, acceptance criteria, dependencies, and status from local specs before and during implementation.
+37. Loop administrators are responsible for selecting and maintaining ordered coding harness and OpenAI API-compatible LLM provider profiles for each loop, as defined in [llm-harness.md](./llm-harness.md).
+38. The IC and CR personas must execute coding work through the loop's configured coding harness priority list under deterministic provider selection.
+39. All non-IC and non-CR personas must execute through the loop's configured OpenAI API-compatible LLM provider priority list under deterministic provider selection.
+40. Athena must deterministically evaluate configured provider lists in priority order and use fallback providers when higher-priority providers are unavailable.
+41. If all configured providers for required execution are unavailable, Athena must pause loop execution, keep events open, and resume automatically when deterministic availability checks succeed.
+42. Athena runtime implementation must support horizontal scaling across multiple instances without changing deterministic orchestration outcomes.
+43. Distributed event execution must enforce single effective active claim per event and must prevent duplicate side effects through idempotency controls.
+44. Deterministic orchestration logic must remain correct under concurrent processing and retries across instances.
+45. Concurrency-control and deduplication mechanisms used for horizontal scaling must be observable and auditable.

@@ -42,6 +42,7 @@ Athena development is local-spec-first.
 - Specification, reference, and description artifacts are maintained in [docs/specs/index.md](./docs/specs/index.md).
 - Before implementation, agents gather scope, acceptance criteria, and dependency context from local specs.
 - Keep local specs synchronized with implementation and behavioral changes.
+- Personas are persisted per loop, with lifecycle constraints defined in [docs/specs/definitions/persona.md](./docs/specs/definitions/persona.md).
 - Jira is an optional external event source and only participates when a loop is configured to ingest Jira events.
 
 See [AGENTS.md](./AGENTS.md) for agent workflow guidance.

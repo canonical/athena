@@ -13,12 +13,12 @@ A complete forward handoff (from one persona to another) includes:
 
 The engineering manager persona determines the next owning persona.
 
-## Blocked Handoff (Back to EM)
+## Blocked Handoff (Back to Loop, Then EM)
 
-If a persona cannot complete an event due to ambiguity, unresolvable dependencies, missing approvals, or other blockers, it hands the event back to the engineering manager persona with:
+If a persona cannot complete an event due to ambiguity, unresolvable dependencies, missing approvals, or other blockers, it hands the event back to the loop with:
 
 1. The event being returned and its current status.
 2. The specific blocker or reason it cannot be completed.
 3. What was attempted and what failed.
 4. Available context and decisions made so far.
-5. The engineering manager persona then resolves the blocker or routes to an appropriate persona.
+5. Athena routes the returned event to the engineering manager persona, and the engineering manager persona then resolves the blocker or routes to an appropriate persona.
