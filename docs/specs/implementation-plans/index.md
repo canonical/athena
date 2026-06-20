@@ -4,18 +4,22 @@ This index is the entry point for implementation planning artifacts.
 
 ## Consolidated Task List
 
+### Persona Definition Capability (Foundation)
+
+- [ ] Define persona schema, lifecycle, and capability model (IC, CR, EM, PM, QA, UX personas and their execution roles within loop orchestration). Detailed plan: [persona-management.plan.md](./persona-management.plan.md)
+
 ### Loop-Based Definitions First (Blocking)
 
 - [ ] Define loop-scoped OpenAI API connection contract (provider profile schema, endpoint, model, credential reference, timeout, retry, and fallback order). Detailed plan: [openai-api-connection.plan.md](./openai-api-connection.plan.md)
-- [ ] Define loop-scoped harness contract (catalog, allow/deny, and execution profile selection).
-	- [ ] Define GitHub Copilot Cloud Agent harness profile as MVP executable option.
-	- [ ] Define OpenAI Codex harness profile as post-MVP candidate.
-	- [ ] Define Claude Code harness profile as post-MVP candidate.
-	- [ ] Define Devin harness profile as post-MVP candidate.
-	- [ ] Define Juju machine charm based harness profile as MVP+1 Athena-owned target.
-	- [ ] Define activation/lifecycle statuses for each listed harness (MVP executable, candidate, MVP+1 target).
-	- [ ] Define loop-level allow/deny policy and deterministic priority/fallback selection across the listed harnesses.
-	- [ ] Define harness audit and telemetry requirements (profile changes, selected harness, fallback decisions, failure categories).
+- [ ] Define loop-scoped harness contract (catalog, allow/deny, and execution profile selection). Detailed plan: [harness-connection.plan.md](./harness-connection.plan.md)
+  - [ ] Define GitHub Copilot Cloud Agent harness profile as MVP executable option.
+  - [ ] Define OpenAI Codex harness profile as post-MVP candidate.
+  - [ ] Define Claude Code harness profile as post-MVP candidate.
+  - [ ] Define Juju machine charm based harness profile as MVP+1 Athena-owned target.
+  - [ ] Define Devin harness profile as post-MVP candidate.
+  - [ ] Define activation/lifecycle statuses for each listed harness (MVP executable, candidate, MVP+1 target).
+  - [ ] Define loop-level allow/deny policy and deterministic priority/fallback selection across the listed harnesses.
+  - [ ] Define harness audit and telemetry requirements (profile changes, selected harness, fallback decisions, failure categories).
 - [ ] Define loop provider/harness availability behavior (pause, resume, check frequency, and deterministic recovery rules).
 - [ ] Define loop-level validation contract for LLM/harness outputs (Zod schema versioning and failure handling).
 - [ ] Define loop-level audit contract (required events, actor/context fields, retention, and redaction policy).
