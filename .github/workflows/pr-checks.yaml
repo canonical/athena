@@ -142,7 +142,7 @@ jobs:
           exit 1
 
       - name: Update and commit coverage baseline
-        if: ${{ github.event_name == 'pull_request' && !cancelled() }}
+        if: ${{ github.event_name == 'pull_request' && !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
           node --experimental-strip-types ./testing/write-coverage-baseline.ts \
             ./testing/results/coverage/coverage-summary.json \
@@ -157,4 +157,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add testing/coverage-baseline.json
           git commit -m "ci: update coverage baseline [skip ci]"
-          git push
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
