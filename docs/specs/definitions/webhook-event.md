@@ -4,6 +4,8 @@
 
 A webhook event is an event triggered by an inbound webhook payload from an external system configured for a loop. Webhook ingestion is optional and must be configured per loop.
 
+Implementation details for this source are defined in [event-source.phase3.plan.md](./event-source.phase3.plan.md).
+
 ## Characteristics
 
 - Webhook ingestion must be explicitly configured for the loop. It is not active by default.
