@@ -42,7 +42,8 @@ jobs:
     if: ${{ github.event_name == 'merge_group' || github.event.pull_request.draft == false }}
     timeout-minutes: 60
     permissions:
-      contents: write
+      actions: read
+      contents: read
       pull-requests: write
     steps:
       - name: Checkout code
@@ -78,13 +79,69 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Resolve latest coverage baseline artifact
+        id: baseline_artifact
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const workflowId = 'coverage-baseline.yaml';
+            const artifactName = 'athena-coverage-baseline';
+
+            const { data: runs } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: workflowId,
+              branch: 'main',
+              status: 'completed',
+              per_page: 50,
+            });
+
+            const successfulRun = runs.workflow_runs.find((run) => run.conclusion === 'success');
+            if (!successfulRun) {
+              core.info('No successful coverage baseline workflow run found on main.');
+              core.setOutput('found', 'false');
+              return;
+            }
+
+            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: successfulRun.id,
+              per_page: 100,
+            });
+
+            const baselineArtifact = artifacts.artifacts.find(
+              (artifact) => artifact.name === artifactName && !artifact.expired,
+            );
+
+            if (!baselineArtifact) {
+              core.info(`Artifact ${artifactName} not found on workflow run ${successfulRun.id}.`);
+              core.setOutput('found', 'false');
+              return;
+            }
+
+            core.setOutput('found', 'true');
+            core.setOutput('archive_download_url', baselineArtifact.archive_download_url);
+
+      - name: Download coverage baseline artifact
+        if: ${{ steps.baseline_artifact.outputs.found == 'true' }}
+        run: |
+          mkdir -p testing/results/coverage-baseline
+          curl -fsSL \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            -L "${{ steps.baseline_artifact.outputs.archive_download_url }}" \
+            -o /tmp/athena-coverage-baseline.zip
+          unzip -o /tmp/athena-coverage-baseline.zip -d testing/results/coverage-baseline
+
       - name: Evaluate coverage delta against baseline
         id: coverage_delta
+        if: ${{ steps.baseline_artifact.outputs.found == 'true' }}
         continue-on-error: true
         run: |
           node --experimental-strip-types ./testing/evaluate-coverage-delta.ts \
             ./testing/results/coverage/coverage-summary.json \
-            ./testing/coverage-baseline.json \
+            ./testing/results/coverage-baseline/coverage-baseline.json \
             ./testing/results/coverage/coverage-comment.md
 
       - name: Post coverage comment
@@ -132,7 +189,7 @@ jobs:
       - name: Fail on coverage regression
         if: ${{ steps.coverage_delta.outputs.has_regression == 'true' }}
         run: |
-          echo "Coverage regression detected compared to testing/coverage-baseline.json"
+          echo "Coverage regression detected compared to the latest coverage baseline artifact"
           exit 1
 
       - name: Fail on coverage evaluation error
@@ -140,23 +197,3 @@ jobs:
         run: |
           echo "Coverage delta evaluation failed due to malformed or missing coverage inputs"
           exit 1
-
-      - name: Update and commit coverage baseline
-        if: ${{ github.event_name == 'pull_request' && !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
-        run: |
-          node --experimental-strip-types ./testing/write-coverage-baseline.ts \
-            ./testing/results/coverage/coverage-summary.json \
-            ./testing/coverage-baseline.json
-
-          if git diff --quiet -- testing/coverage-baseline.json; then
-            echo "Coverage baseline already up to date"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add testing/coverage-baseline.json
-          git commit -m "ci: update coverage baseline [skip ci]"
-          git fetch origin "${{ github.event.pull_request.head.ref }}"
-          git rebase "origin/${{ github.event.pull_request.head.ref }}"
-          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
