@@ -42,13 +42,14 @@ jobs:
     if: ${{ github.event_name == 'merge_group' || github.event.pull_request.draft == false }}
     timeout-minutes: 60
     permissions:
+      actions: read
       contents: read
       pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
@@ -78,13 +79,69 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Resolve latest coverage baseline artifact
+        id: baseline_artifact
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const workflowId = 'coverage-baseline.yaml';
+            const artifactName = 'athena-coverage-baseline';
+
+            const { data: runs } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: workflowId,
+              branch: 'main',
+              status: 'completed',
+              per_page: 50,
+            });
+
+            const successfulRun = runs.workflow_runs.find((run) => run.conclusion === 'success');
+            if (!successfulRun) {
+              core.info('No successful coverage baseline workflow run found on main.');
+              core.setOutput('found', 'false');
+              return;
+            }
+
+            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: successfulRun.id,
+              per_page: 100,
+            });
+
+            const baselineArtifact = artifacts.artifacts.find(
+              (artifact) => artifact.name === artifactName && !artifact.expired,
+            );
+
+            if (!baselineArtifact) {
+              core.info(`Artifact ${artifactName} not found on workflow run ${successfulRun.id}.`);
+              core.setOutput('found', 'false');
+              return;
+            }
+
+            core.setOutput('found', 'true');
+            core.setOutput('archive_download_url', baselineArtifact.archive_download_url);
+
+      - name: Download coverage baseline artifact
+        if: ${{ steps.baseline_artifact.outputs.found == 'true' }}
+        run: |
+          mkdir -p testing/results/coverage-baseline
+          curl -fsSL \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            -L "${{ steps.baseline_artifact.outputs.archive_download_url }}" \
+            -o /tmp/athena-coverage-baseline.zip
+          unzip -o /tmp/athena-coverage-baseline.zip -d testing/results/coverage-baseline
+
       - name: Evaluate coverage delta against baseline
         id: coverage_delta
+        if: ${{ steps.baseline_artifact.outputs.found == 'true' }}
         continue-on-error: true
         run: |
           node --experimental-strip-types ./testing/evaluate-coverage-delta.ts \
             ./testing/results/coverage/coverage-summary.json \
-            ./testing/coverage-baseline.json \
+            ./testing/results/coverage-baseline/coverage-baseline.json \
             ./testing/results/coverage/coverage-comment.md
 
       - name: Post coverage comment
@@ -132,7 +189,7 @@ jobs:
       - name: Fail on coverage regression
         if: ${{ steps.coverage_delta.outputs.has_regression == 'true' }}
         run: |
-          echo "Coverage regression detected compared to testing/coverage-baseline.json"
+          echo "Coverage regression detected compared to the latest coverage baseline artifact"
           exit 1
 
       - name: Fail on coverage evaluation error
