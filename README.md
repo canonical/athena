@@ -38,7 +38,7 @@ Athena development is Jira-first.
 
 - All Athena work is tracked under [PRTL-3872](https://warthogs.atlassian.net/browse/PRTL-3872), the Athena AI Orchestrator objective.
 - Jira tickets are the source of specifications for Athena implementation decisions.
-- While developing Athena, agents use Jira MCP to query work items and gather ticket scope, acceptance criteria, and dependency context.
+- While developing Athena, agents gather ticket scope, acceptance criteria, and dependency context from Jira using Jira MCP when available, or Jira REST using `COPILOT_JIRA_BASE_URL` and `COPILOT_JIRA_TOKEN` in cloud agent environments.
 
 See [AGENTS.md](./AGENTS.md) for agent workflow guidance.
 

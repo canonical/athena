@@ -16,7 +16,10 @@ Read these documents before making changes:
 
 - All Athena work is tracked under [PRTL-3872](https://warthogs.atlassian.net/browse/PRTL-3872), the Athena AI Orchestrator objective.
 - Jira tickets are the source of specifications for Athena implementation work.
-- While developing Athena, agents must use Jira MCP to retrieve ticket scope, acceptance criteria, dependencies, and status.
+- While developing Athena, agents must retrieve ticket scope, acceptance criteria, dependencies, and status from Jira before and during implementation.
+- Preferred access path is Jira MCP.
+- When Jira MCP is unavailable in cloud agent environments, agents must use Jira REST with `COPILOT_JIRA_BASE_URL` and `COPILOT_JIRA_TOKEN` secrets.
+- `COPILOT_JIRA_TOKEN` is currently provisioned as read-only and must be treated as read-only in automation.
 
 ## Authoring direction
 

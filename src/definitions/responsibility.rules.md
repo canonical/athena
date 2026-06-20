@@ -34,4 +34,5 @@
 32. Once a Task or an Epic is completed, the QA persona performs quality assurance for each completed item.
 33. The engineering manager persona is responsible for watching over responsibilities and routing.
 34. All Athena work items must roll up under [PRTL-3872](https://warthogs.atlassian.net/browse/PRTL-3872), the Athena AI Orchestrator objective.
-35. While developing Athena, agents must use Jira MCP to retrieve ticket scope, acceptance criteria, dependencies, and status before and during implementation.
+35. While developing Athena, agents must retrieve ticket scope, acceptance criteria, dependencies, and status before and during implementation, using Jira MCP when available or Jira REST with `COPILOT_JIRA_BASE_URL` and `COPILOT_JIRA_TOKEN` in cloud agent environments.
+36. `COPILOT_JIRA_TOKEN` is read-only in current cloud automation and must not be used for Jira write operations.
