@@ -157,4 +157,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add testing/coverage-baseline.json
           git commit -m "ci: update coverage baseline [skip ci]"
+          git fetch origin "${{ github.event.pull_request.head.ref }}"
+          git rebase "origin/${{ github.event.pull_request.head.ref }}"
           git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
