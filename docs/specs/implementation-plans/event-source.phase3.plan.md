@@ -2,7 +2,7 @@
 
 ## Overview
 
-This plan covers the implementation of webhook ingestion for Athena loops. Each loop can have multiple webhook configurations. Each inbound webhook payload creates a new event in the loop and follows the standard Athena routing flow described in [theloop.md](./theloop.md).
+This plan covers the implementation of webhook ingestion for Athena loops. Each loop can have multiple webhook configurations. Each inbound webhook payload creates a new event in the loop and follows the standard Athena routing flow described in [theloop.md](../definitions/theloop.md).
 
 ---
 

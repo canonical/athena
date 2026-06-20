@@ -21,7 +21,7 @@
 
 ## References
 
-- [event.md](./event.md)
-- [interaction.protocol.md](./interaction.protocol.md)
-- [responsibility.rules.md](./responsibility.rules.md)
-- [nfr.md](./nfr.md)
+- [event.md](../definitions/event.md)
+- [interaction.protocol.md](../definitions/interaction.protocol.md)
+- [responsibility.rules.md](../definitions/responsibility.rules.md)
+- [nfr.md](../definitions/nfr.md)

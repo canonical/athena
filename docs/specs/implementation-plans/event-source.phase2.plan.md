@@ -21,8 +21,8 @@
 
 ## References
 
-- [tool-usage.md](./tool-usage.md)
-- [event.md](./event.md)
-- [llm-harness.md](./llm-harness.md)
-- [handoff.definition.md](./handoff.definition.md)
-- [nfr.md](./nfr.md)
+- [tool-usage.md](../definitions/tool-usage.md)
+- [event.md](../definitions/event.md)
+- [llm-harness.md](../definitions/llm-harness.md)
+- [handoff.definition.md](../definitions/handoff.definition.md)
+- [nfr.md](../definitions/nfr.md)

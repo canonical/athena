@@ -21,8 +21,8 @@
 
 ## References
 
-- [user-request.md](./user-request.md)
-- [event.md](./event.md)
-- [theloop.md](./theloop.md)
-- [handoff.definition.md](./handoff.definition.md)
-- [nfr.md](./nfr.md)
+- [user-request.md](../definitions/user-request.md)
+- [event.md](../definitions/event.md)
+- [theloop.md](../definitions/theloop.md)
+- [handoff.definition.md](../definitions/handoff.definition.md)
+- [nfr.md](../definitions/nfr.md)

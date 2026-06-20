@@ -5,7 +5,6 @@ Normative definition files for Athena orchestration rules and constraints.
 - [approval.matrix.md](./approval.matrix.md)
 - [dod.md](./dod.md)
 - [event.md](./event.md)
-- [event-source.plan.md](./event-source.plan.md)
 - [handoff.definition.md](./handoff.definition.md)
 - [interaction.protocol.md](./interaction.protocol.md)
 - [llm-harness.md](./llm-harness.md)
