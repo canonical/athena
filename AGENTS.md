@@ -12,14 +12,14 @@ Read these documents before making changes:
 - [Testing standards](./docs/testing-standards.md): canonical test strategy, E2E scope, and coverage expectations.
 - [PR publishing and updating standards](./docs/pr-publishing-updating-standards.md): canonical pull request validation and update requirements.
 
-## Jira workflow
+## Local specs workflow
 
-- All Athena work is tracked under [PRTL-3872](https://warthogs.atlassian.net/browse/PRTL-3872), the Athena AI Orchestrator objective.
-- Jira tickets are the source of specifications for Athena implementation work.
-- While developing Athena, agents must retrieve ticket scope, acceptance criteria, dependencies, and status from Jira before and during implementation.
-- Preferred access path is Jira MCP.
-- When Jira MCP is unavailable in cloud agent environments, agents must use Jira REST with `COPILOT_JIRA_BASE_URL` and `COPILOT_JIRA_TOKEN` secrets.
-- `COPILOT_JIRA_TOKEN` is currently provisioned as read-only and must be treated as read-only in automation.
+- Athena specifications and references are maintained locally in [docs/specs](./docs/specs).
+- Specification, reference, and description artifacts are tracked in repository docs, not external trackers.
+- Before implementation, agents must retrieve scope, acceptance criteria, dependencies, and status from local specs.
+- Keep local specs current whenever behavior, ownership, approvals, or sequencing changes.
+- Use [docs/specs/definitions](./docs/specs/definitions) for normative rules and [docs/specs/personas](./docs/specs/personas) for persona behavior.
+- Jira is an optional external event source for Athena loops and is only used when loop ingestion from Jira is explicitly configured.
 
 ## Authoring direction
 

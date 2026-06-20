@@ -2,6 +2,8 @@
 
 Athena is a multi-agent orchestration service. This repository is the bootstrap workspace for the service runtime, packaging, and deployment artifacts.
 
+Athena itself is fully deterministic code. Agents that integrate with Athena loops handle LLM business and domain-specific reasoning.
+
 At the moment, the implementation is still early-stage. The application now includes a first OIDC-backed session authentication flow alongside bootstrap packaging files.
 
 ## Current status
@@ -18,6 +20,7 @@ At the moment, the implementation is still early-stage. The application now incl
 - Runtime sources and build configs in repository root (`src`, `testing`, and top-level Node/TypeScript config files)
 - [charm](./charm): Juju charm sources for deploying Athena.
 - [migrations](./migrations): Repository-level PostgreSQL schema and seed files.
+- [docs/specs/index.md](./docs/specs/index.md): Local specification, reference, and persona artifacts index.
 - [rockcraft.yaml](./rockcraft.yaml): Rock packaging definition for Athena.
 
 ## Coding standards
@@ -34,11 +37,12 @@ See [docs/pr-publishing-updating-standards.md](./docs/pr-publishing-updating-sta
 
 ## Development model
 
-Athena development is Jira-first.
+Athena development is local-spec-first.
 
-- All Athena work is tracked under [PRTL-3872](https://warthogs.atlassian.net/browse/PRTL-3872), the Athena AI Orchestrator objective.
-- Jira tickets are the source of specifications for Athena implementation decisions.
-- While developing Athena, agents gather ticket scope, acceptance criteria, and dependency context from Jira using Jira MCP when available, or Jira REST using `COPILOT_JIRA_BASE_URL` and `COPILOT_JIRA_TOKEN` in cloud agent environments.
+- Specification, reference, and description artifacts are maintained in [docs/specs/index.md](./docs/specs/index.md).
+- Before implementation, agents gather scope, acceptance criteria, and dependency context from local specs.
+- Keep local specs synchronized with implementation and behavioral changes.
+- Jira is an optional external event source and only participates when a loop is configured to ingest Jira events.
 
 See [AGENTS.md](./AGENTS.md) for agent workflow guidance.
 
