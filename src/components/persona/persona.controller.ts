@@ -1,12 +1,10 @@
 import { isValidUuid } from "@components/utilities/validation.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
-import { defaultEmPersonality, personaInsertSchema, personaUpdateSchema } from "./persona.schema.js";
+import { personaInsertSchema, personaUpdateSchema } from "./persona.schema.js";
 import { queryPersonaActiveCount, queryPersonaAuditCreate, queryPersonaById, queryPersonaCreate, queryPersonaDelete, queryPersonaList, queryPersonaSeedEM, queryPersonaUpdate } from "./persona.service.js";
 
 export class PersonaValidationError extends Error {}
 export class PersonaNotFoundError extends Error {}
-
-const emPersonality = defaultEmPersonality;
 
 const validateLoopId = (loopId: string): void => {
   if (!isValidUuid(loopId)) {
@@ -170,4 +168,4 @@ export const personaDelete = async (loopId: string, personaId: string, userId: s
   });
 };
 
-export const personaSeedEM = async (loopId: string): Promise<Persona> => queryPersonaSeedEM(loopId, emPersonality);
+export const personaSeedEM = async (loopId: string): Promise<Persona> => queryPersonaSeedEM(loopId);

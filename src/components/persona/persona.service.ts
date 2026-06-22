@@ -1,5 +1,5 @@
 import { getPool } from "@components/postgres/postgres.js";
-import type { Persona, PersonaAudit, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
+import { defaultEmPersonality, type Persona, type PersonaAudit, type PersonaInsert, type PersonaUpdate } from "./persona.schema.js";
 
 const personaColumns = `"id", "loop", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"`;
 
@@ -116,7 +116,7 @@ export const queryPersonaAuditCreate = async (audit: Omit<PersonaAudit, `id` | `
   );
 };
 
-export const queryPersonaSeedEM = async (loopId: string, personality: string, client?: import("pg").PoolClient): Promise<Persona> => {
+export const queryPersonaSeedEM = async (loopId: string, client?: import("pg").PoolClient): Promise<Persona> => {
   const pool = client ?? getPool();
   const result = await pool.query<Persona>(
     `
@@ -124,7 +124,7 @@ export const queryPersonaSeedEM = async (loopId: string, personality: string, cl
       VALUES ($1, $2, $3, FALSE, TRUE, 'active', 0)
       RETURNING ${personaColumns}
     `,
-    [loopId, `Engineering Manager`, personality],
+    [loopId, `Engineering Manager`, defaultEmPersonality],
   );
 
   const persona = result.rows[0];
