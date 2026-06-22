@@ -2,6 +2,8 @@
 
 Athena is a multi-agent orchestration service. This repository is the bootstrap workspace for the service runtime, packaging, and deployment artifacts.
 
+Athena itself is fully deterministic code. Agents that integrate with Athena loops handle LLM business and domain-specific reasoning.
+
 At the moment, the implementation is still early-stage. The application now includes a first OIDC-backed session authentication flow alongside bootstrap packaging files.
 
 ## Current status
@@ -18,6 +20,7 @@ At the moment, the implementation is still early-stage. The application now incl
 - Runtime sources and build configs in repository root (`src`, `testing`, and top-level Node/TypeScript config files)
 - [charm](./charm): Juju charm sources for deploying Athena.
 - [migrations](./migrations): Repository-level PostgreSQL schema and seed files.
+- [docs/specs/index.md](./docs/specs/index.md): Local specification, reference, and persona artifacts index.
 - [rockcraft.yaml](./rockcraft.yaml): Rock packaging definition for Athena.
 
 ## Coding standards
@@ -31,6 +34,18 @@ See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rul
 Athena requires validation before creating and updating pull requests.
 
 See [docs/pr-publishing-updating-standards.md](./docs/pr-publishing-updating-standards.md) for the canonical pull request publishing and update requirements.
+
+## Development model
+
+Athena development is local-spec-first.
+
+- Specification, reference, and description artifacts are maintained in [docs/specs/index.md](./docs/specs/index.md).
+- Before implementation, agents gather scope, acceptance criteria, and dependency context from local specs.
+- Keep local specs synchronized with implementation and behavioral changes.
+- Personas are persisted per loop, with lifecycle constraints defined in [docs/specs/definitions/persona.md](./docs/specs/definitions/persona.md).
+- Jira is an optional external event source and only participates when a loop is configured to ingest Jira events.
+
+See [AGENTS.md](./AGENTS.md) for agent workflow guidance.
 
 ## What the app does today
 

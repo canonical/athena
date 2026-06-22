@@ -28,6 +28,7 @@ __pycache__/
 .idea/
 .vscode/*
 !.vscode/settings.json
+!.vscode/mcp.json
 *.iml
 .DS_Store
 Thumbs.db
