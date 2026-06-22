@@ -189,12 +189,12 @@ test(`personas page shows loop selector and reference catalog`, async ({ page })
   await page.getByLabel(`Loop`).selectOption({ label: `Persona UI loop` });
 
   await expect(page.getByText(`Reference persona templates`)).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `Engineering Manager` })).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `Individual Contributor` })).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `Code Reviewer` })).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `Product Manager` })).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `Quality Assurance` })).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `User Experience` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Engineering Manager`, exact: true })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Individual Contributor`, exact: true })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Code Reviewer`, exact: true })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Product Manager`, exact: true })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Quality Assurance`, exact: true })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `User Experience`, exact: true })).toBeVisible();
 });
 
 test(`personas page supports add update and delete of non-EM persona`, async ({ page }) => {

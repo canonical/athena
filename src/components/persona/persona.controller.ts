@@ -153,7 +153,7 @@ export const personaDelete = async (loopId: string, personaId: string, userId: s
   }
 
   await queryPersonaAuditCreate({
-    persona: personaId,
+    persona: null,
     loop: loopId,
     actor: userId,
     action: `delete`,
