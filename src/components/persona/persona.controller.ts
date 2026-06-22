@@ -1,7 +1,7 @@
 import { isValidUuid } from "@components/utilities/validation.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 import { personaInsertSchema, personaUpdateSchema } from "./persona.schema.js";
-import { queryPersonaActiveCount, queryPersonaAuditCreate, queryPersonaById, queryPersonaCreate, queryPersonaDelete, queryPersonaList, queryPersonaSeedEM, queryPersonaUpdate } from "./persona.service.js";
+import { queryPersonaActiveCount, queryPersonaById, queryPersonaCreate, queryPersonaDelete, queryPersonaList, queryPersonaSeedEM, queryPersonaUpdate } from "./persona.service.js";
 
 export class PersonaValidationError extends Error {}
 export class PersonaNotFoundError extends Error {}
@@ -53,26 +53,7 @@ export const personaList = async (loopId: string): Promise<Persona[]> => {
 export const personaCreate = async (loopId: string, input: PersonaInsert, userId: string): Promise<Persona> => {
   validateLoopId(loopId);
 
-  const persona = await queryPersonaCreate(loopId, input, false);
-
-  await queryPersonaAuditCreate({
-    persona: persona.id,
-    loop: loopId,
-    actor: userId,
-    action: `create`,
-    changeSummary: `Created persona "${persona.displayName}".`,
-    snapshotBefore: {},
-    snapshotAfter: {
-      displayName: persona.displayName,
-      personality: persona.personality,
-      usesCodingHarness: persona.usesCodingHarness,
-      isEngineeringManager: persona.isEngineeringManager,
-      lifecycleStatus: persona.lifecycleStatus,
-      routingPriority: persona.routingPriority,
-    },
-  });
-
-  return persona;
+  return queryPersonaCreate(loopId, input, false, userId);
 };
 
 export const personaUpdate = async (loopId: string, personaId: string, input: PersonaUpdate, userId: string): Promise<Persona> => {
@@ -92,37 +73,13 @@ export const personaUpdate = async (loopId: string, personaId: string, input: Pe
     throw new PersonaValidationError(`An engineering manager persona cannot use a coding harness.`);
   }
 
-  const updated = await queryPersonaUpdate(personaId, loopId, input);
+  const updated = await queryPersonaUpdate(personaId, loopId, input, userId);
 
   if (!updated) {
     throw new PersonaNotFoundError(`Persona not found.`);
   }
 
   await validatePersonaConstraintsAfterChange(loopId);
-
-  await queryPersonaAuditCreate({
-    persona: personaId,
-    loop: loopId,
-    actor: userId,
-    action: `update`,
-    changeSummary: `Updated persona "${updated.displayName}".`,
-    snapshotBefore: {
-      displayName: existing.displayName,
-      personality: existing.personality,
-      usesCodingHarness: existing.usesCodingHarness,
-      isEngineeringManager: existing.isEngineeringManager,
-      lifecycleStatus: existing.lifecycleStatus,
-      routingPriority: existing.routingPriority,
-    },
-    snapshotAfter: {
-      displayName: updated.displayName,
-      personality: updated.personality,
-      usesCodingHarness: updated.usesCodingHarness,
-      isEngineeringManager: updated.isEngineeringManager,
-      lifecycleStatus: updated.lifecycleStatus,
-      routingPriority: updated.routingPriority,
-    },
-  });
 
   return updated;
 };
@@ -144,28 +101,11 @@ export const personaDelete = async (loopId: string, personaId: string, userId: s
     throw new PersonaValidationError(`The engineering manager persona cannot be deleted.`);
   }
 
-  const deleted = await queryPersonaDelete(personaId, loopId);
+  const deleted = await queryPersonaDelete(personaId, loopId, userId);
 
   if (!deleted) {
     throw new PersonaNotFoundError(`Persona not found.`);
   }
-
-  await queryPersonaAuditCreate({
-    persona: null,
-    loop: loopId,
-    actor: userId,
-    action: `delete`,
-    changeSummary: `Deleted persona "${existing.displayName}".`,
-    snapshotBefore: {
-      displayName: existing.displayName,
-      personality: existing.personality,
-      usesCodingHarness: existing.usesCodingHarness,
-      isEngineeringManager: existing.isEngineeringManager,
-      lifecycleStatus: existing.lifecycleStatus,
-      routingPriority: existing.routingPriority,
-    },
-    snapshotAfter: {},
-  });
 };
 
 export const personaSeedEM = async (loopId: string): Promise<Persona> => queryPersonaSeedEM(loopId);

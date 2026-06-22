@@ -181,7 +181,7 @@ test(`personas reject missing required fields`, async ({ page }) => {
 test(`personas page shows loop selector and reference catalog`, async ({ page }) => {
   await authenticate(page);
   await createLoop(page, `Persona UI loop`);
-  await page.goto(`http://athena.localhost/personas`);
+  await page.goto(`http://athena.localhost/persona-list`);
 
   await expect(page.getByRole(`heading`, { name: `Personas` })).toBeVisible();
   await expect(page.getByLabel(`Loop`)).toBeVisible();
@@ -200,7 +200,7 @@ test(`personas page shows loop selector and reference catalog`, async ({ page })
 test(`personas page supports add update and delete of non-EM persona`, async ({ page }) => {
   await authenticate(page);
   await createLoop(page, `Persona UI CRUD loop`);
-  await page.goto(`http://athena.localhost/personas`);
+  await page.goto(`http://athena.localhost/persona-list`);
 
   await page.getByLabel(`Loop`).selectOption({ label: `Persona UI CRUD loop` });
 

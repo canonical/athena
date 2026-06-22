@@ -37,18 +37,6 @@ export type Persona = {
 export type PersonaInsert = z.infer<typeof personaInsertSchema>;
 export type PersonaUpdate = z.infer<typeof personaUpdateSchema>;
 
-export type PersonaAudit = {
-  id: string;
-  persona: string | null;
-  loop: string;
-  actor: string;
-  action: `create` | `update` | `delete`;
-  changeSummary: string;
-  snapshotBefore: Record<string, unknown>;
-  snapshotAfter: Record<string, unknown>;
-  createdAt: Date | string;
-};
-
 export type ReferencePersona = {
   role: string;
   displayName: string;

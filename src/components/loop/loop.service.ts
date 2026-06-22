@@ -57,6 +57,7 @@ export const queryLoopCreate = async (input: LoopInsert, userId: string): Promis
     }
 
     await client.query(`INSERT INTO "loopUser" ("loop", "user", "isAdmin") VALUES ($1, $2, TRUE)`, [loop.id, userId]);
+    await client.query(`SELECT set_config('app.current_actor', $1, true)`, [userId]);
     await queryPersonaSeedEM(loop.id, client);
     await client.query(`COMMIT`);
 

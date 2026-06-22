@@ -8,6 +8,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 \ir ./fncs/000100.uuidv7.sql
 \ir ./fncs/000200.updatedAt.sql
 \ir ./fncs/000300.ensureUpdatedAtTrigger.sql
+\ir ./fncs/000400.personaAuditTrigger.sql
 
 \echo >>> Running Athena DDL migrations
 \ir ./ddls/000100.user.sql
