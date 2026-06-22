@@ -118,9 +118,9 @@ export function PersonaEditor({ loopId, editingPersona, catalogTemplates, onSucc
           <input id="persona-display-name" name="persona-display-name" onChange={(event) => setForm((prev) => ({ ...prev, displayName: event.target.value }))} required type="text" value={form.displayName} />
           <label htmlFor="persona-personality">Personality</label>
           <textarea id="persona-personality" name="persona-personality" onChange={(event) => setForm((prev) => ({ ...prev, personality: event.target.value }))} required rows={6} value={form.personality} />
-          <label htmlFor="persona-lifecycle-status">Lifecycle status</label>
           <Select
             id="persona-lifecycle-status"
+            label="Lifecycle status"
             name="persona-lifecycle-status"
             onChange={(event) => setForm((prev) => ({ ...prev, lifecycleStatus: event.target.value as (typeof personaLifecycleStatuses)[number] }))}
             options={personaLifecycleStatuses.map((status) => ({ value: status, label: lifecycleStatusLabel[status] ?? status }))}
