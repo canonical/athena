@@ -16,8 +16,12 @@ This document is the source of truth for pull request publishing and update expe
 2. Include a clear summary of what changed and why, not only from the last push, but about the whole PR.
 3. Include test/validation evidence in the PR description (at minimum, `npm run check` and `npm test` outcomes).
 4. Update or add relevant documentation when behavior, workflows, or standards change.
+5. Include the relevant information and link to the relevant `docs/specs` artifact.
+6. If a change is triggered by an external source event (for example Jira ingestion), include that external reference as context only.
+7. Map implemented changes to acceptance criteria defined in local specs.
 
 ## Update discipline requirements
 
 1. Resolve review feedback with code and validation updates together so the PR stays releasable.
 2. Do not commit or push a PR update while required validations are failing.
+3. Before each PR update, verify active local spec criteria are still satisfied by the current PR state.
