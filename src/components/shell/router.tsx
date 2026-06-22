@@ -2,6 +2,7 @@ import { ApplicationLayout, Chip, Notification, NotificationSeverity } from "@ca
 import { AuthenticationView } from "@components/authentication/Authentication.js";
 import { Event } from "@components/event/Event.js";
 import { Loop } from "@components/loop/Loop.js";
+import { Persona } from "@components/persona/Persona.js";
 import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
 
 import athenaLogo from "./athena-logo.svg";
@@ -13,6 +14,7 @@ const rootPath = `/`;
 const authenticationPath = `/authentication`;
 const loopsPath = `/loops`;
 const eventsPath = `/events`;
+const personasPath = `/personas`;
 
 type AuthenticationSearch = {
   returnTo?: string;
@@ -103,7 +105,13 @@ const eventRoute = createRoute({
   component: Event,
 });
 
-const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopRoute, eventRoute]);
+const personaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: personasPath,
+  component: Persona,
+});
+
+const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopRoute, eventRoute, personaRoute]);
 
 export const router = createRouter({
   routeTree,

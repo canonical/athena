@@ -30,7 +30,7 @@ export const sideNavigationItems: SideNavigationProps["items"] = [
       {
         icon: "user-group",
         label: "Personas",
-        nonInteractive: true,
+        href: `/personas`,
       },
       {
         icon: "code",

@@ -15,6 +15,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 \ir ./ddls/000300.loopUser.sql
 \ir ./ddls/000400.event.sql
 \ir ./ddls/000500.session.sql
+\ir ./ddls/000600.persona.sql
+\ir ./ddls/000700.personaAudit.sql
 \ir ./ddls/999999.cleanup.sql
 
 COMMIT;

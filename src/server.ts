@@ -4,6 +4,7 @@ import { defineMiddlewares } from "@components/base/define-middlewares.js";
 import { config } from "@components/config/config.js";
 import { eventRouter } from "@components/event/event.router.js";
 import { loopRouter } from "@components/loop/loop.router.js";
+import { personaRouter } from "@components/persona/persona.router.js";
 import { staticRouter } from "@components/static/static.router.js";
 import { statusRouter } from "@components/status/status.router.js";
 import express, { type Request, type Response } from "express";
@@ -27,6 +28,7 @@ if (process.env.COVERAGE) {
 app.use(apiRoot, requireAuthentication);
 app.use(apiRoot, loopRouter);
 app.use(apiRoot, eventRouter);
+app.use(apiRoot, personaRouter);
 app.use(staticRouter);
 
 app.use((_request: Request, response: Response) => {
