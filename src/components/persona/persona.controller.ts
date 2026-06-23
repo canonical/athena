@@ -50,13 +50,13 @@ export const personaList = async (loopId: string): Promise<Persona[]> => {
   return queryPersonaList(loopId);
 };
 
-export const personaCreate = async (loopId: string, input: PersonaInsert, userId: string): Promise<Persona> => {
+export const personaCreate = async (loopId: string, input: PersonaInsert): Promise<Persona> => {
   validateLoopId(loopId);
 
-  return queryPersonaCreate(loopId, input, false, userId);
+  return queryPersonaCreate(loopId, input, false);
 };
 
-export const personaUpdate = async (loopId: string, personaId: string, input: PersonaUpdate, userId: string): Promise<Persona> => {
+export const personaUpdate = async (loopId: string, personaId: string, input: PersonaUpdate): Promise<Persona> => {
   validateLoopId(loopId);
 
   if (!isValidUuid(personaId)) {
@@ -73,7 +73,7 @@ export const personaUpdate = async (loopId: string, personaId: string, input: Pe
     throw new PersonaValidationError(`An engineering manager persona cannot use a coding harness.`);
   }
 
-  const updated = await queryPersonaUpdate(personaId, loopId, input, userId);
+  const updated = await queryPersonaUpdate(personaId, loopId, input);
 
   if (!updated) {
     throw new PersonaNotFoundError(`Persona not found.`);
@@ -84,7 +84,7 @@ export const personaUpdate = async (loopId: string, personaId: string, input: Pe
   return updated;
 };
 
-export const personaDelete = async (loopId: string, personaId: string, userId: string): Promise<void> => {
+export const personaDelete = async (loopId: string, personaId: string): Promise<void> => {
   validateLoopId(loopId);
 
   if (!isValidUuid(personaId)) {
@@ -101,7 +101,7 @@ export const personaDelete = async (loopId: string, personaId: string, userId: s
     throw new PersonaValidationError(`The engineering manager persona cannot be deleted.`);
   }
 
-  const deleted = await queryPersonaDelete(personaId, loopId, userId);
+  const deleted = await queryPersonaDelete(personaId, loopId);
 
   if (!deleted) {
     throw new PersonaNotFoundError(`Persona not found.`);

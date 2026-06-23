@@ -71,8 +71,7 @@ personaRouter.post(`/loops/:loopId/personas`, async (request: Request, response:
       return;
     }
 
-    const user = response.locals.user!;
-    const persona = await personaCreate(loopId, validatePersonaInsertRequest(request.body), user.id);
+    const persona = await personaCreate(loopId, validatePersonaInsertRequest(request.body));
     response.status(201).json(persona);
   } catch (error) {
     if (!sendPersonaError(error, response)) {
@@ -95,8 +94,7 @@ personaRouter.put(`/loops/:loopId/personas/:personaId`, async (request: Request,
       return;
     }
 
-    const user = response.locals.user!;
-    const persona = await personaUpdate(loopId, personaId, validatePersonaUpdateRequest(request.body), user.id);
+    const persona = await personaUpdate(loopId, personaId, validatePersonaUpdateRequest(request.body));
     response.status(200).json(persona);
   } catch (error) {
     if (!sendPersonaError(error, response)) {
@@ -119,8 +117,7 @@ personaRouter.delete(`/loops/:loopId/personas/:personaId`, async (request: Reque
       return;
     }
 
-    const user = response.locals.user!;
-    await personaDelete(loopId, personaId, user.id);
+    await personaDelete(loopId, personaId);
     response.sendStatus(204);
   } catch (error) {
     if (!sendPersonaError(error, response)) {

@@ -1,25 +1,7 @@
 import { getPool } from "@components/postgres/postgres.js";
-import type { PoolClient } from "pg";
 import { defaultEmPersonality, type Persona, type PersonaInsert, type PersonaUpdate } from "./persona.schema.js";
 
 const personaColumns = `"id", "loop", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"`;
-
-const withActor = async <T>(actor: string, fn: (client: PoolClient) => Promise<T>): Promise<T> => {
-  const client = await getPool().connect();
-
-  try {
-    await client.query(`BEGIN`);
-    await client.query(`SELECT set_config('app.current_actor', $1, true)`, [actor]);
-    const result = await fn(client);
-    await client.query(`COMMIT`);
-    return result;
-  } catch (error) {
-    await client.query(`ROLLBACK`);
-    throw error;
-  } finally {
-    client.release();
-  }
-};
 
 export const queryPersonaList = async (loopId: string): Promise<Persona[]> => {
   const result = await getPool().query<Persona>(
@@ -74,60 +56,54 @@ export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: 
   };
 };
 
-export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, isEngineeringManager: boolean, actor: string): Promise<Persona> => {
-  return withActor(actor, async (client) => {
-    const result = await client.query<Persona>(
-      `
-        INSERT INTO "persona" ("loop", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "lifecycleStatus", "routingPriority")
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING ${personaColumns}
-      `,
-      [loopId, input.displayName, input.personality, input.usesCodingHarness, isEngineeringManager, input.lifecycleStatus, input.routingPriority],
-    );
+export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, isEngineeringManager: boolean): Promise<Persona> => {
+  const result = await getPool().query<Persona>(
+    `
+      INSERT INTO "persona" ("loop", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "lifecycleStatus", "routingPriority")
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING ${personaColumns}
+    `,
+    [loopId, input.displayName, input.personality, input.usesCodingHarness, isEngineeringManager, input.lifecycleStatus, input.routingPriority],
+  );
 
-    const [persona] = result.rows;
+  const [persona] = result.rows;
 
-    if (!persona) {
-      throw new Error(`Persona was not created.`);
-    }
+  if (!persona) {
+    throw new Error(`Persona was not created.`);
+  }
 
-    return persona;
-  });
+  return persona;
 };
 
-export const queryPersonaUpdate = async (personaId: string, loopId: string, input: PersonaUpdate, actor: string): Promise<Persona | undefined> => {
-  return withActor(actor, async (client) => {
-    const result = await client.query<Persona>(
-      `
-        UPDATE "persona"
-        SET
-          "displayName" = $1,
-          "personality" = $2,
-          "usesCodingHarness" = $3,
-          "lifecycleStatus" = $4,
-          "routingPriority" = $5
-        WHERE "id" = $6 AND "loop" = $7
-        RETURNING ${personaColumns}
-      `,
-      [input.displayName, input.personality, input.usesCodingHarness, input.lifecycleStatus, input.routingPriority, personaId, loopId],
-    );
+export const queryPersonaUpdate = async (personaId: string, loopId: string, input: PersonaUpdate): Promise<Persona | undefined> => {
+  const result = await getPool().query<Persona>(
+    `
+      UPDATE "persona"
+      SET
+        "displayName" = $1,
+        "personality" = $2,
+        "usesCodingHarness" = $3,
+        "lifecycleStatus" = $4,
+        "routingPriority" = $5
+      WHERE "id" = $6 AND "loop" = $7
+      RETURNING ${personaColumns}
+    `,
+    [input.displayName, input.personality, input.usesCodingHarness, input.lifecycleStatus, input.routingPriority, personaId, loopId],
+  );
 
-    return result.rows[0];
-  });
+  return result.rows[0];
 };
 
-export const queryPersonaDelete = async (personaId: string, loopId: string, actor: string): Promise<boolean> => {
-  return withActor(actor, async (client) => {
-    const result = await client.query(
-      `
-        DELETE FROM "persona"
-        WHERE "id" = $1 AND "loop" = $2
-      `,
-      [personaId, loopId],
-    );
+export const queryPersonaDelete = async (personaId: string, loopId: string): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      DELETE FROM "persona"
+      WHERE "id" = $1 AND "loop" = $2
+    `,
+    [personaId, loopId],
+  );
 
-    return Boolean(result.rowCount);
-  });
+  return Boolean(result.rowCount);
 };
 
 export const queryPersonaSeedEM = async (loopId: string, client?: import("pg").PoolClient): Promise<Persona> => {
