@@ -150,7 +150,7 @@ export function PersonaList() {
                           <Button appearance="base" onClick={() => startEditing(persona)} type="button">
                             {`Edit ${persona.displayName}`}
                           </Button>
-                          {!persona.isEngineeringManager ? (
+                          {!persona.isDefault ? (
                             <Button appearance="negative" disabled={busyPersonaId === persona.id} onClick={() => handleDelete(persona)} type="button">
                               {busyPersonaId === persona.id ? `Deleting ${persona.displayName}...` : `Delete ${persona.displayName}`}
                             </Button>

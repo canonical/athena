@@ -28,6 +28,7 @@ export type Persona = {
   personality: string;
   usesCodingHarness: boolean;
   isEngineeringManager: boolean;
+  isDefault: boolean;
   lifecycleStatus: PersonaLifecycleStatus;
   routingPriority: number;
   createdAt: Date | string;
@@ -89,5 +90,3 @@ export const referencePersonaCatalog: ReferencePersona[] = [
     isEngineeringManager: false,
   },
 ];
-
-export const defaultEmPersonality = referencePersonaCatalog.find((r) => r.role === `em`)?.personality ?? `You are an experienced engineering manager.`;

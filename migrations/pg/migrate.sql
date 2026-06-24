@@ -18,6 +18,9 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 \ir ./ddls/000600.persona.sql
 \ir ./ddls/999999.cleanup.sql
 
+\echo >>> Running Athena seed functions
+\ir ./fncs/000400.seedDefaultPersonas.sql
+
 COMMIT;
 
 \echo >>> Athena migrations completed successfully

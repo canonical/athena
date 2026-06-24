@@ -104,7 +104,7 @@ test(`EM persona cannot be deleted`, async ({ page }) => {
 
   const deleteResponse = await page.request.delete(`http://athena.localhost/api/loops/${loop.id}/personas/${em!.id}`);
   expect(deleteResponse.status()).toBe(400);
-  await expect(deleteResponse.json()).resolves.toEqual({ error: `The engineering manager persona cannot be deleted.` });
+  await expect(deleteResponse.json()).resolves.toEqual({ error: `Default personas cannot be deleted.` });
 });
 
 test(`EM persona cannot be updated to use coding harness`, async ({ page }) => {
@@ -135,25 +135,18 @@ test(`deactivating the last coding harness persona is rejected`, async ({ page }
 
   const loop = await createLoop(page, `Harness constraint loop`);
 
-  const createResponse = await page.request.post(`http://athena.localhost/api/loops/${loop.id}/personas`, {
-    data: {
-      displayName: `Only IC`,
-      personality: `You are the only IC.`,
-      usesCodingHarness: true,
-      lifecycleStatus: `active`,
-      routingPriority: 1,
-    },
-  });
-  expect(createResponse.status()).toBe(201);
-  const ic = (await createResponse.json()) as { id: string };
+  const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
+  const personas = (await listResponse.json()) as Array<{ id: string; displayName: string; personality: string; usesCodingHarness: boolean; isEngineeringManager: boolean; lifecycleStatus: string; routingPriority: number }>;
+  const ic = personas.find((p) => p.usesCodingHarness && !p.isEngineeringManager);
+  expect(ic).toBeDefined();
 
-  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${ic.id}`, {
+  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${ic!.id}`, {
     data: {
-      displayName: `Only IC`,
-      personality: `You are the only IC.`,
-      usesCodingHarness: true,
+      displayName: ic!.displayName,
+      personality: ic!.personality,
+      usesCodingHarness: ic!.usesCodingHarness,
       lifecycleStatus: `archived`,
-      routingPriority: 1,
+      routingPriority: ic!.routingPriority,
     },
   });
   expect(updateResponse.status()).toBe(400);

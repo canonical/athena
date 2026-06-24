@@ -1,7 +1,7 @@
 import { isValidUuid } from "@components/utilities/validation.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 import { personaInsertSchema, personaUpdateSchema } from "./persona.schema.js";
-import { queryPersonaActiveCount, queryPersonaById, queryPersonaCreate, queryPersonaDelete, queryPersonaList, queryPersonaSeedEM, queryPersonaUpdate } from "./persona.service.js";
+import { queryPersonaActiveCount, queryPersonaById, queryPersonaCreate, queryPersonaDelete, queryPersonaList, queryPersonaUpdate } from "./persona.service.js";
 
 export class PersonaValidationError extends Error {}
 export class PersonaNotFoundError extends Error {}
@@ -97,8 +97,8 @@ export const personaDelete = async (loopId: string, personaId: string): Promise<
     throw new PersonaNotFoundError(`Persona not found.`);
   }
 
-  if (existing.isEngineeringManager) {
-    throw new PersonaValidationError(`The engineering manager persona cannot be deleted.`);
+  if (existing.isDefault) {
+    throw new PersonaValidationError(`Default personas cannot be deleted.`);
   }
 
   const deleted = await queryPersonaDelete(personaId, loopId);
@@ -107,5 +107,3 @@ export const personaDelete = async (loopId: string, personaId: string): Promise<
     throw new PersonaNotFoundError(`Persona not found.`);
   }
 };
-
-export const personaSeedEM = async (loopId: string): Promise<Persona> => queryPersonaSeedEM(loopId);

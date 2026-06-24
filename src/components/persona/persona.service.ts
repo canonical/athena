@@ -1,7 +1,7 @@
 import { getPool } from "@components/postgres/postgres.js";
-import { defaultEmPersonality, type Persona, type PersonaInsert, type PersonaUpdate } from "./persona.schema.js";
+import { type Persona, type PersonaInsert, type PersonaUpdate } from "./persona.schema.js";
 
-const personaColumns = `"id", "loop", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"`;
+const personaColumns = `"id", "loop", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "isDefault", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"`;
 
 export const queryPersonaList = async (loopId: string): Promise<Persona[]> => {
   const result = await getPool().query<Persona>(
@@ -104,24 +104,4 @@ export const queryPersonaDelete = async (personaId: string, loopId: string): Pro
   );
 
   return Boolean(result.rowCount);
-};
-
-export const queryPersonaSeedEM = async (loopId: string, client?: import("pg").PoolClient): Promise<Persona> => {
-  const pool = client ?? getPool();
-  const result = await pool.query<Persona>(
-    `
-      INSERT INTO "persona" ("loop", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "lifecycleStatus", "routingPriority")
-      VALUES ($1, $2, $3, FALSE, TRUE, 'active', 0)
-      RETURNING ${personaColumns}
-    `,
-    [loopId, `Engineering Manager`, defaultEmPersonality],
-  );
-
-  const persona = result.rows[0];
-
-  if (!persona) {
-    throw new Error(`EM persona seed failed.`);
-  }
-
-  return persona;
 };

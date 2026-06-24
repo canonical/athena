@@ -1,4 +1,3 @@
-import { queryPersonaSeedEM } from "@components/persona/persona.service.js";
 import { getPool } from "@components/postgres/postgres.js";
 import type { Loop, LoopInsert, LoopUpdate } from "./loop.schema.js";
 
@@ -57,7 +56,7 @@ export const queryLoopCreate = async (input: LoopInsert, userId: string): Promis
     }
 
     await client.query(`INSERT INTO "loopUser" ("loop", "user", "isAdmin") VALUES ($1, $2, TRUE)`, [loop.id, userId]);
-    await queryPersonaSeedEM(loop.id, client);
+    await client.query(`SELECT seedDefaultPersonas($1)`, [loop.id]);
     await client.query(`COMMIT`);
 
     return loop;

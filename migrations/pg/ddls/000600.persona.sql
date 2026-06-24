@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS "persona" (
   "personality" TEXT NOT NULL,
   "usesCodingHarness" BOOLEAN NOT NULL DEFAULT FALSE,
   "isEngineeringManager" BOOLEAN NOT NULL DEFAULT FALSE,
+  "isDefault" BOOLEAN NOT NULL DEFAULT FALSE,
   "lifecycleStatus" TEXT NOT NULL DEFAULT 'active' CHECK ("lifecycleStatus" IN ('active', 'deprecated', 'archived')),
   "routingPriority" INT NOT NULL DEFAULT 0,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
