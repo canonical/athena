@@ -1,6 +1,5 @@
 CREATE TABLE IF NOT EXISTS "persona" (
   "id" UUID PRIMARY KEY DEFAULT uuidv7(),
-  "loop" UUID NOT NULL REFERENCES "loop"("id") ON DELETE CASCADE,
   "displayName" TEXT NOT NULL,
   "personality" TEXT NOT NULL,
   "usesCodingHarness" BOOLEAN NOT NULL DEFAULT FALSE,
@@ -12,7 +11,6 @@ CREATE TABLE IF NOT EXISTS "persona" (
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS "idxPersonaLoop" ON "persona"("loop");
 CREATE INDEX IF NOT EXISTS "idxPersonaLifecycleStatus" ON "persona"("lifecycleStatus");
 
 SELECT ensureUpdatedAtTrigger('persona');

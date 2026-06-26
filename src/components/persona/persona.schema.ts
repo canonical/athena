@@ -23,7 +23,6 @@ export const personaUpdateSchema = z.object({
 
 export type Persona = {
   id: string;
-  loop: string;
   displayName: string;
   personality: string;
   usesCodingHarness: boolean;

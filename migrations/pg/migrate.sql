@@ -16,10 +16,11 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 \ir ./ddls/000400.event.sql
 \ir ./ddls/000500.session.sql
 \ir ./ddls/000600.persona.sql
+\ir ./ddls/000700.loopPersona.sql
 \ir ./ddls/999999.cleanup.sql
 
 \echo >>> Running Athena seed functions
-\ir ./fncs/000400.seedDefaultPersonas.sql
+\ir ./fncs/000600.persona.seed.sql
 
 COMMIT;
 

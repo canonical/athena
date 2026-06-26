@@ -1,20 +1,18 @@
--- Seeds all default personas for a newly created loop.
+-- Seeds default personas globally and assigns them to a newly created loop.
 -- Each default persona is sourced directly from docs/specs/personas/*.md and is
 -- marked isDefault = TRUE so that the application can prevent users from deleting them.
--- The function is idempotent: if default personas already exist for the loop it is a no-op.
+-- The function is idempotent: global defaults are inserted only once and loop
+-- assignments are skipped when already present.
 CREATE OR REPLACE FUNCTION seedDefaultPersonas(p_loop_id UUID)
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM "persona" WHERE "loop" = p_loop_id AND "isDefault" = TRUE) THEN
-    RETURN;
-  END IF;
-
-  INSERT INTO "persona" ("loop", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "isDefault", "lifecycleStatus", "routingPriority")
-  VALUES
+  -- Insert global default personas if none exist yet
+  IF NOT EXISTS (SELECT 1 FROM "persona" WHERE "isDefault" = TRUE) THEN
+    INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isEngineeringManager", "isDefault", "lifecycleStatus", "routingPriority")
+    VALUES
     (
-      p_loop_id,
       'Diana',
       '# EM Persona: Diana
 
@@ -112,7 +110,6 @@ When responding as Diana:
       0
     ),
     (
-      p_loop_id,
       'Clara',
       '# IC Persona: Clara
 
@@ -214,7 +211,6 @@ When responding as Clara:
       1
     ),
     (
-      p_loop_id,
       'Elena',
       '# Code Reviewer Persona: Elena
 
@@ -310,7 +306,6 @@ When responding as Elena:
       2
     ),
     (
-      p_loop_id,
       'Alice',
       '# PM Persona: Alice
 
@@ -406,7 +401,6 @@ When responding as Alice:
       3
     ),
     (
-      p_loop_id,
       'Beatrice',
       '# PM Persona: Beatrice
 
@@ -502,7 +496,6 @@ When responding as Beatrice:
       4
     ),
     (
-      p_loop_id,
       'Grace',
       '# QA Persona: Grace
 
@@ -598,7 +591,6 @@ When responding as Grace:
       5
     ),
     (
-      p_loop_id,
       'Fiona',
       '# UX Persona: Fiona
 
@@ -693,5 +685,13 @@ When responding as Fiona:
       'active',
       6
     );
+  END IF;
+
+  -- Assign all default personas to this loop (idempotent)
+  INSERT INTO "loopPersona" ("loop", "persona")
+  SELECT p_loop_id, "id"
+  FROM "persona"
+  WHERE "isDefault" = TRUE
+  ON CONFLICT DO NOTHING;
 END;
 $$;

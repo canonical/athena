@@ -1,15 +1,16 @@
 import { getPool } from "@components/postgres/postgres.js";
 import { type Persona, type PersonaInsert, type PersonaUpdate } from "./persona.schema.js";
 
-const personaColumns = `"id", "loop", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "isDefault", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"`;
+const personaColumns = `p."id", p."displayName", p."personality", p."usesCodingHarness", p."isEngineeringManager", p."isDefault", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"`;
 
 export const queryPersonaList = async (loopId: string): Promise<Persona[]> => {
   const result = await getPool().query<Persona>(
     `
       SELECT ${personaColumns}
-      FROM "persona"
-      WHERE "loop" = $1
-      ORDER BY "isEngineeringManager" DESC, "routingPriority" ASC, "createdAt" ASC
+      FROM "persona" p
+      JOIN "loopPersona" lp ON lp."persona" = p."id"
+      WHERE lp."loop" = $1
+      ORDER BY p."isEngineeringManager" DESC, p."routingPriority" ASC, p."createdAt" ASC
     `,
     [loopId],
   );
@@ -21,8 +22,9 @@ export const queryPersonaById = async (personaId: string, loopId: string): Promi
   const result = await getPool().query<Persona>(
     `
       SELECT ${personaColumns}
-      FROM "persona"
-      WHERE "id" = $1 AND "loop" = $2
+      FROM "persona" p
+      JOIN "loopPersona" lp ON lp."persona" = p."id"
+      WHERE p."id" = $1 AND lp."loop" = $2
     `,
     [personaId, loopId],
   );
@@ -35,10 +37,11 @@ export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: 
     `
       SELECT
         COUNT(*) AS "total",
-        COUNT(*) FILTER (WHERE "usesCodingHarness" = TRUE) AS "withCodingHarness",
-        COUNT(*) FILTER (WHERE "isEngineeringManager" = TRUE) AS "engineeringManagers"
-      FROM "persona"
-      WHERE "loop" = $1 AND "lifecycleStatus" = 'active'
+        COUNT(*) FILTER (WHERE p."usesCodingHarness" = TRUE) AS "withCodingHarness",
+        COUNT(*) FILTER (WHERE p."isEngineeringManager" = TRUE) AS "engineeringManagers"
+      FROM "persona" p
+      JOIN "loopPersona" lp ON lp."persona" = p."id"
+      WHERE lp."loop" = $1 AND p."lifecycleStatus" = 'active'
     `,
     [loopId],
   );
@@ -57,36 +60,51 @@ export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: 
 };
 
 export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, isEngineeringManager: boolean): Promise<Persona> => {
-  const result = await getPool().query<Persona>(
-    `
-      INSERT INTO "persona" ("loop", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "lifecycleStatus", "routingPriority")
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING ${personaColumns}
-    `,
-    [loopId, input.displayName, input.personality, input.usesCodingHarness, isEngineeringManager, input.lifecycleStatus, input.routingPriority],
-  );
+  const client = await getPool().connect();
 
-  const [persona] = result.rows;
+  try {
+    await client.query(`BEGIN`);
 
-  if (!persona) {
-    throw new Error(`Persona was not created.`);
+    const result = await client.query<Persona>(
+      `
+        INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isEngineeringManager", "lifecycleStatus", "routingPriority")
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING "id", "displayName", "personality", "usesCodingHarness", "isEngineeringManager", "isDefault", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"
+      `,
+      [input.displayName, input.personality, input.usesCodingHarness, isEngineeringManager, input.lifecycleStatus, input.routingPriority],
+    );
+
+    const [persona] = result.rows;
+
+    if (!persona) {
+      throw new Error(`Persona was not created.`);
+    }
+
+    await client.query(`INSERT INTO "loopPersona" ("loop", "persona") VALUES ($1, $2)`, [loopId, persona.id]);
+    await client.query(`COMMIT`);
+
+    return persona;
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return persona;
 };
 
 export const queryPersonaUpdate = async (personaId: string, loopId: string, input: PersonaUpdate): Promise<Persona | undefined> => {
   const result = await getPool().query<Persona>(
     `
-      UPDATE "persona"
+      UPDATE "persona" p
       SET
         "displayName" = $1,
         "personality" = $2,
         "usesCodingHarness" = $3,
         "lifecycleStatus" = $4,
         "routingPriority" = $5
-      WHERE "id" = $6 AND "loop" = $7
-      RETURNING ${personaColumns}
+      FROM "loopPersona" lp
+      WHERE p."id" = $6 AND lp."persona" = p."id" AND lp."loop" = $7
+      RETURNING p."id", p."displayName", p."personality", p."usesCodingHarness", p."isEngineeringManager", p."isDefault", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"
     `,
     [input.displayName, input.personality, input.usesCodingHarness, input.lifecycleStatus, input.routingPriority, personaId, loopId],
   );
@@ -95,13 +113,41 @@ export const queryPersonaUpdate = async (personaId: string, loopId: string, inpu
 };
 
 export const queryPersonaDelete = async (personaId: string, loopId: string): Promise<boolean> => {
-  const result = await getPool().query(
-    `
-      DELETE FROM "persona"
-      WHERE "id" = $1 AND "loop" = $2
-    `,
-    [personaId, loopId],
-  );
+  const client = await getPool().connect();
 
-  return Boolean(result.rowCount);
+  try {
+    await client.query(`BEGIN`);
+
+    const unlinkResult = await client.query(
+      `
+        DELETE FROM "loopPersona"
+        WHERE "persona" = $1 AND "loop" = $2
+      `,
+      [personaId, loopId],
+    );
+
+    if (!unlinkResult.rowCount) {
+      await client.query(`ROLLBACK`);
+      return false;
+    }
+
+    // Remove the persona record itself if it is not a default and has no remaining loop assignments
+    await client.query(
+      `
+        DELETE FROM "persona"
+        WHERE "id" = $1
+          AND "isDefault" = FALSE
+          AND NOT EXISTS (SELECT 1 FROM "loopPersona" WHERE "persona" = $1)
+      `,
+      [personaId],
+    );
+
+    await client.query(`COMMIT`);
+    return true;
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  } finally {
+    client.release();
+  }
 };
