@@ -37,7 +37,7 @@ export const fetchPersonaCatalog = async (): Promise<ReferencePersona[]> => {
   return response.json() as Promise<ReferencePersona[]>;
 };
 
-export const fetchAllPersonas = async (): Promise<Persona[]> => {
+export const fetchPersonaListAll = async (): Promise<Persona[]> => {
   const response = await fetch(personaApiPaths.globalList, { credentials: `include` });
 
   if (!response.ok) {
@@ -57,7 +57,7 @@ export const fetchPersonaById = async (personaId: string): Promise<Persona> => {
   return response.json() as Promise<Persona>;
 };
 
-export const fetchPersonas = async (loopId: string): Promise<Persona[]> => {
+export const fetchPersonaList = async (loopId: string): Promise<Persona[]> => {
   const response = await fetch(personaApiPaths.list(loopId), { credentials: `include` });
 
   if (!response.ok) {

@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchAllPersonas, fetchPersonaById, fetchPersonaCatalog, fetchPersonas } from "./persona.client.js";
+import { fetchPersonaById, fetchPersonaCatalog, fetchPersonaList, fetchPersonaListAll } from "./persona.client.js";
 import type { Persona, ReferencePersona } from "./persona.schema.js";
 
-export type PersonasState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; personas: Persona[] };
+export type PersonaListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; personas: Persona[] };
 
 export type PersonaState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; persona: Persona };
 
 export type CatalogState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; catalog: ReferencePersona[] };
 
-export const usePersonas = (loopId: string | null) => {
-  const [state, setState] = useState<PersonasState>({ status: `loading` });
+export const usePersonaList = (loopId: string | null) => {
+  const [state, setState] = useState<PersonaListState>({ status: `loading` });
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export const usePersonas = (loopId: string | null) => {
 
     setState({ status: `loading` });
 
-    fetchPersonas(loopId)
+    fetchPersonaList(loopId)
       .then((personas) => {
         if (active) {
           setState({ status: `success`, personas });
@@ -47,8 +47,8 @@ export const usePersonas = (loopId: string | null) => {
   return { state, reload };
 };
 
-export const useAllPersonas = () => {
-  const [state, setState] = useState<PersonasState>({ status: `loading` });
+export const usePersonaListAll = () => {
+  const [state, setState] = useState<PersonaListState>({ status: `loading` });
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export const useAllPersonas = () => {
 
     setState({ status: `loading` });
 
-    fetchAllPersonas()
+    fetchPersonaListAll()
       .then((personas) => {
         if (active) {
           setState({ status: `success`, personas });

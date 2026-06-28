@@ -20,7 +20,7 @@ const readErrorMessage = async (response: Response, fallback: string): Promise<s
   }
 };
 
-export const fetchLoops = async (): Promise<Loop[]> => {
+export const fetchLoopList = async (): Promise<Loop[]> => {
   const response = await fetch(loopApiPaths.list, { credentials: `include` });
 
   if (!response.ok) {

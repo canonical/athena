@@ -1,9 +1,8 @@
 import { Button, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
-import { useAllPersonas } from "@components/persona/persona.query.js";
+import { usePersonaList, usePersonaListAll } from "@components/persona/persona.query.js";
 import { type FormEvent, useState } from "react";
 import { PersonaEditor } from "../persona/PersonaEditor.js";
 import { assignPersonaToLoop, deletePersona } from "../persona/persona.client.js";
-import { usePersonas } from "../persona/persona.query.js";
 import type { Persona as PersonaRecord } from "../persona/persona.schema.js";
 import { updateLoop } from "./loop.client.js";
 import { useLoop } from "./loop.query.js";
@@ -173,16 +172,16 @@ type LoopPersonasTabProps = {
 };
 
 function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
-  const { state: personasState, reload: reloadPersonas } = usePersonas(loopId);
-  const { state: allPersonasState } = useAllPersonas();
+  const { state: personaListState, reload: reloadPersonaList } = usePersonaList(loopId);
+  const { state: personaListAllState } = usePersonaListAll();
   const [editingPersona, setEditingPersona] = useState<PersonaRecord | null>(null);
   const [busyPersonaId, setBusyPersonaId] = useState<string | null>(null);
   const [selectedGlobalPersonaId, setSelectedGlobalPersonaId] = useState(``);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  const assignedIds = personasState.status === `success` ? new Set(personasState.personas.map((p) => p.id)) : new Set<string>();
+  const assignedIds = personaListState.status === `success` ? new Set(personaListState.personas.map((p) => p.id)) : new Set<string>();
 
-  const unassignedPersonas = allPersonasState.status === `success` ? allPersonasState.personas.filter((p) => !assignedIds.has(p.id)) : [];
+  const unassignedPersonaList = personaListAllState.status === `success` ? personaListAllState.personas.filter((p) => !assignedIds.has(p.id)) : [];
 
   const handleEditorSuccess = (message: string) => {
     onFeedback({
@@ -191,7 +190,7 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
       message,
     });
     setEditingPersona(null);
-    reloadPersonas();
+    reloadPersonaList();
   };
 
   const handleRemove = async (persona: PersonaRecord) => {
@@ -210,7 +209,7 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
         setEditingPersona(null);
       }
 
-      reloadPersonas();
+      reloadPersonaList();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       onFeedback({
@@ -241,7 +240,7 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
         message: `Persona has been assigned to this loop.`,
       });
       setSelectedGlobalPersonaId(``);
-      reloadPersonas();
+      reloadPersonaList();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       onFeedback({
@@ -257,7 +256,7 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
   return (
     <>
       <PersonaEditor editingPersona={editingPersona} key={editingPersona?.id ?? `new`} loopId={loopId} onCancel={() => setEditingPersona(null)} onSuccess={handleEditorSuccess} />
-      {unassignedPersonas.length > 0 ? (
+      {unassignedPersonaList.length > 0 ? (
         <div className="p-strip is-shallow">
           <h2 className="p-heading--4">Assign an existing persona</h2>
           <form onSubmit={handleAssignExisting}>
@@ -265,7 +264,7 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
               id="assign-persona-select"
               label="Persona"
               onChange={(event) => setSelectedGlobalPersonaId(event.target.value)}
-              options={[{ value: ``, label: `— Select a persona —` }, ...unassignedPersonas.map((p) => ({ value: p.id, label: p.displayName }))]}
+              options={[{ value: ``, label: `— Select a persona —` }, ...unassignedPersonaList.map((p) => ({ value: p.id, label: p.displayName }))]}
               value={selectedGlobalPersonaId}
             />
             <Button appearance="base" disabled={!selectedGlobalPersonaId || isAssigning} type="submit">
@@ -276,17 +275,17 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
       ) : null}
       <div className="p-strip is-shallow">
         <h2 className="p-heading--4">Assigned personas</h2>
-        {personasState.status === `loading` ? <p className="p-text--default">Loading personas...</p> : null}
-        {personasState.status === `error` ? (
+        {personaListState.status === `loading` ? <p className="p-text--default">Loading personas...</p> : null}
+        {personaListState.status === `error` ? (
           <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load personas">
-            {personasState.message}
+            {personaListState.message}
           </Notification>
         ) : null}
-        {personasState.status === `success` && personasState.personas.length === 0 ? <p className="p-text--default">No personas assigned to this loop yet. Add or assign a persona above.</p> : null}
-        {personasState.status === `success` && personasState.personas.length > 0 ? (
+        {personaListState.status === `success` && personaListState.personas.length === 0 ? <p className="p-text--default">No personas assigned to this loop yet. Add or assign a persona above.</p> : null}
+        {personaListState.status === `success` && personaListState.personas.length > 0 ? (
           <MainTable
             headers={[{ content: `Display name` }, { content: `Coding harness` }, { content: `Status` }, { content: `Priority` }, { content: `Actions` }]}
-            rows={personasState.personas.map((persona) => ({
+            rows={personaListState.personas.map((persona) => ({
               key: persona.id,
               columns: [
                 { content: persona.isRouting ? `${persona.displayName} (R)` : persona.displayName },

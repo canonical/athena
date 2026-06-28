@@ -2,7 +2,6 @@ import { isValidUuid } from "@components/utilities/validation.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 import { personaInsertSchema, personaUpdateSchema } from "./persona.schema.js";
 import {
-  queryAllPersonas,
   queryPersonaActiveCount,
   queryPersonaAssignToLoop,
   queryPersonaById,
@@ -11,6 +10,7 @@ import {
   queryPersonaCreateGlobal,
   queryPersonaDelete,
   queryPersonaList,
+  queryPersonaListAll,
   queryPersonaUpdate,
   queryPersonaUpdateGlobal,
 } from "./persona.service.js";
@@ -69,7 +69,7 @@ export const personaList = async (loopId: string): Promise<Persona[]> => {
 };
 
 export const personaListGlobal = async (): Promise<Persona[]> => {
-  return queryAllPersonas();
+  return queryPersonaListAll();
 };
 
 export const personaGetById = async (personaId: string): Promise<Persona> => {

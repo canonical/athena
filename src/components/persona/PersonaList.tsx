@@ -2,7 +2,7 @@ import { Button, MainTable, Notification, NotificationSeverity } from "@canonica
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { PersonaEditor } from "./PersonaEditor.js";
-import { useAllPersonas } from "./persona.query.js";
+import { usePersonaListAll } from "./persona.query.js";
 import type { Persona as PersonaRecord } from "./persona.schema.js";
 
 type Feedback = {
@@ -18,7 +18,7 @@ const lifecycleStatusLabel: Record<string, string> = {
 };
 
 export function PersonaList() {
-  const { state: personasState, reload: reloadPersonas } = useAllPersonas();
+  const { state: personaListState, reload: reloadPersonaList } = usePersonaListAll();
   const [editingPersona, setEditingPersona] = useState<PersonaRecord | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
@@ -33,7 +33,7 @@ export function PersonaList() {
       message,
     });
     resetEditor();
-    reloadPersonas();
+    reloadPersonaList();
   };
 
   return (
@@ -49,17 +49,17 @@ export function PersonaList() {
       <PersonaEditor editingPersona={editingPersona} key={editingPersona?.id ?? `new`} onCancel={resetEditor} onSuccess={handleEditorSuccess} />
       <div className="p-strip is-shallow">
         <h2 className="p-heading--4">All personas</h2>
-        {personasState.status === `loading` ? <p className="p-text--default">Loading personas...</p> : null}
-        {personasState.status === `error` ? (
+        {personaListState.status === `loading` ? <p className="p-text--default">Loading personas...</p> : null}
+        {personaListState.status === `error` ? (
           <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load personas">
-            {personasState.message}
+            {personaListState.message}
           </Notification>
         ) : null}
-        {personasState.status === `success` && personasState.personas.length === 0 ? <p className="p-text--default">No personas yet. Create a persona above.</p> : null}
-        {personasState.status === `success` && personasState.personas.length > 0 ? (
+        {personaListState.status === `success` && personaListState.personas.length === 0 ? <p className="p-text--default">No personas yet. Create a persona above.</p> : null}
+        {personaListState.status === `success` && personaListState.personas.length > 0 ? (
           <MainTable
             headers={[{ content: `Display name` }, { content: `Coding harness` }, { content: `Status` }, { content: `Priority` }, { content: `Actions` }]}
-            rows={personasState.personas.map((persona) => ({
+            rows={personaListState.personas.map((persona) => ({
               key: persona.id,
               columns: [
                 {

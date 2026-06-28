@@ -20,7 +20,7 @@ export const queryPersonaList = async (loopId: string): Promise<Persona[]> => {
   return result.rows;
 };
 
-export const queryAllPersonas = async (): Promise<Persona[]> => {
+export const queryPersonaListAll = async (): Promise<Persona[]> => {
   const result = await getPool().query<Persona>(
     `
       SELECT ${personaColumnsUnqualified}

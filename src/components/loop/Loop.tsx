@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { createLoop, deleteLoop, updateLoop } from "./loop.client.js";
 import type { LoopListState } from "./loop.query.js";
-import { useLoops } from "./loop.query.js";
+import { useLoopList } from "./loop.query.js";
 import { loopInsertSchema, loopUpdateSchema } from "./loop.schema.js";
 
 type Feedback = {
@@ -17,7 +17,7 @@ type LoopItem = Extract<LoopListState, { status: "success" }>["loops"][number];
 const formatTimestamp = (value: Date | string) => new Date(value).toLocaleString();
 
 export function Loop() {
-  const { state, reload } = useLoops();
+  const { state, reload } = useLoopList();
   const [createName, setCreateName] = useState(``);
   const [createDescription, setCreateDescription] = useState(``);
   const [editingLoop, setEditingLoop] = useState<LoopItem | null>(null);

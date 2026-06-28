@@ -1,5 +1,5 @@
 import { Button, Notification, NotificationSeverity, Select } from "@canonical/react-components";
-import { useLoops } from "@components/loop/loop.query.js";
+import { useLoopList } from "@components/loop/loop.query.js";
 import { type FormEvent, useState } from "react";
 import { assignPersonaToLoop } from "./persona.client.js";
 import { usePersonaById } from "./persona.query.js";
@@ -22,12 +22,12 @@ type PersonaDetailProps = {
 
 export function Persona({ personaId }: PersonaDetailProps) {
   const { state, reload } = usePersonaById(personaId);
-  const { state: loopsState } = useLoops();
+  const { state: loopListState } = useLoopList();
   const [selectedLoopId, setSelectedLoopId] = useState(``);
   const [isAssigning, setIsAssigning] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
-  const loops = loopsState.status === `success` ? loopsState.loops : [];
+  const loopList = loopListState.status === `success` ? loopListState.loops : [];
 
   if (state.status === `loading`) {
     return (
@@ -61,7 +61,7 @@ export function Persona({ personaId }: PersonaDetailProps) {
 
     try {
       await assignPersonaToLoop(selectedLoopId, personaId);
-      const loopName = loops.find((l) => l.id === selectedLoopId)?.name ?? selectedLoopId;
+      const loopName = loopList.find((l) => l.id === selectedLoopId)?.name ?? selectedLoopId;
       setFeedback({
         severity: NotificationSeverity.INFORMATION,
         title: `Persona assigned`,
@@ -109,20 +109,20 @@ export function Persona({ personaId }: PersonaDetailProps) {
       </div>
       <div className="p-strip is-shallow">
         <h2 className="p-heading--4">Assign to loop</h2>
-        {loopsState.status === `loading` ? <p className="p-text--default">Loading loops...</p> : null}
-        {loopsState.status === `error` ? (
+        {loopListState.status === `loading` ? <p className="p-text--default">Loading loops...</p> : null}
+        {loopListState.status === `error` ? (
           <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load loops">
-            {loopsState.message}
+            {loopListState.message}
           </Notification>
         ) : null}
-        {loopsState.status === `success` && loops.length === 0 ? <p className="p-text--default">No loops available. Create a loop first.</p> : null}
-        {loopsState.status === `success` && loops.length > 0 ? (
+        {loopListState.status === `success` && loopList.length === 0 ? <p className="p-text--default">No loops available. Create a loop first.</p> : null}
+        {loopListState.status === `success` && loopList.length > 0 ? (
           <form onSubmit={handleAssign}>
             <Select
               id="persona-assign-loop"
               label="Loop"
               onChange={(event) => setSelectedLoopId(event.target.value)}
-              options={[{ value: ``, label: `— Select a loop —` }, ...loops.map((l) => ({ value: l.id, label: l.name }))]}
+              options={[{ value: ``, label: `— Select a loop —` }, ...loopList.map((l) => ({ value: l.id, label: l.name }))]}
               value={selectedLoopId}
             />
             <Button appearance="positive" disabled={!selectedLoopId || isAssigning} type="submit">
