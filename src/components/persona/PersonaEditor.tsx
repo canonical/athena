@@ -156,4 +156,3 @@ export function PersonaEditor({ loopId, editingPersona, catalogTemplates, onSucc
     </div>
   );
 }
-

@@ -213,7 +213,13 @@ export function Loop() {
           rows={state.loops.map((loop) => ({
             key: loop.id,
             columns: [
-              { content: <Link to={`/loops/$loopId`} params={{ loopId: loop.id }}>{loop.name}</Link> },
+              {
+                content: (
+                  <Link to={`/loops/$loopId`} params={{ loopId: loop.id }}>
+                    {loop.name}
+                  </Link>
+                ),
+              },
               { content: loop.description ?? "—" },
               { content: formatTimestamp(loop.updatedAt) },
               {

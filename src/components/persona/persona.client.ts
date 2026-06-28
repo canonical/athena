@@ -150,4 +150,3 @@ export const deletePersona = async (loopId: string, personaId: string): Promise<
     throw new Error(await readErrorMessage(response, `Persona deletion failed with status ${response.status}`));
   }
 };
-

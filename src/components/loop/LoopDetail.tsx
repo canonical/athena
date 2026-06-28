@@ -61,9 +61,9 @@ export function LoopDetail({ loopId }: LoopDetailProps) {
           {feedback.message}
         </Notification>
       ) : null}
-      <nav className="p-tabs">
-        <ul className="p-tabs__list" role="tablist">
-          <li className="p-tabs__item" role="presentation">
+      <nav className="p-tabs" aria-label="Loop sections">
+        <div className="p-tabs__list" role="tablist">
+          <div className="p-tabs__item" role="presentation">
             <button
               aria-selected={activeTab === `details`}
               className={`p-tabs__link${activeTab === `details` ? ` is-active` : ``}`}
@@ -76,8 +76,8 @@ export function LoopDetail({ loopId }: LoopDetailProps) {
             >
               Details
             </button>
-          </li>
-          <li className="p-tabs__item" role="presentation">
+          </div>
+          <div className="p-tabs__item" role="presentation">
             <button
               aria-selected={activeTab === `personas`}
               className={`p-tabs__link${activeTab === `personas` ? ` is-active` : ``}`}
@@ -90,8 +90,8 @@ export function LoopDetail({ loopId }: LoopDetailProps) {
             >
               Personas
             </button>
-          </li>
-        </ul>
+          </div>
+        </div>
       </nav>
       {activeTab === `details` ? <LoopDetailsTab loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} onFeedback={setFeedback} onSaved={reloadLoop} /> : null}
       {activeTab === `personas` ? <LoopPersonasTab loopId={loopId} onFeedback={setFeedback} /> : null}
