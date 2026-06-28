@@ -1,4 +1,5 @@
 import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { createLoop, deleteLoop, updateLoop } from "./loop.client.js";
 import type { LoopsState } from "./loop.query.js";
@@ -212,7 +213,7 @@ export function Loop() {
           rows={state.loops.map((loop) => ({
             key: loop.id,
             columns: [
-              { content: loop.name },
+              { content: <Link to={`/loops/$loopId`} params={{ loopId: loop.id }}>{loop.name}</Link> },
               { content: loop.description ?? "—" },
               { content: formatTimestamp(loop.updatedAt) },
               {

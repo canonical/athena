@@ -1,7 +1,19 @@
 import { isValidUuid } from "@components/utilities/validation.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 import { personaInsertSchema, personaUpdateSchema } from "./persona.schema.js";
-import { queryPersonaActiveCount, queryPersonaById, queryPersonaCreate, queryPersonaDelete, queryPersonaList, queryPersonaUpdate } from "./persona.service.js";
+import {
+  queryAllPersonas,
+  queryPersonaActiveCount,
+  queryPersonaAssignToLoop,
+  queryPersonaById,
+  queryPersonaByIdGlobal,
+  queryPersonaCreate,
+  queryPersonaCreateGlobal,
+  queryPersonaDelete,
+  queryPersonaList,
+  queryPersonaUpdate,
+  queryPersonaUpdateGlobal,
+} from "./persona.service.js";
 
 export class PersonaValidationError extends Error {}
 export class PersonaNotFoundError extends Error {}
@@ -9,6 +21,12 @@ export class PersonaNotFoundError extends Error {}
 const validateLoopId = (loopId: string): void => {
   if (!isValidUuid(loopId)) {
     throw new PersonaValidationError(`loopId must be a valid UUID.`);
+  }
+};
+
+const validatePersonaId = (personaId: string): void => {
+  if (!isValidUuid(personaId)) {
+    throw new PersonaValidationError(`personaId must be a valid UUID.`);
   }
 };
 
@@ -50,18 +68,35 @@ export const personaList = async (loopId: string): Promise<Persona[]> => {
   return queryPersonaList(loopId);
 };
 
+export const personaListGlobal = async (): Promise<Persona[]> => {
+  return queryAllPersonas();
+};
+
+export const personaGetById = async (personaId: string): Promise<Persona> => {
+  validatePersonaId(personaId);
+
+  const persona = await queryPersonaByIdGlobal(personaId);
+
+  if (!persona) {
+    throw new PersonaNotFoundError(`Persona not found.`);
+  }
+
+  return persona;
+};
+
 export const personaCreate = async (loopId: string, input: PersonaInsert): Promise<Persona> => {
   validateLoopId(loopId);
 
   return queryPersonaCreate(loopId, input, false);
 };
 
+export const personaCreateGlobal = async (input: PersonaInsert): Promise<Persona> => {
+  return queryPersonaCreateGlobal(input, false);
+};
+
 export const personaUpdate = async (loopId: string, personaId: string, input: PersonaUpdate): Promise<Persona> => {
   validateLoopId(loopId);
-
-  if (!isValidUuid(personaId)) {
-    throw new PersonaValidationError(`personaId must be a valid UUID.`);
-  }
+  validatePersonaId(personaId);
 
   const existing = await queryPersonaById(personaId, loopId);
 
@@ -84,12 +119,44 @@ export const personaUpdate = async (loopId: string, personaId: string, input: Pe
   return updated;
 };
 
+export const personaUpdateGlobal = async (personaId: string, input: PersonaUpdate): Promise<Persona> => {
+  validatePersonaId(personaId);
+
+  const existing = await queryPersonaByIdGlobal(personaId);
+
+  if (!existing) {
+    throw new PersonaNotFoundError(`Persona not found.`);
+  }
+
+  if (existing.isEngineeringManager && input.usesCodingHarness) {
+    throw new PersonaValidationError(`An engineering manager persona cannot use a coding harness.`);
+  }
+
+  const updated = await queryPersonaUpdateGlobal(personaId, input);
+
+  if (!updated) {
+    throw new PersonaNotFoundError(`Persona not found.`);
+  }
+
+  return updated;
+};
+
+export const personaAssignToLoop = async (loopId: string, personaId: string): Promise<void> => {
+  validateLoopId(loopId);
+  validatePersonaId(personaId);
+
+  const persona = await queryPersonaByIdGlobal(personaId);
+
+  if (!persona) {
+    throw new PersonaNotFoundError(`Persona not found.`);
+  }
+
+  await queryPersonaAssignToLoop(loopId, personaId);
+};
+
 export const personaDelete = async (loopId: string, personaId: string): Promise<void> => {
   validateLoopId(loopId);
-
-  if (!isValidUuid(personaId)) {
-    throw new PersonaValidationError(`personaId must be a valid UUID.`);
-  }
+  validatePersonaId(personaId);
 
   const existing = await queryPersonaById(personaId, loopId);
 

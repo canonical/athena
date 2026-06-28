@@ -1,6 +1,6 @@
 import { Button, Notification, NotificationSeverity, Select } from "@canonical/react-components";
 import { type FormEvent, useState } from "react";
-import { createPersona, updatePersona } from "./persona.client.js";
+import { createPersona, createPersonaGlobal, updatePersona, updatePersonaGlobal } from "./persona.client.js";
 import type { Persona as PersonaRecord, ReferencePersona } from "./persona.schema.js";
 import { personaLifecycleStatuses } from "./persona.schema.js";
 
@@ -33,7 +33,7 @@ const emptyForm = (): FormState => ({
 });
 
 type PersonaEditorProps = {
-  loopId: string;
+  loopId?: string;
   editingPersona: PersonaRecord | null;
   catalogTemplates?: ReferencePersona[];
   onSuccess: (message: string) => void;
@@ -73,11 +73,20 @@ export function PersonaEditor({ loopId, editingPersona, catalogTemplates, onSucc
 
     try {
       if (editingPersona) {
-        await updatePersona(loopId, editingPersona.id, form);
+        if (loopId) {
+          await updatePersona(loopId, editingPersona.id, form);
+        } else {
+          await updatePersonaGlobal(editingPersona.id, form);
+        }
         onSuccess(`${form.displayName} has been updated.`);
       } else {
-        await createPersona(loopId, form);
-        onSuccess(`${form.displayName} has been added to the loop.`);
+        if (loopId) {
+          await createPersona(loopId, form);
+          onSuccess(`${form.displayName} has been added to the loop.`);
+        } else {
+          await createPersonaGlobal(form);
+          onSuccess(`${form.displayName} has been created.`);
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -147,3 +156,4 @@ export function PersonaEditor({ loopId, editingPersona, catalogTemplates, onSucc
     </div>
   );
 }
+

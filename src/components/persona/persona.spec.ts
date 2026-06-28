@@ -171,50 +171,40 @@ test(`personas reject missing required fields`, async ({ page }) => {
   await expect(response.json()).resolves.toEqual({ error: `displayName is required.` });
 });
 
-test(`personas page shows loop selector and reference catalog`, async ({ page }) => {
+test(`personas page shows global persona list and create form`, async ({ page }) => {
   await authenticate(page);
-  await createLoop(page, `Persona UI loop`);
   await page.goto(`http://athena.localhost/persona-list`);
 
   await expect(page.getByRole(`heading`, { name: `Personas` })).toBeVisible();
-  await expect(page.getByLabel(`Loop`)).toBeVisible();
-
-  await page.getByLabel(`Loop`).selectOption({ label: `Persona UI loop` });
-
-  await expect(page.getByText(`Reference persona templates`)).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `Engineering Manager`, exact: true })).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `Individual Contributor`, exact: true })).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `Code Reviewer`, exact: true })).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `Product Manager`, exact: true })).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `Quality Assurance`, exact: true })).toBeVisible();
-  await expect(page.getByRole(`button`, { name: `User Experience`, exact: true })).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `All personas` })).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Add persona` })).toBeVisible();
 });
 
-test(`personas page supports add update and delete of non-EM persona`, async ({ page }) => {
+test(`persona list page supports creating a new persona globally`, async ({ page }) => {
   await authenticate(page);
-  await createLoop(page, `Persona UI CRUD loop`);
   await page.goto(`http://athena.localhost/persona-list`);
 
-  await page.getByLabel(`Loop`).selectOption({ label: `Persona UI CRUD loop` });
-
-  await page.getByRole(`button`, { name: `Individual Contributor` }).click();
-
-  await expect(page.getByLabel(`Display name`)).toHaveValue(`Individual Contributor`);
-
+  await page.getByLabel(`Display name`).fill(`Global IC`);
+  await page.getByLabel(`Personality`).fill(`You are a global IC persona.`);
   await page.getByRole(`button`, { name: `Add persona` }).click();
 
-  await expect(page.getByText(`Individual Contributor has been added to the loop.`)).toBeVisible();
-  await expect(page.getByRole(`gridcell`, { name: `Individual Contributor`, exact: true }).first()).toBeVisible();
+  await expect(page.getByText(`Global IC has been created.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: `Global IC`, exact: true }).first()).toBeVisible();
+});
 
-  await page.getByRole(`button`, { name: `Edit Individual Contributor` }).click();
-  await page.getByLabel(`Display name`).fill(`IC Updated`);
-  await page.getByRole(`button`, { name: `Save persona` }).click();
+test(`loop detail page shows Personas tab with assigned personas and assign form`, async ({ page }) => {
+  await authenticate(page);
 
-  await expect(page.getByText(`IC Updated has been updated.`)).toBeVisible();
-  await expect(page.getByRole(`gridcell`, { name: `IC Updated`, exact: true }).first()).toBeVisible();
+  const loop = await createLoop(page, `Loop detail personas loop`);
+  await page.goto(`http://athena.localhost/loops/${loop.id}`);
 
-  await page.getByRole(`button`, { name: `Delete IC Updated` }).click();
+  await expect(page.getByRole(`heading`, { name: `Loop detail personas loop` })).toBeVisible();
 
-  await expect(page.getByText(`IC Updated has been deleted.`)).toBeVisible();
-  await expect(page.getByRole(`gridcell`, { name: `IC Updated`, exact: true })).toHaveCount(0);
+  await page.getByRole(`button`, { name: `Personas` }).click();
+
+  await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
+
+  const personas = (await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`)).json() as Promise<Array<{ displayName: string }>>;
+  const personaList = await personas;
+  expect(personaList.length).toBeGreaterThan(0);
 });

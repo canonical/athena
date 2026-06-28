@@ -1,6 +1,20 @@
 import { isValidUuid } from "@components/utilities/validation.js";
 import { type Request, type Response, Router } from "express";
-import { PersonaNotFoundError, PersonaValidationError, personaCreate, personaDelete, personaList, personaUpdate, validatePersonaInsertRequest, validatePersonaUpdateRequest } from "./persona.controller.js";
+import {
+  PersonaNotFoundError,
+  PersonaValidationError,
+  personaAssignToLoop,
+  personaCreate,
+  personaCreateGlobal,
+  personaDelete,
+  personaGetById,
+  personaList,
+  personaListGlobal,
+  personaUpdate,
+  personaUpdateGlobal,
+  validatePersonaInsertRequest,
+  validatePersonaUpdateRequest,
+} from "./persona.controller.js";
 import { referencePersonaCatalog } from "./persona.schema.js";
 
 export const personaRouter = Router();
@@ -47,6 +61,54 @@ personaRouter.get(`/personas/catalog`, (_request: Request, response: Response) =
   response.status(200).json(referencePersonaCatalog);
 });
 
+personaRouter.get(`/personas`, async (_request: Request, response: Response) => {
+  response.status(200).json(await personaListGlobal());
+});
+
+personaRouter.post(`/personas`, async (request: Request, response: Response) => {
+  try {
+    const persona = await personaCreateGlobal(validatePersonaInsertRequest(request.body));
+    response.status(201).json(persona);
+  } catch (error) {
+    if (!sendPersonaError(error, response)) {
+      throw error;
+    }
+  }
+});
+
+personaRouter.get(`/personas/:personaId`, async (request: Request, response: Response) => {
+  try {
+    const personaId = getPersonaId(request, response);
+
+    if (!personaId) {
+      return;
+    }
+
+    response.status(200).json(await personaGetById(personaId));
+  } catch (error) {
+    if (!sendPersonaError(error, response)) {
+      throw error;
+    }
+  }
+});
+
+personaRouter.put(`/personas/:personaId`, async (request: Request, response: Response) => {
+  try {
+    const personaId = getPersonaId(request, response);
+
+    if (!personaId) {
+      return;
+    }
+
+    const persona = await personaUpdateGlobal(personaId, validatePersonaUpdateRequest(request.body));
+    response.status(200).json(persona);
+  } catch (error) {
+    if (!sendPersonaError(error, response)) {
+      throw error;
+    }
+  }
+});
+
 personaRouter.get(`/loops/:loopId/personas`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
@@ -73,6 +135,30 @@ personaRouter.post(`/loops/:loopId/personas`, async (request: Request, response:
 
     const persona = await personaCreate(loopId, validatePersonaInsertRequest(request.body));
     response.status(201).json(persona);
+  } catch (error) {
+    if (!sendPersonaError(error, response)) {
+      throw error;
+    }
+  }
+});
+
+personaRouter.post(`/loops/:loopId/persona-assignments`, async (request: Request, response: Response) => {
+  try {
+    const loopId = getLoopId(request, response);
+
+    if (!loopId) {
+      return;
+    }
+
+    const { personaId: rawPersonaId } = request.body as { personaId?: unknown };
+
+    if (!rawPersonaId || typeof rawPersonaId !== `string`) {
+      response.status(400).json({ error: `personaId is required.` });
+      return;
+    }
+
+    await personaAssignToLoop(loopId, rawPersonaId);
+    response.sendStatus(204);
   } catch (error) {
     if (!sendPersonaError(error, response)) {
       throw error;
@@ -125,3 +211,4 @@ personaRouter.delete(`/loops/:loopId/personas/:personaId`, async (request: Reque
     }
   }
 });
+

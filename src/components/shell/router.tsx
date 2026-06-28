@@ -2,6 +2,8 @@ import { ApplicationLayout, Chip, Notification, NotificationSeverity } from "@ca
 import { AuthenticationView } from "@components/authentication/Authentication.js";
 import { Event } from "@components/event/Event.js";
 import { Loop } from "@components/loop/Loop.js";
+import { LoopDetail } from "@components/loop/LoopDetail.js";
+import { Persona } from "@components/persona/Persona.js";
 import { PersonaList } from "@components/persona/PersonaList.js";
 import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
 
@@ -13,8 +15,10 @@ import "./shell.scss";
 const rootPath = `/`;
 const authenticationPath = `/authentication`;
 const loopsPath = `/loops`;
+const loopDetailPath = `/loops/$loopId`;
 const eventsPath = `/events`;
 const personaListPath = `/persona-list`;
+const personaDetailPath = `/personas/$personaId`;
 
 type AuthenticationSearch = {
   returnTo?: string;
@@ -62,6 +66,18 @@ function AuthenticationRouteView() {
   return <AuthenticationView returnTo={returnTo ?? rootPath} />;
 }
 
+function LoopDetailView() {
+  const { loopId } = loopDetailRoute.useParams();
+
+  return <LoopDetail loopId={loopId} />;
+}
+
+function PersonaDetailView() {
+  const { personaId } = personaDetailRoute.useParams();
+
+  return <Persona personaId={personaId} />;
+}
+
 function NotFoundView() {
   return (
     <section className="athena-home">
@@ -99,6 +115,12 @@ const loopRoute = createRoute({
   component: Loop,
 });
 
+const loopDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: loopDetailPath,
+  component: LoopDetailView,
+});
+
 const eventRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: eventsPath,
@@ -111,7 +133,13 @@ const personaRoute = createRoute({
   component: PersonaList,
 });
 
-const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopRoute, eventRoute, personaRoute]);
+const personaDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: personaDetailPath,
+  component: PersonaDetailView,
+});
+
+const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopRoute, loopDetailRoute, eventRoute, personaRoute, personaDetailRoute]);
 
 export const router = createRouter({
   routeTree,
