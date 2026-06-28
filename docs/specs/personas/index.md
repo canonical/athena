@@ -6,8 +6,8 @@ This document is the canonical index of reference personas for Athena loops.
 
 Each entry below is a reference persona. Reference personas are provided as templates when loop admins configure a new loop. Admins can add them as-is, customize their personality, or create entirely custom personas.
 
-| Role | Display name | Uses coding harness | Is engineering manager |
-|------|--------------|---------------------|------------------------|
+| Role | Display name | Uses coding harness | Is decision maker |
+|------|--------------|---------------------|-------------------|
 | EM   | Engineering Manager | No | Yes |
 | IC   | Individual Contributor | Yes | No |
 | CR   | Code Reviewer | No | No |
