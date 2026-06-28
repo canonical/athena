@@ -37,8 +37,8 @@ const validatePersonaConstraintsAfterChange = async (loopId: string): Promise<vo
     throw new PersonaValidationError(`At least one active persona with a coding harness is required.`);
   }
 
-  if (counts.engineeringManagers < 1) {
-    throw new PersonaValidationError(`At least one active engineering manager persona is required.`);
+  if (counts.decisionMakers < 1) {
+    throw new PersonaValidationError(`At least one active decision maker persona is required.`);
   }
 };
 
@@ -104,8 +104,8 @@ export const personaUpdate = async (loopId: string, personaId: string, input: Pe
     throw new PersonaNotFoundError(`Persona not found.`);
   }
 
-  if (existing.isEngineeringManager && input.usesCodingHarness) {
-    throw new PersonaValidationError(`An engineering manager persona cannot use a coding harness.`);
+  if (existing.isDecisionMaker && input.usesCodingHarness) {
+    throw new PersonaValidationError(`A decision maker persona cannot use a coding harness.`);
   }
 
   const updated = await queryPersonaUpdate(personaId, loopId, input);
@@ -128,8 +128,8 @@ export const personaUpdateGlobal = async (personaId: string, input: PersonaUpdat
     throw new PersonaNotFoundError(`Persona not found.`);
   }
 
-  if (existing.isEngineeringManager && input.usesCodingHarness) {
-    throw new PersonaValidationError(`An engineering manager persona cannot use a coding harness.`);
+  if (existing.isDecisionMaker && input.usesCodingHarness) {
+    throw new PersonaValidationError(`A decision maker persona cannot use a coding harness.`);
   }
 
   const updated = await queryPersonaUpdateGlobal(personaId, input);

@@ -312,7 +312,7 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
             rows={personasState.personas.map((persona) => ({
               key: persona.id,
               columns: [
-                { content: persona.isEngineeringManager ? `${persona.displayName} (EM)` : persona.displayName },
+                { content: persona.isDecisionMaker ? `${persona.displayName} (DM)` : persona.displayName },
                 { content: persona.usesCodingHarness ? `Yes` : `No` },
                 { content: lifecycleStatusLabel[persona.lifecycleStatus] ?? persona.lifecycleStatus },
                 { content: persona.routingPriority },

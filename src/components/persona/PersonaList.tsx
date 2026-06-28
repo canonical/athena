@@ -72,7 +72,7 @@ export function PersonaList() {
                 {
                   content: (
                     <Link to={`/personas/$personaId`} params={{ personaId: persona.id }}>
-                      {persona.isEngineeringManager ? `${persona.displayName} (EM)` : persona.displayName}
+                      {persona.isDecisionMaker ? `${persona.displayName} (DM)` : persona.displayName}
                     </Link>
                   ),
                 },

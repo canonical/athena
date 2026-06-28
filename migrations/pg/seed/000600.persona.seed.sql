@@ -10,7 +10,7 @@ AS $$
 BEGIN
   -- Insert global default personas if none exist yet
   IF NOT EXISTS (SELECT 1 FROM "persona" WHERE "isDefault" = TRUE) THEN
-    INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isEngineeringManager", "isDefault", "lifecycleStatus", "routingPriority")
+    INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isDecisionMaker", "isDefault", "lifecycleStatus", "routingPriority")
     VALUES
     (
       'Diana',
