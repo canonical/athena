@@ -187,7 +187,7 @@ test(`personas page shows global persona list and create form`, async ({ page })
   await authenticate(page);
   await page.goto(`http://athena.localhost/persona-list`);
 
-  await expect(page.getByRole(`heading`, { level: 1, name: `Personas` })).toBeVisible();
+  await expect(page.locator(`h1`)).toHaveText(`Personas`);
   await expect(page.getByRole(`heading`, { name: `All personas` })).toBeVisible();
   await expect(page.getByRole(`heading`, { name: `Add persona` })).toBeVisible();
 });
@@ -211,8 +211,12 @@ test(`loop detail page shows Personas tab with assigned personas and assign form
   await page.goto(`http://athena.localhost/loops/${loop.id}`);
 
   await expect(page.getByRole(`heading`, { name: `Loop detail personas loop` })).toBeVisible();
+  const loopSections = page.getByRole(`navigation`, { name: `Loop sections` });
+  await expect(loopSections).toBeVisible();
+  await expect(loopSections.getByRole(`tablist`)).toBeVisible();
+  await expect(loopSections.getByRole(`tab`, { name: `Details` })).toBeVisible();
 
-  await page.getByRole(`tab`, { name: `Personas` }).click();
+  await loopSections.getByRole(`tab`, { name: `Personas` }).click();
 
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 
