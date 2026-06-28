@@ -187,7 +187,7 @@ test(`personas page shows global persona list and create form`, async ({ page })
   await authenticate(page);
   await page.goto(`http://athena.localhost/persona-list`);
 
-  await expect(page.getByRole(`heading`, { exact: true, name: `Personas` })).toBeVisible();
+  await expect(page.getByRole(`heading`, { level: 1, name: `Personas` })).toBeVisible();
   await expect(page.getByRole(`heading`, { name: `All personas` })).toBeVisible();
   await expect(page.getByRole(`heading`, { name: `Add persona` })).toBeVisible();
 });

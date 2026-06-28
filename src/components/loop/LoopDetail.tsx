@@ -61,36 +61,38 @@ export function LoopDetail({ loopId }: LoopDetailProps) {
           {feedback.message}
         </Notification>
       ) : null}
-      <nav className="p-tabs" aria-label="Loop sections">
-        <div className="p-tabs__list" role="tablist">
-          <div className="p-tabs__item" role="presentation">
-            <button
-              aria-selected={activeTab === `details`}
-              className={`p-tabs__link${activeTab === `details` ? ` is-active` : ``}`}
-              onClick={() => {
-                setActiveTab(`details`);
-                setFeedback(null);
-              }}
-              role="tab"
-              type="button"
-            >
-              Details
-            </button>
-          </div>
-          <div className="p-tabs__item" role="presentation">
-            <button
-              aria-selected={activeTab === `personas`}
-              className={`p-tabs__link${activeTab === `personas` ? ` is-active` : ``}`}
-              onClick={() => {
-                setActiveTab(`personas`);
-                setFeedback(null);
-              }}
-              role="tab"
-              type="button"
-            >
-              Personas
-            </button>
-          </div>
+      <nav aria-label="Loop sections" className="p-tabs">
+        <div aria-label="Loop sections" role="tablist">
+          <ul className="p-tabs__list">
+            <li className="p-tabs__item" role="presentation">
+              <button
+                aria-selected={activeTab === `details`}
+                className={`p-tabs__link${activeTab === `details` ? ` is-active` : ``}`}
+                onClick={() => {
+                  setActiveTab(`details`);
+                  setFeedback(null);
+                }}
+                role="tab"
+                type="button"
+              >
+                Details
+              </button>
+            </li>
+            <li className="p-tabs__item" role="presentation">
+              <button
+                aria-selected={activeTab === `personas`}
+                className={`p-tabs__link${activeTab === `personas` ? ` is-active` : ``}`}
+                onClick={() => {
+                  setActiveTab(`personas`);
+                  setFeedback(null);
+                }}
+                role="tab"
+                type="button"
+              >
+                Personas
+              </button>
+            </li>
+          </ul>
         </div>
       </nav>
       {activeTab === `details` ? <LoopDetailsTab loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} onFeedback={setFeedback} onSaved={reloadLoop} /> : null}
