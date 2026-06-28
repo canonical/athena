@@ -62,7 +62,7 @@ export function LoopDetail({ loopId }: LoopDetailProps) {
         </Notification>
       ) : null}
       <nav aria-label="Loop sections" className="p-tabs">
-        <div aria-label="Loop sections" role="tablist">
+        <div role="tablist">
           <ul className="p-tabs__list">
             <li className="p-tabs__item" role="presentation">
               <button
