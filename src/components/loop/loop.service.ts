@@ -56,7 +56,12 @@ export const queryLoopCreate = async (input: LoopInsert, userId: string): Promis
     }
 
     await client.query(`INSERT INTO "loopUser" ("loop", "user", "isAdmin") VALUES ($1, $2, TRUE)`, [loop.id, userId]);
-    await client.query(`SELECT seedDefaultPersonas($1)`, [loop.id]);
+    await client.query(
+      `INSERT INTO "loopPersona" ("loop", "persona")
+       SELECT $1, "id" FROM "persona" WHERE "isDefault" = TRUE
+       ON CONFLICT DO NOTHING`,
+      [loop.id],
+    );
     await client.query(`COMMIT`);
 
     return loop;

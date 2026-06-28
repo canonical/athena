@@ -1,20 +1,12 @@
--- Seeds default personas globally and assigns them to a newly created loop.
+-- Seeds default personas globally.
 -- Each default persona is sourced directly from docs/specs/personas/*.md and is
 -- marked isDefault = TRUE so that the application can prevent users from deleting them.
--- The function is idempotent: global defaults are inserted only once and loop
--- assignments are skipped when already present.
-CREATE OR REPLACE FUNCTION seedDefaultPersonas(p_loop_id UUID)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  -- Insert global default personas if none exist yet
-  IF NOT EXISTS (SELECT 1 FROM "persona" WHERE "isDefault" = TRUE) THEN
-    INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isDecisionMaker", "isDefault", "lifecycleStatus", "routingPriority")
-    VALUES
-    (
-      'Diana',
-      '# EM Persona: Diana
+-- Idempotent: skipped when default personas already exist.
+INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isDecisionMaker", "isDefault", "lifecycleStatus", "routingPriority")
+VALUES
+(
+  'Diana',
+  '# EM Persona: Diana
 
 ## Identity
 
@@ -103,15 +95,15 @@ When responding as Diana:
 "If this is not getting done now, it should not disappear; it needs PM ownership and a maintained specification trail."
 
 "The useful question is not whether this matters, but what we are willing to prioritize ahead of it."',
-      FALSE,
-      TRUE,
-      TRUE,
-      'active',
-      0
-    ),
-    (
-      'Clara',
-      '# IC Persona: Clara
+  FALSE,
+  TRUE,
+  TRUE,
+  'active',
+  0
+),
+(
+  'Clara',
+  '# IC Persona: Clara
 
 ## Identity
 
@@ -204,15 +196,15 @@ When responding as Clara:
 "We can move quickly here, but we should keep the change narrow and validate the touched path immediately."
 
 "Let''s solve the root cause cleanly instead of adding another layer of workaround."',
-      TRUE,
-      FALSE,
-      TRUE,
-      'active',
-      1
-    ),
-    (
-      'Elena',
-      '# Code Reviewer Persona: Elena
+  TRUE,
+  FALSE,
+  TRUE,
+  'active',
+  1
+),
+(
+  'Elena',
+  '# Code Reviewer Persona: Elena
 
 ## Identity
 
@@ -299,15 +291,15 @@ When responding as Elena:
 "I do not see a convincing validation step for the risky branch, so this change still carries regression risk."
 
 "There are no material findings in the implementation as written, but coverage on the touched behavior is still thin."',
-      FALSE,
-      FALSE,
-      TRUE,
-      'active',
-      2
-    ),
-    (
-      'Alice',
-      '# PM Persona: Alice
+  FALSE,
+  FALSE,
+  TRUE,
+  'active',
+  2
+),
+(
+  'Alice',
+  '# PM Persona: Alice
 
 ## Identity
 
@@ -394,15 +386,15 @@ When responding as Alice:
 "The happy path is clear, but the state transitions and failure cases are still underspecified."
 
 "Let''s separate the core requirement from the follow-on enhancements so the team can execute cleanly."',
-      FALSE,
-      FALSE,
-      TRUE,
-      'active',
-      3
-    ),
-    (
-      'Beatrice',
-      '# PM Persona: Beatrice
+  FALSE,
+  FALSE,
+  TRUE,
+  'active',
+  3
+),
+(
+  'Beatrice',
+  '# PM Persona: Beatrice
 
 ## Identity
 
@@ -489,15 +481,15 @@ When responding as Beatrice:
 "There are a few valid paths here, so the useful question is which tradeoff we want to accept right now."
 
 "We do not need the perfect end-state today; we need the next move that creates learning and keeps the product coherent."',
-      FALSE,
-      FALSE,
-      TRUE,
-      'active',
-      4
-    ),
-    (
-      'Grace',
-      '# QA Persona: Grace
+  FALSE,
+  FALSE,
+  TRUE,
+  'active',
+  4
+),
+(
+  'Grace',
+  '# QA Persona: Grace
 
 ## Identity
 
@@ -584,15 +576,15 @@ When responding as Grace:
 "This is reproducible under a specific state transition, which means the defect is real and not just environmental noise."
 
 "Before we call this ready, we need evidence on the risky workflow rather than assumption-based confidence."',
-      FALSE,
-      FALSE,
-      TRUE,
-      'active',
-      5
-    ),
-    (
-      'Fiona',
-      '# UX Persona: Fiona
+  FALSE,
+  FALSE,
+  TRUE,
+  'active',
+  5
+),
+(
+  'Fiona',
+  '# UX Persona: Fiona
 
 ## Identity
 
@@ -679,19 +671,10 @@ When responding as Fiona:
 "If this is difficult with a keyboard, unclear to a screen reader, or confusing under stress, the design is not finished."
 
 "We should start from the Vanilla Framework pattern in Figma and only diverge if there is a clear user benefit."',
-      FALSE,
-      FALSE,
-      TRUE,
-      'active',
-      6
-    );
-  END IF;
-
-  -- Assign all default personas to this loop (idempotent)
-  INSERT INTO "loopPersona" ("loop", "persona")
-  SELECT p_loop_id, "id"
-  FROM "persona"
-  WHERE "isDefault" = TRUE
-  ON CONFLICT DO NOTHING;
-END;
-$$;
+  FALSE,
+  FALSE,
+  TRUE,
+  'active',
+  6
+)
+ON CONFLICT ("displayName") WHERE "isDefault" = TRUE DO NOTHING;

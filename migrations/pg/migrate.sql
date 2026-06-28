@@ -19,7 +19,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 \ir ./ddls/000700.loopPersona.sql
 \ir ./ddls/999999.cleanup.sql
 
-\echo >>> Running Athena seed functions
+\echo >>> Running Athena seed data
 \ir ./seed/000600.persona.seed.sql
 
 COMMIT;

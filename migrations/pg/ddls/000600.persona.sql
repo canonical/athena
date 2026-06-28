@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS "persona" (
 );
 
 CREATE INDEX IF NOT EXISTS "idxPersonaLifecycleStatus" ON "persona"("lifecycleStatus");
+CREATE UNIQUE INDEX IF NOT EXISTS "idxPersonaDefaultDisplayName" ON "persona"("displayName") WHERE "isDefault" = TRUE;
 
 SELECT ensureUpdatedAtTrigger('persona');
 
