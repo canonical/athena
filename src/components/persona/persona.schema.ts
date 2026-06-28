@@ -27,6 +27,7 @@ export type Persona = {
   personality: string;
   usesCodingHarness: boolean;
   isDecisionMaker: boolean;
+  isDefault: boolean;
   lifecycleStatus: PersonaLifecycleStatus;
   routingPriority: number;
   createdAt: Date | string;
