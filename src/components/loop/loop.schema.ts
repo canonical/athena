@@ -52,4 +52,5 @@ export type LoopDetailsProps = {
 export type LoopPersonasProps = {
   loopId: string;
   onFeedback: (feedback: Feedback | null) => void;
+  onRoutingStatusChange: (activeRoutingCount: number) => void;
 };

@@ -36,10 +36,6 @@ const validatePersonaConstraintsAfterChange = async (loopId: string): Promise<vo
   if (counts.withCodingHarness < 1) {
     throw new PersonaValidationError(`At least one active persona with a coding harness is required.`);
   }
-
-  if (counts.routing < 1) {
-    throw new PersonaValidationError(`At least one active routing persona is required.`);
-  }
 };
 
 export const validatePersonaInsertRequest = (value: unknown): PersonaInsert => {

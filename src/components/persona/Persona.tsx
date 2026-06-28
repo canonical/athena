@@ -86,8 +86,6 @@ export function Persona({ personaId }: PersonaDetailProps) {
         <dl>
           <dt>Lifecycle status</dt>
           <dd>{lifecycleStatusLabel[persona.lifecycleStatus] ?? persona.lifecycleStatus}</dd>
-          <dt>Routing priority</dt>
-          <dd>{persona.routingPriority}</dd>
           <dt>Coding harness</dt>
           <dd>{persona.usesCodingHarness ? `Yes` : `No`}</dd>
           <dt>Routing persona</dt>

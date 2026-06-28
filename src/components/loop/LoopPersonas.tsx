@@ -1,7 +1,7 @@
 import { Button, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
 import { useCurrentUser } from "@components/authentication/authentication.query.js";
 import { usePersonaList, usePersonaListAll } from "@components/persona/persona.query.js";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { isPersonaOwner, PersonaEditor, personaEditorKey } from "../persona/PersonaEditor.js";
 import { assignPersonaToLoop, deletePersona } from "../persona/persona.client.js";
 import type { Persona as PersonaRecord } from "../persona/persona.schema.js";
@@ -13,7 +13,7 @@ const lifecycleStatusLabel: Record<string, string> = {
   archived: `Archived`,
 };
 
-export function LoopPersonas({ loopId, onFeedback }: LoopPersonasProps) {
+export function LoopPersonas({ loopId, onFeedback, onRoutingStatusChange }: LoopPersonasProps) {
   const currentUser = useCurrentUser();
   const { state: personaListState, reload: reloadPersonaList } = usePersonaList(loopId);
   const { state: personaListAllState } = usePersonaListAll();
@@ -26,6 +26,14 @@ export function LoopPersonas({ loopId, onFeedback }: LoopPersonasProps) {
   const assignedIds = personaListState.status === `success` ? new Set(personaListState.personas.map((p) => p.id)) : new Set<string>();
 
   const unassignedPersonaList = personaListAllState.status === `success` ? personaListAllState.personas.filter((p) => !assignedIds.has(p.id)) : [];
+
+  const activeRoutingCount = personaListState.status === `success` ? personaListState.personas.filter((p) => p.isRouting && p.lifecycleStatus === `active`).length : null;
+
+  useEffect(() => {
+    if (activeRoutingCount !== null) {
+      onRoutingStatusChange(activeRoutingCount);
+    }
+  }, [activeRoutingCount, onRoutingStatusChange]);
 
   const handleEditorSuccess = (message: string) => {
     onFeedback({
@@ -106,8 +114,20 @@ export function LoopPersonas({ loopId, onFeedback }: LoopPersonasProps) {
 
   const isOwner = (persona: PersonaRecord): boolean => isPersonaOwner(persona, currentUser);
 
+  const pausedReason =
+    activeRoutingCount === 0
+      ? `No active routing persona is assigned. Assign or activate a routing persona to resume the loop.`
+      : activeRoutingCount !== null && activeRoutingCount > 1
+        ? `${activeRoutingCount} active routing personas are assigned. Exactly one is required. Remove or archive the extras to resume the loop.`
+        : null;
+
   return (
     <>
+      {pausedReason ? (
+        <Notification severity={NotificationSeverity.CAUTION} title="Loop is paused">
+          {pausedReason}
+        </Notification>
+      ) : null}
       <PersonaEditor cloneSource={cloneSource} editingPersona={editingPersona} key={personaEditorKey(editingPersona, cloneSource)} loopId={loopId} onCancel={handleEditorCancel} onSuccess={handleEditorSuccess} />
       {unassignedPersonaList.length > 0 ? (
         <div className="p-strip is-shallow">
@@ -137,14 +157,13 @@ export function LoopPersonas({ loopId, onFeedback }: LoopPersonasProps) {
         {personaListState.status === `success` && personaListState.personas.length === 0 ? <p className="p-text--default">No personas assigned to this loop yet. Add or assign a persona above.</p> : null}
         {personaListState.status === `success` && personaListState.personas.length > 0 ? (
           <MainTable
-            headers={[{ content: `Display name` }, { content: `Coding harness` }, { content: `Status` }, { content: `Priority` }, { content: `Actions` }]}
+            headers={[{ content: `Display name` }, { content: `Coding harness` }, { content: `Status` }, { content: `Actions` }]}
             rows={personaListState.personas.map((persona) => ({
               key: persona.id,
               columns: [
                 { content: persona.isRouting ? `${persona.displayName} (R)` : persona.displayName },
                 { content: persona.usesCodingHarness ? `Yes` : `No` },
                 { content: lifecycleStatusLabel[persona.lifecycleStatus] ?? persona.lifecycleStatus },
-                { content: persona.routingPriority },
                 {
                   content: (
                     <div>

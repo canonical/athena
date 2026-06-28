@@ -2,7 +2,7 @@
 -- Each default persona is sourced directly from docs/specs/personas/*.md and is
 -- marked isDefault = TRUE so that the application can prevent users from deleting them.
 -- Idempotent: skipped when default personas already exist.
-INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "isDefault", "lifecycleStatus", "routingPriority")
+INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "isDefault", "lifecycleStatus")
 VALUES
 (
   'Diana',
@@ -98,8 +98,7 @@ When responding as Diana:
   FALSE,
   TRUE,
   TRUE,
-  'active',
-  0
+  'active'
 ),
 (
   'Clara',
@@ -199,8 +198,7 @@ When responding as Clara:
   TRUE,
   FALSE,
   TRUE,
-  'active',
-  1
+  'active'
 ),
 (
   'Elena',
@@ -294,8 +292,7 @@ When responding as Elena:
   FALSE,
   FALSE,
   TRUE,
-  'active',
-  2
+  'active'
 ),
 (
   'Alice',
@@ -389,8 +386,7 @@ When responding as Alice:
   FALSE,
   FALSE,
   TRUE,
-  'active',
-  3
+  'active'
 ),
 (
   'Beatrice',
@@ -484,8 +480,7 @@ When responding as Beatrice:
   FALSE,
   FALSE,
   TRUE,
-  'active',
-  4
+  'active'
 ),
 (
   'Grace',
@@ -579,8 +574,7 @@ When responding as Grace:
   FALSE,
   FALSE,
   TRUE,
-  'active',
-  5
+  'active'
 ),
 (
   'Fiona',
@@ -674,7 +668,6 @@ When responding as Fiona:
   FALSE,
   FALSE,
   TRUE,
-  'active',
-  6
+  'active'
 )
 ON CONFLICT ("displayName") WHERE "isDefault" = TRUE DO NOTHING;

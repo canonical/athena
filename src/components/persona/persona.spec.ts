@@ -58,7 +58,6 @@ test(`personas support create read update and delete through the API`, async ({ 
       personality: `You are a senior IC.`,
       usesCodingHarness: true,
       lifecycleStatus: `active`,
-      routingPriority: 1,
     },
   });
   expect(createResponse.status()).toBe(201);
@@ -78,14 +77,12 @@ test(`personas support create read update and delete through the API`, async ({ 
       personality: `You are a senior IC, updated.`,
       usesCodingHarness: true,
       lifecycleStatus: `active`,
-      routingPriority: 2,
     },
   });
   expect(updateResponse.status()).toBe(200);
   await expect(updateResponse.json()).resolves.toMatchObject({
     id: created.id,
     displayName: `IC Persona Updated`,
-    routingPriority: 2,
   });
 
   const deleteResponse = await page.request.delete(`http://athena.localhost/api/loops/${loop.id}/personas/${created.id}`);
@@ -117,7 +114,7 @@ test(`routing persona cannot be updated to use coding harness`, async ({ page })
   const loop = await createLoop(page, `EM harness guard loop`);
 
   const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
-  const personas = (await listResponse.json()) as Array<{ id: string; isRouting: boolean; displayName: string; personality: string; lifecycleStatus: string; routingPriority: number }>;
+  const personas = (await listResponse.json()) as Array<{ id: string; isRouting: boolean; displayName: string; personality: string; lifecycleStatus: string }>;
   const routingPersona = personas.find((p) => p.isRouting);
   expect(routingPersona).toBeDefined();
 
@@ -131,7 +128,6 @@ test(`routing persona cannot be updated to use coding harness`, async ({ page })
       personality: routingPersona.personality,
       usesCodingHarness: true,
       lifecycleStatus: routingPersona.lifecycleStatus,
-      routingPriority: routingPersona.routingPriority,
     },
   });
   expect(updateResponse.status()).toBe(400);
@@ -144,7 +140,7 @@ test(`deactivating the last coding harness persona is rejected`, async ({ page }
   const loop = await createLoop(page, `Harness constraint loop`);
 
   const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
-  const personas = (await listResponse.json()) as Array<{ id: string; displayName: string; personality: string; usesCodingHarness: boolean; isRouting: boolean; lifecycleStatus: string; routingPriority: number }>;
+  const personas = (await listResponse.json()) as Array<{ id: string; displayName: string; personality: string; usesCodingHarness: boolean; isRouting: boolean; lifecycleStatus: string }>;
   const ic = personas.find((p) => p.usesCodingHarness && !p.isRouting);
   expect(ic).toBeDefined();
 
@@ -158,7 +154,6 @@ test(`deactivating the last coding harness persona is rejected`, async ({ page }
       personality: ic.personality,
       usesCodingHarness: ic.usesCodingHarness,
       lifecycleStatus: `archived`,
-      routingPriority: ic.routingPriority,
     },
   });
   expect(updateResponse.status()).toBe(400);
@@ -176,7 +171,6 @@ test(`personas reject missing required fields`, async ({ page }) => {
       personality: `Valid personality`,
       usesCodingHarness: false,
       lifecycleStatus: `active`,
-      routingPriority: 0,
     },
   });
   expect(response.status()).toBe(400);

@@ -51,14 +51,13 @@ For each loop, the admin selects:
   "isRouting": boolean,
   "isDefault": boolean,
   "owner": "string | null (user ID of the creator; null for default/system personas)",
-  "lifecycleStatus": "string (active, deprecated, archived)",
-  "routingPriority": integer
+  "lifecycleStatus": "string (active, deprecated, archived)"
 }
 ```
 
 ## Validation and safety gates
 
-1. At least one EM persona must be enabled in any loop.
+1. Exactly one active routing persona must be assigned to a loop for the loop to function. A loop with zero or more than one active routing persona is considered **paused** and will not process events until the configuration is corrected.
 2. At least one persona with `usesCodingHarness: true` must be enabled in any loop.
 3. Persona routing must be acyclic (no infinite handoff loops).
 4. If `isRouting` is true, `usesCodingHarness` must be false.

@@ -58,7 +58,7 @@ export function PersonaList() {
         {personaListState.status === `success` && personaListState.personas.length === 0 ? <p className="p-text--default">No personas yet. Create a persona above.</p> : null}
         {personaListState.status === `success` && personaListState.personas.length > 0 ? (
           <MainTable
-            headers={[{ content: `Display name` }, { content: `Coding harness` }, { content: `Status` }, { content: `Priority` }, { content: `Actions` }]}
+            headers={[{ content: `Display name` }, { content: `Coding harness` }, { content: `Status` }, { content: `Actions` }]}
             rows={personaListState.personas.map((persona) => ({
               key: persona.id,
               columns: [
@@ -71,7 +71,6 @@ export function PersonaList() {
                 },
                 { content: persona.usesCodingHarness ? `Yes` : `No` },
                 { content: lifecycleStatusLabel[persona.lifecycleStatus] ?? persona.lifecycleStatus },
-                { content: persona.routingPriority },
                 {
                   content: isOwner(persona) ? (
                     <Button

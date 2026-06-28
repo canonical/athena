@@ -11,7 +11,6 @@ export const personaInsertSchema = z.object({
   personality: requiredString(`personality is required.`),
   usesCodingHarness: z.boolean({ message: `usesCodingHarness is required.` }),
   lifecycleStatus: z.enum(personaLifecycleStatuses).default(`active`),
-  routingPriority: z.number().int().min(0).default(0),
 });
 
 export const personaUpdateSchema = z.object({
@@ -19,7 +18,6 @@ export const personaUpdateSchema = z.object({
   personality: requiredString(`personality is required.`),
   usesCodingHarness: z.boolean({ message: `usesCodingHarness is required.` }),
   lifecycleStatus: z.enum(personaLifecycleStatuses),
-  routingPriority: z.number().int().min(0).default(0),
 });
 
 export type Persona = {
@@ -31,7 +29,6 @@ export type Persona = {
   isDefault: boolean;
   owner: string | null;
   lifecycleStatus: PersonaLifecycleStatus;
-  routingPriority: number;
   createdAt: Date | string;
   updatedAt: Date | string;
 };
@@ -103,7 +100,6 @@ export type FormState = {
   personality: string;
   usesCodingHarness: boolean;
   lifecycleStatus: (typeof personaLifecycleStatuses)[number];
-  routingPriority: number;
 };
 
 export type PersonaDetailProps = {

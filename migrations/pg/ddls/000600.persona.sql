@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS "persona" (
   "isDefault" BOOLEAN NOT NULL DEFAULT FALSE,
   "owner" TEXT REFERENCES "user"("id") ON DELETE SET NULL,
   "lifecycleStatus" TEXT NOT NULL DEFAULT 'active' CHECK ("lifecycleStatus" IN ('active', 'deprecated', 'archived')),
-  "routingPriority" INT NOT NULL DEFAULT 0,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -26,7 +26,6 @@ const emptyForm = (): FormState => ({
   personality: ``,
   usesCodingHarness: false,
   lifecycleStatus: `active`,
-  routingPriority: 0,
 });
 
 export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemplates, onSuccess, onCancel }: PersonaEditorProps) {
@@ -37,7 +36,6 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
           personality: editingPersona.personality,
           usesCodingHarness: editingPersona.usesCodingHarness,
           lifecycleStatus: editingPersona.lifecycleStatus,
-          routingPriority: editingPersona.routingPriority,
         }
       : cloneSource
         ? {
@@ -45,7 +43,6 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
             personality: cloneSource.personality,
             usesCodingHarness: cloneSource.usesCodingHarness,
             lifecycleStatus: cloneSource.lifecycleStatus,
-            routingPriority: cloneSource.routingPriority,
           }
         : emptyForm(),
   );
@@ -58,7 +55,6 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
       personality: ref.personality,
       usesCodingHarness: ref.usesCodingHarness,
       lifecycleStatus: `active`,
-      routingPriority: 0,
     });
     setFeedback(null);
   };
@@ -132,8 +128,6 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
             options={personaLifecycleStatuses.map((status) => ({ value: status, label: lifecycleStatusLabel[status] ?? status }))}
             value={form.lifecycleStatus}
           />
-          <label htmlFor="persona-routing-priority">Routing priority</label>
-          <input id="persona-routing-priority" min={0} name="persona-routing-priority" onChange={(event) => setForm((prev) => ({ ...prev, routingPriority: Number(event.target.value) }))} type="number" value={form.routingPriority} />
           <label>
             <input checked={form.usesCodingHarness} name="persona-uses-coding-harness" onChange={(event) => setForm((prev) => ({ ...prev, usesCodingHarness: event.target.checked }))} type="checkbox" />
             {` Uses coding harness`}

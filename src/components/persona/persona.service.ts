@@ -1,9 +1,9 @@
 import { getPool } from "@components/postgres/postgres.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 
-const personaColumns = `p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."owner", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"`;
+const personaColumns = `p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."owner", p."lifecycleStatus", p."createdAt", p."updatedAt"`;
 
-const personaColumnsUnqualified = `"id", "displayName", "personality", "usesCodingHarness", "isRouting", "isDefault", "owner", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"`;
+const personaColumnsUnqualified = `"id", "displayName", "personality", "usesCodingHarness", "isRouting", "isDefault", "owner", "lifecycleStatus", "createdAt", "updatedAt"`;
 
 export const queryPersonaList = async (loopId: string): Promise<Persona[]> => {
   const result = await getPool().query<Persona>(
@@ -12,7 +12,7 @@ export const queryPersonaList = async (loopId: string): Promise<Persona[]> => {
       FROM "persona" p
       JOIN "loopPersona" lp ON lp."persona" = p."id"
       WHERE lp."loop" = $1
-      ORDER BY p."isRouting" DESC, p."routingPriority" ASC, p."createdAt" ASC
+      ORDER BY p."isRouting" DESC, p."createdAt" ASC
     `,
     [loopId],
   );
@@ -25,7 +25,7 @@ export const queryPersonaListAll = async (): Promise<Persona[]> => {
     `
       SELECT ${personaColumnsUnqualified}
       FROM "persona"
-      ORDER BY "isRouting" DESC, "routingPriority" ASC, "displayName" ASC
+      ORDER BY "isRouting" DESC, "displayName" ASC
     `,
   );
 
@@ -94,11 +94,11 @@ export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, i
 
     const result = await client.query<Persona>(
       `
-        INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "owner", "lifecycleStatus", "routingPriority")
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "owner", "lifecycleStatus")
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING ${personaColumnsUnqualified}
       `,
-      [input.displayName, input.personality, input.usesCodingHarness, isRouting, ownerId, input.lifecycleStatus, input.routingPriority],
+      [input.displayName, input.personality, input.usesCodingHarness, isRouting, ownerId, input.lifecycleStatus],
     );
 
     const [persona] = result.rows;
@@ -122,11 +122,11 @@ export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, i
 export const queryPersonaCreateGlobal = async (input: PersonaInsert, isRouting: boolean, ownerId: string | null): Promise<Persona> => {
   const result = await getPool().query<Persona>(
     `
-      INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "owner", "lifecycleStatus", "routingPriority")
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "owner", "lifecycleStatus")
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING ${personaColumnsUnqualified}
     `,
-    [input.displayName, input.personality, input.usesCodingHarness, isRouting, ownerId, input.lifecycleStatus, input.routingPriority],
+    [input.displayName, input.personality, input.usesCodingHarness, isRouting, ownerId, input.lifecycleStatus],
   );
 
   const [persona] = result.rows;
@@ -146,13 +146,12 @@ export const queryPersonaUpdate = async (personaId: string, loopId: string, inpu
         "displayName" = $1,
         "personality" = $2,
         "usesCodingHarness" = $3,
-        "lifecycleStatus" = $4,
-        "routingPriority" = $5
+        "lifecycleStatus" = $4
       FROM "loopPersona" lp
-      WHERE p."id" = $6 AND lp."persona" = p."id" AND lp."loop" = $7
-      RETURNING p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."owner", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"
+      WHERE p."id" = $5 AND lp."persona" = p."id" AND lp."loop" = $6
+      RETURNING p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."owner", p."lifecycleStatus", p."createdAt", p."updatedAt"
     `,
-    [input.displayName, input.personality, input.usesCodingHarness, input.lifecycleStatus, input.routingPriority, personaId, loopId],
+    [input.displayName, input.personality, input.usesCodingHarness, input.lifecycleStatus, personaId, loopId],
   );
 
   return result.rows[0];
@@ -166,12 +165,11 @@ export const queryPersonaUpdateGlobal = async (personaId: string, input: Persona
         "displayName" = $1,
         "personality" = $2,
         "usesCodingHarness" = $3,
-        "lifecycleStatus" = $4,
-        "routingPriority" = $5
-      WHERE "id" = $6
+        "lifecycleStatus" = $4
+      WHERE "id" = $5
       RETURNING ${personaColumnsUnqualified}
     `,
-    [input.displayName, input.personality, input.usesCodingHarness, input.lifecycleStatus, input.routingPriority, personaId],
+    [input.displayName, input.personality, input.usesCodingHarness, input.lifecycleStatus, personaId],
   );
 
   return result.rows[0];

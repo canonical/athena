@@ -6,7 +6,6 @@ export type PersonaPayload = {
   personality: string;
   usesCodingHarness: boolean;
   lifecycleStatus: string;
-  routingPriority: number;
 };
 
 export const personaApiPaths = {
