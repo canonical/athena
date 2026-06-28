@@ -1,8 +1,19 @@
 import { Button, Notification, NotificationSeverity, Select } from "@canonical/react-components";
+import type { User } from "@components/authentication/session.schema.js";
 import { type FormEvent, useState } from "react";
 import { createPersona, createPersonaGlobal, updatePersona, updatePersonaGlobal } from "./persona.client.js";
 import type { Persona as PersonaRecord, ReferencePersona } from "./persona.schema.js";
 import { personaLifecycleStatuses } from "./persona.schema.js";
+
+export const isPersonaOwner = (persona: PersonaRecord, currentUser: User | null): boolean => {
+  if (!currentUser || !persona.owner) {
+    return false;
+  }
+
+  return persona.owner === currentUser.id;
+};
+
+export const personaEditorKey = (editingPersona: PersonaRecord | null, cloneSource: PersonaRecord | null): string => editingPersona?.id ?? (cloneSource ? `clone-${cloneSource.id}` : `new`);
 
 type Feedback = {
   severity: NotificationSeverity;

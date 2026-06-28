@@ -59,7 +59,12 @@ const getPersonaId = (request: Request, response: Response): string | undefined 
 };
 
 const getUserId = (response: Response): string => {
-  const user = response.locals.user as AuthenticatedUser;
+  const user = response.locals.user as AuthenticatedUser | undefined;
+
+  if (!user) {
+    throw new Error(`Authenticated user not found in request context.`);
+  }
+
   return user.id;
 };
 

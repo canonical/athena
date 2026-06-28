@@ -2,7 +2,7 @@ import { Button, MainTable, Notification, NotificationSeverity } from "@canonica
 import { useCurrentUser } from "@components/authentication/authentication.query.js";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { PersonaEditor } from "./PersonaEditor.js";
+import { isPersonaOwner, PersonaEditor, personaEditorKey } from "./PersonaEditor.js";
 import { usePersonaListAll } from "./persona.query.js";
 import type { Persona as PersonaRecord } from "./persona.schema.js";
 
@@ -40,13 +40,7 @@ export function PersonaList() {
     reloadPersonaList();
   };
 
-  const isOwner = (persona: PersonaRecord): boolean => {
-    if (!currentUser || !persona.owner) {
-      return false;
-    }
-
-    return persona.owner === currentUser.id;
-  };
+  const isOwner = (persona: PersonaRecord): boolean => isPersonaOwner(persona, currentUser);
 
   return (
     <section className="athena-home">
@@ -58,7 +52,7 @@ export function PersonaList() {
           {feedback.message}
         </Notification>
       ) : null}
-      <PersonaEditor cloneSource={cloneSource} editingPersona={editingPersona} key={editingPersona?.id ?? (cloneSource ? `clone-${cloneSource.id}` : `new`)} onCancel={resetEditor} onSuccess={handleEditorSuccess} />
+      <PersonaEditor cloneSource={cloneSource} editingPersona={editingPersona} key={personaEditorKey(editingPersona, cloneSource)} onCancel={resetEditor} onSuccess={handleEditorSuccess} />
       <div className="p-strip is-shallow">
         <h2 className="p-heading--4">All personas</h2>
         {personaListState.status === `loading` ? <p className="p-text--default">Loading personas...</p> : null}

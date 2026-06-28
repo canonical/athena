@@ -2,7 +2,7 @@ import { Button, MainTable, Notification, NotificationSeverity, Select } from "@
 import { useCurrentUser } from "@components/authentication/authentication.query.js";
 import { usePersonaList, usePersonaListAll } from "@components/persona/persona.query.js";
 import { type FormEvent, useState } from "react";
-import { PersonaEditor } from "../persona/PersonaEditor.js";
+import { isPersonaOwner, PersonaEditor, personaEditorKey } from "../persona/PersonaEditor.js";
 import { assignPersonaToLoop, deletePersona } from "../persona/persona.client.js";
 import type { Persona as PersonaRecord } from "../persona/persona.schema.js";
 
@@ -114,17 +114,11 @@ export function LoopPersonas({ loopId, onFeedback }: LoopPersonasProps) {
     }
   };
 
-  const isOwner = (persona: PersonaRecord): boolean => {
-    if (!currentUser || !persona.owner) {
-      return false;
-    }
-
-    return persona.owner === currentUser.id;
-  };
+  const isOwner = (persona: PersonaRecord): boolean => isPersonaOwner(persona, currentUser);
 
   return (
     <>
-      <PersonaEditor cloneSource={cloneSource} editingPersona={editingPersona} key={editingPersona?.id ?? (cloneSource ? `clone-${cloneSource.id}` : `new`)} loopId={loopId} onCancel={handleEditorCancel} onSuccess={handleEditorSuccess} />
+      <PersonaEditor cloneSource={cloneSource} editingPersona={editingPersona} key={personaEditorKey(editingPersona, cloneSource)} loopId={loopId} onCancel={handleEditorCancel} onSuccess={handleEditorSuccess} />
       {unassignedPersonaList.length > 0 ? (
         <div className="p-strip is-shallow">
           <h2 className="p-heading--4">Assign an existing persona</h2>
