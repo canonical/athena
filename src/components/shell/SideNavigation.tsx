@@ -20,7 +20,7 @@ export const sideNavigationItems: SideNavigationProps["items"] = [
       {
         icon: "applications",
         label: "Loops",
-        href: `/loops`,
+        href: `/loop-list`,
       },
       {
         icon: "queue",

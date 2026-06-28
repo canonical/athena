@@ -72,7 +72,7 @@ test(`loops reject missing names`, async ({ page }) => {
 
 test(`loops page supports create update and delete`, async ({ page }) => {
   await authenticate(page);
-  await page.goto(`http://athena.localhost/loops`);
+  await page.goto(`http://athena.localhost/loop-list`);
 
   await expect(page.getByRole(`heading`, { name: `Loops` })).toBeVisible();
   await page.getByLabel(`Loop name`).fill(`UI loop`);

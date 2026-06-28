@@ -1,3 +1,4 @@
+import type { NotificationSeverity } from "@canonical/react-components";
 import { z } from "zod";
 
 const requiredString = (message: string) => z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string(message));
@@ -26,4 +27,29 @@ export type LoopUser = {
   user: string;
   isAdmin: boolean;
   createdAt: Date | string;
+};
+
+export type Feedback = {
+  severity: (typeof NotificationSeverity)[keyof typeof NotificationSeverity];
+  title: string;
+  message: string;
+};
+
+export type Tab = "details" | "personas";
+
+export type LoopProps = {
+  loopId: string;
+};
+
+export type LoopDetailsProps = {
+  loopId: string;
+  loopName: string;
+  loopDescription: string;
+  onFeedback: (feedback: Feedback | null) => void;
+  onSaved: () => void;
+};
+
+export type LoopPersonasProps = {
+  loopId: string;
+  onFeedback: (feedback: Feedback | null) => void;
 };

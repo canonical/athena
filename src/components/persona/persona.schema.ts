@@ -1,3 +1,4 @@
+import type { NotificationSeverity } from "@canonical/react-components";
 import { z } from "zod";
 
 export const personaLifecycleStatuses = [`active`, `deprecated`, `archived`] as const;
@@ -90,3 +91,30 @@ export const referencePersonaCatalog: ReferencePersona[] = [
     isRouting: false,
   },
 ];
+
+export type Feedback = {
+  severity: (typeof NotificationSeverity)[keyof typeof NotificationSeverity];
+  title: string;
+  message: string;
+};
+
+export type FormState = {
+  displayName: string;
+  personality: string;
+  usesCodingHarness: boolean;
+  lifecycleStatus: (typeof personaLifecycleStatuses)[number];
+  routingPriority: number;
+};
+
+export type PersonaDetailProps = {
+  personaId: string;
+};
+
+export type PersonaEditorProps = {
+  loopId?: string;
+  editingPersona: Persona | null;
+  cloneSource?: Persona | null;
+  catalogTemplates?: ReferencePersona[];
+  onSuccess: (message: string) => void;
+  onCancel?: () => void;
+};

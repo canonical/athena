@@ -5,22 +5,12 @@ import { type FormEvent, useState } from "react";
 import { isPersonaOwner, PersonaEditor, personaEditorKey } from "../persona/PersonaEditor.js";
 import { assignPersonaToLoop, deletePersona } from "../persona/persona.client.js";
 import type { Persona as PersonaRecord } from "../persona/persona.schema.js";
-
-type Feedback = {
-  severity: NotificationSeverity;
-  title: string;
-  message: string;
-};
+import type { LoopPersonasProps } from "./loop.schema.js";
 
 const lifecycleStatusLabel: Record<string, string> = {
   active: `Active`,
   deprecated: `Deprecated`,
   archived: `Archived`,
-};
-
-type LoopPersonasProps = {
-  loopId: string;
-  onFeedback: (feedback: Feedback | null) => void;
 };
 
 export function LoopPersonas({ loopId, onFeedback }: LoopPersonasProps) {

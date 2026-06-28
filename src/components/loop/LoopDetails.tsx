@@ -1,21 +1,8 @@
 import { Button, NotificationSeverity } from "@canonical/react-components";
 import { type FormEvent, useState } from "react";
 import { updateLoop } from "./loop.client.js";
+import type { LoopDetailsProps } from "./loop.schema.js";
 import { loopUpdateSchema } from "./loop.schema.js";
-
-type Feedback = {
-  severity: NotificationSeverity;
-  title: string;
-  message: string;
-};
-
-type LoopDetailsProps = {
-  loopId: string;
-  loopName: string;
-  loopDescription: string;
-  onFeedback: (feedback: Feedback | null) => void;
-  onSaved: () => void;
-};
 
 export function LoopDetails({ loopId, loopName, loopDescription, onFeedback, onSaved }: LoopDetailsProps) {
   const [editName, setEditName] = useState(loopName);

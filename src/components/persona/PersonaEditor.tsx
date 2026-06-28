@@ -2,7 +2,7 @@ import { Button, Notification, NotificationSeverity, Select } from "@canonical/r
 import type { User } from "@components/authentication/session.schema.js";
 import { type FormEvent, useState } from "react";
 import { createPersona, createPersonaGlobal, updatePersona, updatePersonaGlobal } from "./persona.client.js";
-import type { Persona as PersonaRecord, ReferencePersona } from "./persona.schema.js";
+import type { Feedback, FormState, PersonaEditorProps, Persona as PersonaRecord, ReferencePersona } from "./persona.schema.js";
 import { personaLifecycleStatuses } from "./persona.schema.js";
 
 export const isPersonaOwner = (persona: PersonaRecord, currentUser: User | null): boolean => {
@@ -14,20 +14,6 @@ export const isPersonaOwner = (persona: PersonaRecord, currentUser: User | null)
 };
 
 export const personaEditorKey = (editingPersona: PersonaRecord | null, cloneSource: PersonaRecord | null): string => editingPersona?.id ?? (cloneSource ? `clone-${cloneSource.id}` : `new`);
-
-type Feedback = {
-  severity: NotificationSeverity;
-  title: string;
-  message: string;
-};
-
-type FormState = {
-  displayName: string;
-  personality: string;
-  usesCodingHarness: boolean;
-  lifecycleStatus: (typeof personaLifecycleStatuses)[number];
-  routingPriority: number;
-};
 
 const lifecycleStatusLabel: Record<string, string> = {
   active: `Active`,
@@ -42,15 +28,6 @@ const emptyForm = (): FormState => ({
   lifecycleStatus: `active`,
   routingPriority: 0,
 });
-
-type PersonaEditorProps = {
-  loopId?: string;
-  editingPersona: PersonaRecord | null;
-  cloneSource?: PersonaRecord | null;
-  catalogTemplates?: ReferencePersona[];
-  onSuccess: (message: string) => void;
-  onCancel?: () => void;
-};
 
 export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemplates, onSuccess, onCancel }: PersonaEditorProps) {
   const [form, setForm] = useState<FormState>(

@@ -208,7 +208,7 @@ test(`loop detail page shows Personas tab with assigned personas and assign form
   await authenticate(page);
 
   const loop = await createLoop(page, `Loop detail personas loop`);
-  await page.goto(`http://athena.localhost/loops/${loop.id}`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}`);
 
   await expect(page.getByRole(`heading`, { name: `Loop detail personas loop` })).toBeVisible();
   const loopSections = page.getByRole(`navigation`, { name: `Loop sections` });

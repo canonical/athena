@@ -4,13 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { isPersonaOwner, PersonaEditor, personaEditorKey } from "./PersonaEditor.js";
 import { usePersonaListAll } from "./persona.query.js";
-import type { Persona as PersonaRecord } from "./persona.schema.js";
-
-type Feedback = {
-  severity: NotificationSeverity;
-  title: string;
-  message: string;
-};
+import type { Feedback, Persona as PersonaRecord } from "./persona.schema.js";
 
 const lifecycleStatusLabel: Record<string, string> = {
   active: `Active`,

@@ -3,18 +3,7 @@ import { useState } from "react";
 import { LoopDetails } from "./LoopDetails.js";
 import { LoopPersonas } from "./LoopPersonas.js";
 import { useLoop } from "./loop.query.js";
-
-type Tab = "details" | "personas";
-
-type Feedback = {
-  severity: NotificationSeverity;
-  title: string;
-  message: string;
-};
-
-type LoopProps = {
-  loopId: string;
-};
+import type { Feedback, LoopProps, Tab } from "./loop.schema.js";
 
 export function Loop({ loopId }: LoopProps) {
   const { state: loopState, reload: reloadLoop } = useLoop(loopId);

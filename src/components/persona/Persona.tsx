@@ -3,21 +3,12 @@ import { useLoopList } from "@components/loop/loop.query.js";
 import { type FormEvent, useState } from "react";
 import { assignPersonaToLoop } from "./persona.client.js";
 import { usePersonaById } from "./persona.query.js";
-
-type Feedback = {
-  severity: NotificationSeverity;
-  title: string;
-  message: string;
-};
+import type { Feedback, PersonaDetailProps } from "./persona.schema.js";
 
 const lifecycleStatusLabel: Record<string, string> = {
   active: `Active`,
   deprecated: `Deprecated`,
   archived: `Archived`,
-};
-
-type PersonaDetailProps = {
-  personaId: string;
 };
 
 export function Persona({ personaId }: PersonaDetailProps) {

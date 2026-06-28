@@ -14,8 +14,8 @@ import "./shell.scss";
 
 const rootPath = `/`;
 const authenticationPath = `/authentication`;
-const loopsPath = `/loops`;
-const loopDetailPath = `/loops/$loopId`;
+const loopListPath = `/loop-list`;
+const loopDetailPath = `/loop/$loopId`;
 const eventsPath = `/events`;
 const personaListPath = `/persona-list`;
 const personaDetailPath = `/personas/$personaId`;
@@ -109,9 +109,9 @@ const authenticationRoute = createRoute({
   component: AuthenticationRouteView,
 });
 
-const loopRoute = createRoute({
+const loopListRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: loopsPath,
+  path: loopListPath,
   component: LoopList,
 });
 
@@ -139,7 +139,7 @@ const personaDetailRoute = createRoute({
   component: PersonaDetailView,
 });
 
-const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopRoute, loopDetailRoute, eventRoute, personaRoute, personaDetailRoute]);
+const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopListRoute, loopDetailRoute, eventRoute, personaRoute, personaDetailRoute]);
 
 export const router = createRouter({
   routeTree,

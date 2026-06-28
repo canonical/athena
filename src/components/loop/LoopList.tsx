@@ -2,17 +2,9 @@ import { Button, MainTable, Notification, NotificationSeverity } from "@canonica
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { createLoop, deleteLoop, updateLoop } from "./loop.client.js";
-import type { LoopListState } from "./loop.query.js";
 import { useLoopList } from "./loop.query.js";
+import type { Feedback, Loop } from "./loop.schema.js";
 import { loopInsertSchema, loopUpdateSchema } from "./loop.schema.js";
-
-type Feedback = {
-  severity: NotificationSeverity;
-  title: string;
-  message: string;
-};
-
-type LoopItem = Extract<LoopListState, { status: "success" }>["loops"][number];
 
 const formatTimestamp = (value: Date | string) => new Date(value).toLocaleString();
 
@@ -20,7 +12,7 @@ export function LoopList() {
   const { state, reload } = useLoopList();
   const [createName, setCreateName] = useState(``);
   const [createDescription, setCreateDescription] = useState(``);
-  const [editingLoop, setEditingLoop] = useState<LoopItem | null>(null);
+  const [editingLoop, setEditingLoop] = useState<Loop | null>(null);
   const [editName, setEditName] = useState(``);
   const [editDescription, setEditDescription] = useState(``);
   const [busyLoopId, setBusyLoopId] = useState<string | null>(null);
@@ -35,7 +27,7 @@ export function LoopList() {
     setIsSaving(false);
   };
 
-  const startEditing = (loop: LoopItem) => {
+  const startEditing = (loop: Loop) => {
     setEditingLoop(loop);
     setEditName(loop.name);
     setEditDescription(loop.description ?? ``);
@@ -130,7 +122,7 @@ export function LoopList() {
     }
   };
 
-  const handleDelete = async (loop: LoopItem) => {
+  const handleDelete = async (loop: Loop) => {
     setBusyLoopId(loop.id);
     setFeedback(null);
 
@@ -215,7 +207,7 @@ export function LoopList() {
             columns: [
               {
                 content: (
-                  <Link to={`/loops/$loopId`} params={{ loopId: loop.id }}>
+                  <Link to={`/loop/$loopId`} params={{ loopId: loop.id }}>
                     {loop.name}
                   </Link>
                 ),
