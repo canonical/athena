@@ -46,12 +46,7 @@ export function PersonaList() {
           {feedback.message}
         </Notification>
       ) : null}
-      <PersonaEditor
-        editingPersona={editingPersona}
-        key={editingPersona?.id ?? `new`}
-        onCancel={resetEditor}
-        onSuccess={handleEditorSuccess}
-      />
+      <PersonaEditor editingPersona={editingPersona} key={editingPersona?.id ?? `new`} onCancel={resetEditor} onSuccess={handleEditorSuccess} />
       <div className="p-strip is-shallow">
         <h2 className="p-heading--4">All personas</h2>
         {personasState.status === `loading` ? <p className="p-text--default">Loading personas...</p> : null}
@@ -60,9 +55,7 @@ export function PersonaList() {
             {personasState.message}
           </Notification>
         ) : null}
-        {personasState.status === `success` && personasState.personas.length === 0 ? (
-          <p className="p-text--default">No personas yet. Create a persona above.</p>
-        ) : null}
+        {personasState.status === `success` && personasState.personas.length === 0 ? <p className="p-text--default">No personas yet. Create a persona above.</p> : null}
         {personasState.status === `success` && personasState.personas.length > 0 ? (
           <MainTable
             headers={[{ content: `Display name` }, { content: `Coding harness` }, { content: `Status` }, { content: `Priority` }, { content: `Actions` }]}
@@ -94,4 +87,3 @@ export function PersonaList() {
     </section>
   );
 }
-

@@ -62,7 +62,7 @@ export function LoopDetail({ loopId }: LoopDetailProps) {
         </Notification>
       ) : null}
       <nav className="p-tabs">
-        <ul className="p-tabs__list" role="tablist">
+        <ul className="p-tabs__list">
           <li className="p-tabs__item" role="presentation">
             <button
               aria-selected={activeTab === `details`}
@@ -93,21 +93,8 @@ export function LoopDetail({ loopId }: LoopDetailProps) {
           </li>
         </ul>
       </nav>
-      {activeTab === `details` ? (
-        <LoopDetailsTab
-          loopId={loopId}
-          loopName={loop?.name ?? ``}
-          loopDescription={loop?.description ?? ``}
-          onFeedback={setFeedback}
-          onSaved={reloadLoop}
-        />
-      ) : null}
-      {activeTab === `personas` ? (
-        <LoopPersonasTab
-          loopId={loopId}
-          onFeedback={setFeedback}
-        />
-      ) : null}
+      {activeTab === `details` ? <LoopDetailsTab loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} onFeedback={setFeedback} onSaved={reloadLoop} /> : null}
+      {activeTab === `personas` ? <LoopPersonasTab loopId={loopId} onFeedback={setFeedback} /> : null}
     </section>
   );
 }
@@ -193,8 +180,7 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
 
   const assignedIds = personasState.status === `success` ? new Set(personasState.personas.map((p) => p.id)) : new Set<string>();
 
-  const unassignedPersonas =
-    allPersonasState.status === `success` ? allPersonasState.personas.filter((p) => !assignedIds.has(p.id)) : [];
+  const unassignedPersonas = allPersonasState.status === `success` ? allPersonasState.personas.filter((p) => !assignedIds.has(p.id)) : [];
 
   const handleEditorSuccess = (message: string) => {
     onFeedback({
@@ -268,13 +254,7 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
 
   return (
     <>
-      <PersonaEditor
-        editingPersona={editingPersona}
-        key={editingPersona?.id ?? `new`}
-        loopId={loopId}
-        onCancel={() => setEditingPersona(null)}
-        onSuccess={handleEditorSuccess}
-      />
+      <PersonaEditor editingPersona={editingPersona} key={editingPersona?.id ?? `new`} loopId={loopId} onCancel={() => setEditingPersona(null)} onSuccess={handleEditorSuccess} />
       {unassignedPersonas.length > 0 ? (
         <div className="p-strip is-shallow">
           <h2 className="p-heading--4">Assign an existing persona</h2>
@@ -283,10 +263,7 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
               id="assign-persona-select"
               label="Persona"
               onChange={(event) => setSelectedGlobalPersonaId(event.target.value)}
-              options={[
-                { value: ``, label: `— Select a persona —` },
-                ...unassignedPersonas.map((p) => ({ value: p.id, label: p.displayName })),
-              ]}
+              options={[{ value: ``, label: `— Select a persona —` }, ...unassignedPersonas.map((p) => ({ value: p.id, label: p.displayName }))]}
               value={selectedGlobalPersonaId}
             />
             <Button appearance="base" disabled={!selectedGlobalPersonaId || isAssigning} type="submit">
@@ -303,9 +280,7 @@ function LoopPersonasTab({ loopId, onFeedback }: LoopPersonasTabProps) {
             {personasState.message}
           </Notification>
         ) : null}
-        {personasState.status === `success` && personasState.personas.length === 0 ? (
-          <p className="p-text--default">No personas assigned to this loop yet. Add or assign a persona above.</p>
-        ) : null}
+        {personasState.status === `success` && personasState.personas.length === 0 ? <p className="p-text--default">No personas assigned to this loop yet. Add or assign a persona above.</p> : null}
         {personasState.status === `success` && personasState.personas.length > 0 ? (
           <MainTable
             headers={[{ content: `Display name` }, { content: `Coding harness` }, { content: `Status` }, { content: `Priority` }, { content: `Actions` }]}

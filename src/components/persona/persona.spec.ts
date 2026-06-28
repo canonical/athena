@@ -92,42 +92,50 @@ test(`personas support create read update and delete through the API`, async ({ 
   expect(deleteResponse.status()).toBe(204);
 });
 
-test(`EM persona cannot be deleted`, async ({ page }) => {
+test(`decision maker persona cannot be deleted`, async ({ page }) => {
   await authenticate(page);
 
   const loop = await createLoop(page, `EM delete guard loop`);
 
   const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
   const personas = (await listResponse.json()) as Array<{ id: string; isDecisionMaker: boolean }>;
-  const em = personas.find((p) => p.isDecisionMaker);
-  expect(em).toBeDefined();
+  const decisionMaker = personas.find((p) => p.isDecisionMaker);
+  expect(decisionMaker).toBeDefined();
 
-  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loops/${loop.id}/personas/${em!.id}`);
+  if (!decisionMaker) {
+    throw new Error(`Decision maker persona not found.`);
+  }
+
+  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loops/${loop.id}/personas/${decisionMaker.id}`);
   expect(deleteResponse.status()).toBe(400);
   await expect(deleteResponse.json()).resolves.toEqual({ error: `Default personas cannot be deleted.` });
 });
 
-test(`EM persona cannot be updated to use coding harness`, async ({ page }) => {
+test(`decision maker persona cannot be updated to use coding harness`, async ({ page }) => {
   await authenticate(page);
 
   const loop = await createLoop(page, `EM harness guard loop`);
 
   const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
   const personas = (await listResponse.json()) as Array<{ id: string; isDecisionMaker: boolean; displayName: string; personality: string; lifecycleStatus: string; routingPriority: number }>;
-  const em = personas.find((p) => p.isDecisionMaker);
-  expect(em).toBeDefined();
+  const decisionMaker = personas.find((p) => p.isDecisionMaker);
+  expect(decisionMaker).toBeDefined();
 
-  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${em!.id}`, {
+  if (!decisionMaker) {
+    throw new Error(`Decision maker persona not found.`);
+  }
+
+  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${decisionMaker.id}`, {
     data: {
-      displayName: em!.displayName,
-      personality: em!.personality,
+      displayName: decisionMaker.displayName,
+      personality: decisionMaker.personality,
       usesCodingHarness: true,
-      lifecycleStatus: em!.lifecycleStatus,
-      routingPriority: em!.routingPriority,
+      lifecycleStatus: decisionMaker.lifecycleStatus,
+      routingPriority: decisionMaker.routingPriority,
     },
   });
   expect(updateResponse.status()).toBe(400);
-  await expect(updateResponse.json()).resolves.toEqual({ error: `An engineering manager persona cannot use a coding harness.` });
+  await expect(updateResponse.json()).resolves.toEqual({ error: `A decision maker persona cannot use a coding harness.` });
 });
 
 test(`deactivating the last coding harness persona is rejected`, async ({ page }) => {
@@ -140,13 +148,17 @@ test(`deactivating the last coding harness persona is rejected`, async ({ page }
   const ic = personas.find((p) => p.usesCodingHarness && !p.isDecisionMaker);
   expect(ic).toBeDefined();
 
-  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${ic!.id}`, {
+  if (!ic) {
+    throw new Error(`Coding harness persona not found.`);
+  }
+
+  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${ic.id}`, {
     data: {
-      displayName: ic!.displayName,
-      personality: ic!.personality,
-      usesCodingHarness: ic!.usesCodingHarness,
+      displayName: ic.displayName,
+      personality: ic.personality,
+      usesCodingHarness: ic.usesCodingHarness,
       lifecycleStatus: `archived`,
-      routingPriority: ic!.routingPriority,
+      routingPriority: ic.routingPriority,
     },
   });
   expect(updateResponse.status()).toBe(400);
@@ -175,7 +187,7 @@ test(`personas page shows global persona list and create form`, async ({ page })
   await authenticate(page);
   await page.goto(`http://athena.localhost/persona-list`);
 
-  await expect(page.getByRole(`heading`, { name: `Personas` })).toBeVisible();
+  await expect(page.getByRole(`heading`, { exact: true, name: `Personas` })).toBeVisible();
   await expect(page.getByRole(`heading`, { name: `All personas` })).toBeVisible();
   await expect(page.getByRole(`heading`, { name: `Add persona` })).toBeVisible();
 });
@@ -200,7 +212,7 @@ test(`loop detail page shows Personas tab with assigned personas and assign form
 
   await expect(page.getByRole(`heading`, { name: `Loop detail personas loop` })).toBeVisible();
 
-  await page.getByRole(`button`, { name: `Personas` }).click();
+  await page.getByRole(`tab`, { name: `Personas` }).click();
 
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 

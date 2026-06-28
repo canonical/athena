@@ -115,9 +115,7 @@ export function Persona({ personaId }: PersonaDetailProps) {
             {loopsState.message}
           </Notification>
         ) : null}
-        {loopsState.status === `success` && loops.length === 0 ? (
-          <p className="p-text--default">No loops available. Create a loop first.</p>
-        ) : null}
+        {loopsState.status === `success` && loops.length === 0 ? <p className="p-text--default">No loops available. Create a loop first.</p> : null}
         {loopsState.status === `success` && loops.length > 0 ? (
           <form onSubmit={handleAssign}>
             <Select

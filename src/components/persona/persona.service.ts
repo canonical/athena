@@ -1,5 +1,5 @@
 import { getPool } from "@components/postgres/postgres.js";
-import { type Persona, type PersonaInsert, type PersonaUpdate } from "./persona.schema.js";
+import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 
 const personaColumns = `p."id", p."displayName", p."personality", p."usesCodingHarness", p."isDecisionMaker", p."isDefault", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"`;
 
@@ -220,4 +220,3 @@ export const queryPersonaDelete = async (personaId: string, loopId: string): Pro
     client.release();
   }
 };
-
