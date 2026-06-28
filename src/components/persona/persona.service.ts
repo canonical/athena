@@ -1,9 +1,9 @@
 import { getPool } from "@components/postgres/postgres.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 
-const personaColumns = `p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"`;
+const personaColumns = `p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."owner", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"`;
 
-const personaColumnsUnqualified = `"id", "displayName", "personality", "usesCodingHarness", "isRouting", "isDefault", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"`;
+const personaColumnsUnqualified = `"id", "displayName", "personality", "usesCodingHarness", "isRouting", "isDefault", "owner", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"`;
 
 export const queryPersonaList = async (loopId: string): Promise<Persona[]> => {
   const result = await getPool().query<Persona>(
@@ -86,7 +86,7 @@ export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: 
   };
 };
 
-export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, isRouting: boolean): Promise<Persona> => {
+export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, isRouting: boolean, ownerId: string | null): Promise<Persona> => {
   const client = await getPool().connect();
 
   try {
@@ -94,11 +94,11 @@ export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, i
 
     const result = await client.query<Persona>(
       `
-        INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "lifecycleStatus", "routingPriority")
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "owner", "lifecycleStatus", "routingPriority")
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING ${personaColumnsUnqualified}
       `,
-      [input.displayName, input.personality, input.usesCodingHarness, isRouting, input.lifecycleStatus, input.routingPriority],
+      [input.displayName, input.personality, input.usesCodingHarness, isRouting, ownerId, input.lifecycleStatus, input.routingPriority],
     );
 
     const [persona] = result.rows;
@@ -119,14 +119,14 @@ export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, i
   }
 };
 
-export const queryPersonaCreateGlobal = async (input: PersonaInsert, isRouting: boolean): Promise<Persona> => {
+export const queryPersonaCreateGlobal = async (input: PersonaInsert, isRouting: boolean, ownerId: string | null): Promise<Persona> => {
   const result = await getPool().query<Persona>(
     `
-      INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "lifecycleStatus", "routingPriority")
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "owner", "lifecycleStatus", "routingPriority")
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING ${personaColumnsUnqualified}
     `,
-    [input.displayName, input.personality, input.usesCodingHarness, isRouting, input.lifecycleStatus, input.routingPriority],
+    [input.displayName, input.personality, input.usesCodingHarness, isRouting, ownerId, input.lifecycleStatus, input.routingPriority],
   );
 
   const [persona] = result.rows;
@@ -150,7 +150,7 @@ export const queryPersonaUpdate = async (personaId: string, loopId: string, inpu
         "routingPriority" = $5
       FROM "loopPersona" lp
       WHERE p."id" = $6 AND lp."persona" = p."id" AND lp."loop" = $7
-      RETURNING p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"
+      RETURNING p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."owner", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"
     `,
     [input.displayName, input.personality, input.usesCodingHarness, input.lifecycleStatus, input.routingPriority, personaId, loopId],
   );

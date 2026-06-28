@@ -1,3 +1,4 @@
+import type { AuthenticatedUser } from "@components/authentication/session.schema.js";
 import { isValidUuid } from "@components/utilities/validation.js";
 import { type Request, type Response, Router } from "express";
 import {
@@ -57,6 +58,11 @@ const getPersonaId = (request: Request, response: Response): string | undefined 
   return personaId;
 };
 
+const getUserId = (response: Response): string => {
+  const user = response.locals.user as AuthenticatedUser;
+  return user.id;
+};
+
 personaRouter.get(`/personas/catalog`, (_request: Request, response: Response) => {
   response.status(200).json(referencePersonaCatalog);
 });
@@ -67,7 +73,7 @@ personaRouter.get(`/personas`, async (_request: Request, response: Response) => 
 
 personaRouter.post(`/personas`, async (request: Request, response: Response) => {
   try {
-    const persona = await personaCreateGlobal(validatePersonaInsertRequest(request.body));
+    const persona = await personaCreateGlobal(validatePersonaInsertRequest(request.body), getUserId(response));
     response.status(201).json(persona);
   } catch (error) {
     if (!sendPersonaError(error, response)) {
@@ -133,7 +139,7 @@ personaRouter.post(`/loops/:loopId/personas`, async (request: Request, response:
       return;
     }
 
-    const persona = await personaCreate(loopId, validatePersonaInsertRequest(request.body));
+    const persona = await personaCreate(loopId, validatePersonaInsertRequest(request.body), getUserId(response));
     response.status(201).json(persona);
   } catch (error) {
     if (!sendPersonaError(error, response)) {

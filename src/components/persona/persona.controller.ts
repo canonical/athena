@@ -84,14 +84,14 @@ export const personaGetById = async (personaId: string): Promise<Persona> => {
   return persona;
 };
 
-export const personaCreate = async (loopId: string, input: PersonaInsert): Promise<Persona> => {
+export const personaCreate = async (loopId: string, input: PersonaInsert, ownerId: string): Promise<Persona> => {
   validateLoopId(loopId);
 
-  return queryPersonaCreate(loopId, input, false);
+  return queryPersonaCreate(loopId, input, false, ownerId);
 };
 
-export const personaCreateGlobal = async (input: PersonaInsert): Promise<Persona> => {
-  return queryPersonaCreateGlobal(input, false);
+export const personaCreateGlobal = async (input: PersonaInsert, ownerId: string): Promise<Persona> => {
+  return queryPersonaCreateGlobal(input, false, ownerId);
 };
 
 export const personaUpdate = async (loopId: string, personaId: string, input: PersonaUpdate): Promise<Persona> => {

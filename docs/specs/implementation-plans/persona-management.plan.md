@@ -49,7 +49,10 @@ For each loop, the admin selects:
   "personality": "string (persona description and responsibilities)",
   "usesCodingHarness": boolean,
   "isRouting": boolean,
-  "lifecycleStatus": "string (active, deprecated, archived)"
+  "isDefault": boolean,
+  "owner": "string | null (user ID of the creator; null for default/system personas)",
+  "lifecycleStatus": "string (active, deprecated, archived)",
+  "routingPriority": integer
 }
 ```
 

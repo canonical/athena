@@ -1,4 +1,5 @@
 import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { useCurrentUser } from "@components/authentication/authentication.query.js";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { PersonaEditor } from "./PersonaEditor.js";
@@ -18,12 +19,15 @@ const lifecycleStatusLabel: Record<string, string> = {
 };
 
 export function PersonaList() {
+  const currentUser = useCurrentUser();
   const { state: personaListState, reload: reloadPersonaList } = usePersonaListAll();
   const [editingPersona, setEditingPersona] = useState<PersonaRecord | null>(null);
+  const [cloneSource, setCloneSource] = useState<PersonaRecord | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
   const resetEditor = () => {
     setEditingPersona(null);
+    setCloneSource(null);
   };
 
   const handleEditorSuccess = (message: string) => {
@@ -36,6 +40,14 @@ export function PersonaList() {
     reloadPersonaList();
   };
 
+  const isOwner = (persona: PersonaRecord): boolean => {
+    if (!currentUser || !persona.owner) {
+      return false;
+    }
+
+    return persona.owner === currentUser.id;
+  };
+
   return (
     <section className="athena-home">
       <p className="p-heading--5">Personas</p>
@@ -46,7 +58,7 @@ export function PersonaList() {
           {feedback.message}
         </Notification>
       ) : null}
-      <PersonaEditor editingPersona={editingPersona} key={editingPersona?.id ?? `new`} onCancel={resetEditor} onSuccess={handleEditorSuccess} />
+      <PersonaEditor cloneSource={cloneSource} editingPersona={editingPersona} key={editingPersona?.id ?? (cloneSource ? `clone-${cloneSource.id}` : `new`)} onCancel={resetEditor} onSuccess={handleEditorSuccess} />
       <div className="p-strip is-shallow">
         <h2 className="p-heading--4">All personas</h2>
         {personaListState.status === `loading` ? <p className="p-text--default">Loading personas...</p> : null}
@@ -73,9 +85,27 @@ export function PersonaList() {
                 { content: lifecycleStatusLabel[persona.lifecycleStatus] ?? persona.lifecycleStatus },
                 { content: persona.routingPriority },
                 {
-                  content: (
-                    <Button appearance="base" onClick={() => setEditingPersona(persona)} type="button">
+                  content: isOwner(persona) ? (
+                    <Button
+                      appearance="base"
+                      onClick={() => {
+                        setCloneSource(null);
+                        setEditingPersona(persona);
+                      }}
+                      type="button"
+                    >
                       {`Edit ${persona.displayName}`}
+                    </Button>
+                  ) : (
+                    <Button
+                      appearance="base"
+                      onClick={() => {
+                        setEditingPersona(null);
+                        setCloneSource(persona);
+                      }}
+                      type="button"
+                    >
+                      {`Clone & Edit ${persona.displayName}`}
                     </Button>
                   ),
                 },

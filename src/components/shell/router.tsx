@@ -2,7 +2,7 @@ import { ApplicationLayout, Chip, Notification, NotificationSeverity } from "@ca
 import { AuthenticationView } from "@components/authentication/Authentication.js";
 import { Event } from "@components/event/Event.js";
 import { Loop } from "@components/loop/Loop.js";
-import { LoopDetail } from "@components/loop/LoopDetail.js";
+import { LoopList } from "@components/loop/LoopList.js";
 import { Persona } from "@components/persona/Persona.js";
 import { PersonaList } from "@components/persona/PersonaList.js";
 import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
@@ -69,7 +69,7 @@ function AuthenticationRouteView() {
 function LoopDetailView() {
   const { loopId } = loopDetailRoute.useParams();
 
-  return <LoopDetail loopId={loopId} />;
+  return <Loop loopId={loopId} />;
 }
 
 function PersonaDetailView() {
@@ -112,7 +112,7 @@ const authenticationRoute = createRoute({
 const loopRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: loopsPath,
-  component: Loop,
+  component: LoopList,
 });
 
 const loopDetailRoute = createRoute({

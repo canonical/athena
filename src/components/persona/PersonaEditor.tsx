@@ -35,12 +35,13 @@ const emptyForm = (): FormState => ({
 type PersonaEditorProps = {
   loopId?: string;
   editingPersona: PersonaRecord | null;
+  cloneSource?: PersonaRecord | null;
   catalogTemplates?: ReferencePersona[];
   onSuccess: (message: string) => void;
   onCancel?: () => void;
 };
 
-export function PersonaEditor({ loopId, editingPersona, catalogTemplates, onSuccess, onCancel }: PersonaEditorProps) {
+export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemplates, onSuccess, onCancel }: PersonaEditorProps) {
   const [form, setForm] = useState<FormState>(
     editingPersona
       ? {
@@ -50,7 +51,15 @@ export function PersonaEditor({ loopId, editingPersona, catalogTemplates, onSucc
           lifecycleStatus: editingPersona.lifecycleStatus,
           routingPriority: editingPersona.routingPriority,
         }
-      : emptyForm(),
+      : cloneSource
+        ? {
+            displayName: cloneSource.displayName,
+            personality: cloneSource.personality,
+            usesCodingHarness: cloneSource.usesCodingHarness,
+            lifecycleStatus: cloneSource.lifecycleStatus,
+            routingPriority: cloneSource.routingPriority,
+          }
+        : emptyForm(),
   );
   const [isBusy, setIsBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -122,7 +131,7 @@ export function PersonaEditor({ loopId, editingPersona, catalogTemplates, onSucc
           </Notification>
         ) : null}
         <form onSubmit={handleSubmit}>
-          <h2 className="p-heading--4">{editingPersona ? `Edit persona` : `Add persona`}</h2>
+          <h2 className="p-heading--4">{editingPersona ? `Edit persona` : cloneSource ? `Clone persona` : `Add persona`}</h2>
           <label htmlFor="persona-display-name">Display name</label>
           <input id="persona-display-name" name="persona-display-name" onChange={(event) => setForm((prev) => ({ ...prev, displayName: event.target.value }))} required type="text" value={form.displayName} />
           <label htmlFor="persona-personality">Personality</label>
@@ -143,9 +152,9 @@ export function PersonaEditor({ loopId, editingPersona, catalogTemplates, onSucc
           </label>
           <div style={{ marginTop: `1rem` }}>
             <Button appearance="positive" disabled={isBusy} type="submit">
-              {editingPersona ? (isBusy ? `Saving persona...` : `Save persona`) : isBusy ? `Adding persona...` : `Add persona`}
+              {editingPersona ? (isBusy ? `Saving persona...` : `Save persona`) : cloneSource ? (isBusy ? `Cloning persona...` : `Clone persona`) : isBusy ? `Adding persona...` : `Add persona`}
             </Button>
-            {editingPersona && onCancel ? (
+            {(editingPersona || cloneSource) && onCancel ? (
               <Button appearance="base" onClick={onCancel} type="button">
                 Cancel edit
               </Button>
