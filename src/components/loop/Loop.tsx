@@ -2,7 +2,7 @@ import { Button, MainTable, Notification, NotificationSeverity } from "@canonica
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { createLoop, deleteLoop, updateLoop } from "./loop.client.js";
-import type { LoopsState } from "./loop.query.js";
+import type { LoopListState } from "./loop.query.js";
 import { useLoops } from "./loop.query.js";
 import { loopInsertSchema, loopUpdateSchema } from "./loop.schema.js";
 
@@ -12,7 +12,7 @@ type Feedback = {
   message: string;
 };
 
-type LoopItem = Extract<LoopsState, { status: "success" }>["loops"][number];
+type LoopItem = Extract<LoopListState, { status: "success" }>["loops"][number];
 
 const formatTimestamp = (value: Date | string) => new Date(value).toLocaleString();
 

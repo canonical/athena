@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchLoop, fetchLoops } from "./loop.client.js";
 import type { Loop } from "./loop.schema.js";
 
-export type LoopsState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; loops: Loop[] };
+export type LoopListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; loops: Loop[] };
 
 export type LoopState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; loop: Loop };
 
 export const useLoops = () => {
-  const [state, setState] = useState<LoopsState>({ status: `loading` });
+  const [state, setState] = useState<LoopListState>({ status: `loading` });
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {

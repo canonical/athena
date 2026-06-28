@@ -48,7 +48,7 @@ For each loop, the admin selects:
   "displayName": "string (e.g., 'Individual Contributor')",
   "personality": "string (persona description and responsibilities)",
   "usesCodingHarness": boolean,
-  "isDecisionMaker": boolean,
+  "isRouting": boolean,
   "lifecycleStatus": "string (active, deprecated, archived)"
 }
 ```
@@ -58,7 +58,7 @@ For each loop, the admin selects:
 1. At least one EM persona must be enabled in any loop.
 2. At least one persona with `usesCodingHarness: true` must be enabled in any loop.
 3. Persona routing must be acyclic (no infinite handoff loops).
-4. If `isDecisionMaker` is true, `usesCodingHarness` must be false.
+4. If `isRouting` is true, `usesCodingHarness` must be false.
 5. If a persona has `usesCodingHarness: true`, a harness must be available before assignment.
 
 ## Observability and auditability

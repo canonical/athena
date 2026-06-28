@@ -84,7 +84,7 @@ export function Persona({ personaId }: PersonaDetailProps) {
   return (
     <section className="athena-home">
       <p className="p-heading--5">Personas</p>
-      <h1 className="p-heading--2">{persona.isDecisionMaker ? `${persona.displayName} (DM)` : persona.displayName}</h1>
+      <h1 className="p-heading--2">{persona.isRouting ? `${persona.displayName} (R)` : persona.displayName}</h1>
       {feedback ? (
         <Notification severity={feedback.severity} title={feedback.title}>
           {feedback.message}
@@ -99,8 +99,8 @@ export function Persona({ personaId }: PersonaDetailProps) {
           <dd>{persona.routingPriority}</dd>
           <dt>Coding harness</dt>
           <dd>{persona.usesCodingHarness ? `Yes` : `No`}</dd>
-          <dt>Decision maker</dt>
-          <dd>{persona.isDecisionMaker ? `Yes` : `No`}</dd>
+          <dt>Routing persona</dt>
+          <dd>{persona.isRouting ? `Yes` : `No`}</dd>
           <dt>Default persona</dt>
           <dd>{persona.isDefault ? `Yes` : `No`}</dd>
           <dt>Personality</dt>

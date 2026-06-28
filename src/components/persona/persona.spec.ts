@@ -13,7 +13,7 @@ test(`persona catalog returns reference personas`, async ({ page }) => {
   const response = await page.request.get(`http://athena.localhost/api/personas/catalog`);
   expect(response.status()).toBe(200);
 
-  const catalog = (await response.json()) as Array<{ role: string; displayName: string; usesCodingHarness: boolean; isDecisionMaker: boolean }>;
+  const catalog = (await response.json()) as Array<{ role: string; displayName: string; usesCodingHarness: boolean; isRouting: boolean }>;
   expect(catalog.length).toBeGreaterThan(0);
 
   const roles = catalog.map((p) => p.role);
@@ -25,12 +25,12 @@ test(`persona catalog returns reference personas`, async ({ page }) => {
   expect(roles).toContain(`ux`);
 
   const em = catalog.find((p) => p.role === `em`);
-  expect(em?.isDecisionMaker).toBe(true);
+  expect(em?.isRouting).toBe(true);
   expect(em?.usesCodingHarness).toBe(false);
 
   const ic = catalog.find((p) => p.role === `ic`);
   expect(ic?.usesCodingHarness).toBe(true);
-  expect(ic?.isDecisionMaker).toBe(false);
+  expect(ic?.isRouting).toBe(false);
 });
 
 test(`loop creation seeds an EM persona automatically`, async ({ page }) => {
@@ -41,8 +41,8 @@ test(`loop creation seeds an EM persona automatically`, async ({ page }) => {
   const response = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
   expect(response.status()).toBe(200);
 
-  const personas = (await response.json()) as Array<{ isDecisionMaker: boolean; displayName: string; lifecycleStatus: string }>;
-  const emPersonas = personas.filter((p) => p.isDecisionMaker);
+  const personas = (await response.json()) as Array<{ isRouting: boolean; displayName: string; lifecycleStatus: string }>;
+  const emPersonas = personas.filter((p) => p.isRouting);
   expect(emPersonas.length).toBe(1);
   expect(emPersonas[0]?.lifecycleStatus).toBe(`active`);
 });
@@ -62,10 +62,10 @@ test(`personas support create read update and delete through the API`, async ({ 
     },
   });
   expect(createResponse.status()).toBe(201);
-  const created = (await createResponse.json()) as { id: string; displayName: string; usesCodingHarness: boolean; isDecisionMaker: boolean };
+  const created = (await createResponse.json()) as { id: string; displayName: string; usesCodingHarness: boolean; isRouting: boolean };
   expect(created.displayName).toBe(`IC Persona`);
   expect(created.usesCodingHarness).toBe(true);
-  expect(created.isDecisionMaker).toBe(false);
+  expect(created.isRouting).toBe(false);
 
   const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
   expect(listResponse.status()).toBe(200);
@@ -92,50 +92,50 @@ test(`personas support create read update and delete through the API`, async ({ 
   expect(deleteResponse.status()).toBe(204);
 });
 
-test(`decision maker persona cannot be deleted`, async ({ page }) => {
+test(`routing persona cannot be deleted`, async ({ page }) => {
   await authenticate(page);
 
   const loop = await createLoop(page, `EM delete guard loop`);
 
   const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
-  const personas = (await listResponse.json()) as Array<{ id: string; isDecisionMaker: boolean }>;
-  const decisionMaker = personas.find((p) => p.isDecisionMaker);
-  expect(decisionMaker).toBeDefined();
+  const personas = (await listResponse.json()) as Array<{ id: string; isRouting: boolean }>;
+  const routingPersona = personas.find((p) => p.isRouting);
+  expect(routingPersona).toBeDefined();
 
-  if (!decisionMaker) {
-    throw new Error(`Decision maker persona not found.`);
+  if (!routingPersona) {
+    throw new Error(`Routing persona not found.`);
   }
 
-  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loops/${loop.id}/personas/${decisionMaker.id}`);
+  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loops/${loop.id}/personas/${routingPersona.id}`);
   expect(deleteResponse.status()).toBe(400);
   await expect(deleteResponse.json()).resolves.toEqual({ error: `Default personas cannot be deleted.` });
 });
 
-test(`decision maker persona cannot be updated to use coding harness`, async ({ page }) => {
+test(`routing persona cannot be updated to use coding harness`, async ({ page }) => {
   await authenticate(page);
 
   const loop = await createLoop(page, `EM harness guard loop`);
 
   const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
-  const personas = (await listResponse.json()) as Array<{ id: string; isDecisionMaker: boolean; displayName: string; personality: string; lifecycleStatus: string; routingPriority: number }>;
-  const decisionMaker = personas.find((p) => p.isDecisionMaker);
-  expect(decisionMaker).toBeDefined();
+  const personas = (await listResponse.json()) as Array<{ id: string; isRouting: boolean; displayName: string; personality: string; lifecycleStatus: string; routingPriority: number }>;
+  const routingPersona = personas.find((p) => p.isRouting);
+  expect(routingPersona).toBeDefined();
 
-  if (!decisionMaker) {
-    throw new Error(`Decision maker persona not found.`);
+  if (!routingPersona) {
+    throw new Error(`Routing persona not found.`);
   }
 
-  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${decisionMaker.id}`, {
+  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${routingPersona.id}`, {
     data: {
-      displayName: decisionMaker.displayName,
-      personality: decisionMaker.personality,
+      displayName: routingPersona.displayName,
+      personality: routingPersona.personality,
       usesCodingHarness: true,
-      lifecycleStatus: decisionMaker.lifecycleStatus,
-      routingPriority: decisionMaker.routingPriority,
+      lifecycleStatus: routingPersona.lifecycleStatus,
+      routingPriority: routingPersona.routingPriority,
     },
   });
   expect(updateResponse.status()).toBe(400);
-  await expect(updateResponse.json()).resolves.toEqual({ error: `A decision maker persona cannot use a coding harness.` });
+  await expect(updateResponse.json()).resolves.toEqual({ error: `A routing persona cannot use a coding harness.` });
 });
 
 test(`deactivating the last coding harness persona is rejected`, async ({ page }) => {
@@ -144,8 +144,8 @@ test(`deactivating the last coding harness persona is rejected`, async ({ page }
   const loop = await createLoop(page, `Harness constraint loop`);
 
   const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
-  const personas = (await listResponse.json()) as Array<{ id: string; displayName: string; personality: string; usesCodingHarness: boolean; isDecisionMaker: boolean; lifecycleStatus: string; routingPriority: number }>;
-  const ic = personas.find((p) => p.usesCodingHarness && !p.isDecisionMaker);
+  const personas = (await listResponse.json()) as Array<{ id: string; displayName: string; personality: string; usesCodingHarness: boolean; isRouting: boolean; lifecycleStatus: string; routingPriority: number }>;
+  const ic = personas.find((p) => p.usesCodingHarness && !p.isRouting);
   expect(ic).toBeDefined();
 
   if (!ic) {

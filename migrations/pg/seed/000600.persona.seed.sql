@@ -2,7 +2,7 @@
 -- Each default persona is sourced directly from docs/specs/personas/*.md and is
 -- marked isDefault = TRUE so that the application can prevent users from deleting them.
 -- Idempotent: skipped when default personas already exist.
-INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isDecisionMaker", "isDefault", "lifecycleStatus", "routingPriority")
+INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "isDefault", "lifecycleStatus", "routingPriority")
 VALUES
 (
   'Diana',

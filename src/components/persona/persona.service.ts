@@ -1,9 +1,9 @@
 import { getPool } from "@components/postgres/postgres.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 
-const personaColumns = `p."id", p."displayName", p."personality", p."usesCodingHarness", p."isDecisionMaker", p."isDefault", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"`;
+const personaColumns = `p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"`;
 
-const personaColumnsUnqualified = `"id", "displayName", "personality", "usesCodingHarness", "isDecisionMaker", "isDefault", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"`;
+const personaColumnsUnqualified = `"id", "displayName", "personality", "usesCodingHarness", "isRouting", "isDefault", "lifecycleStatus", "routingPriority", "createdAt", "updatedAt"`;
 
 export const queryPersonaList = async (loopId: string): Promise<Persona[]> => {
   const result = await getPool().query<Persona>(
@@ -12,7 +12,7 @@ export const queryPersonaList = async (loopId: string): Promise<Persona[]> => {
       FROM "persona" p
       JOIN "loopPersona" lp ON lp."persona" = p."id"
       WHERE lp."loop" = $1
-      ORDER BY p."isDecisionMaker" DESC, p."routingPriority" ASC, p."createdAt" ASC
+      ORDER BY p."isRouting" DESC, p."routingPriority" ASC, p."createdAt" ASC
     `,
     [loopId],
   );
@@ -25,7 +25,7 @@ export const queryAllPersonas = async (): Promise<Persona[]> => {
     `
       SELECT ${personaColumnsUnqualified}
       FROM "persona"
-      ORDER BY "isDecisionMaker" DESC, "routingPriority" ASC, "displayName" ASC
+      ORDER BY "isRouting" DESC, "routingPriority" ASC, "displayName" ASC
     `,
   );
 
@@ -59,13 +59,13 @@ export const queryPersonaByIdGlobal = async (personaId: string): Promise<Persona
   return result.rows[0];
 };
 
-export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: number; withCodingHarness: number; decisionMakers: number }> => {
-  const result = await getPool().query<{ total: string; withCodingHarness: string; decisionMakers: string }>(
+export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: number; withCodingHarness: number; routing: number }> => {
+  const result = await getPool().query<{ total: string; withCodingHarness: string; routing: string }>(
     `
       SELECT
         COUNT(*) AS "total",
         COUNT(*) FILTER (WHERE p."usesCodingHarness" = TRUE) AS "withCodingHarness",
-        COUNT(*) FILTER (WHERE p."isDecisionMaker" = TRUE) AS "decisionMakers"
+        COUNT(*) FILTER (WHERE p."isRouting" = TRUE) AS "routing"
       FROM "persona" p
       JOIN "loopPersona" lp ON lp."persona" = p."id"
       WHERE lp."loop" = $1 AND p."lifecycleStatus" = 'active'
@@ -76,17 +76,17 @@ export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: 
   const row = result.rows[0];
 
   if (!row) {
-    return { total: 0, withCodingHarness: 0, decisionMakers: 0 };
+    return { total: 0, withCodingHarness: 0, routing: 0 };
   }
 
   return {
     total: Number(row.total),
     withCodingHarness: Number(row.withCodingHarness),
-    decisionMakers: Number(row.decisionMakers),
+    routing: Number(row.routing),
   };
 };
 
-export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, isDecisionMaker: boolean): Promise<Persona> => {
+export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, isRouting: boolean): Promise<Persona> => {
   const client = await getPool().connect();
 
   try {
@@ -94,11 +94,11 @@ export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, i
 
     const result = await client.query<Persona>(
       `
-        INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isDecisionMaker", "lifecycleStatus", "routingPriority")
+        INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "lifecycleStatus", "routingPriority")
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING ${personaColumnsUnqualified}
       `,
-      [input.displayName, input.personality, input.usesCodingHarness, isDecisionMaker, input.lifecycleStatus, input.routingPriority],
+      [input.displayName, input.personality, input.usesCodingHarness, isRouting, input.lifecycleStatus, input.routingPriority],
     );
 
     const [persona] = result.rows;
@@ -119,14 +119,14 @@ export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, i
   }
 };
 
-export const queryPersonaCreateGlobal = async (input: PersonaInsert, isDecisionMaker: boolean): Promise<Persona> => {
+export const queryPersonaCreateGlobal = async (input: PersonaInsert, isRouting: boolean): Promise<Persona> => {
   const result = await getPool().query<Persona>(
     `
-      INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isDecisionMaker", "lifecycleStatus", "routingPriority")
+      INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "lifecycleStatus", "routingPriority")
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING ${personaColumnsUnqualified}
     `,
-    [input.displayName, input.personality, input.usesCodingHarness, isDecisionMaker, input.lifecycleStatus, input.routingPriority],
+    [input.displayName, input.personality, input.usesCodingHarness, isRouting, input.lifecycleStatus, input.routingPriority],
   );
 
   const [persona] = result.rows;
@@ -150,7 +150,7 @@ export const queryPersonaUpdate = async (personaId: string, loopId: string, inpu
         "routingPriority" = $5
       FROM "loopPersona" lp
       WHERE p."id" = $6 AND lp."persona" = p."id" AND lp."loop" = $7
-      RETURNING p."id", p."displayName", p."personality", p."usesCodingHarness", p."isDecisionMaker", p."isDefault", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"
+      RETURNING p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."lifecycleStatus", p."routingPriority", p."createdAt", p."updatedAt"
     `,
     [input.displayName, input.personality, input.usesCodingHarness, input.lifecycleStatus, input.routingPriority, personaId, loopId],
   );
