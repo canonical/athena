@@ -2,7 +2,6 @@ import { Notification, NotificationSeverity } from "@canonical/react-components"
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { LoopDetails } from "./LoopDetails.js";
-import { LoopLayout } from "./LoopLayout.js";
 import { LoopPersonas } from "./LoopPersonas.js";
 import { useLoop } from "./loop.query.js";
 import type { Feedback, LoopProps, Tab } from "./loop.schema.js";
@@ -34,25 +33,20 @@ export function Loop({ loopId, tab }: LoopProps) {
   };
 
   if (loopState.status === `loading`) {
-    return (
-      <LoopLayout>
-        <p className="p-text--default">Loading loop...</p>
-      </LoopLayout>
-    );
+    return <p className="p-text--default">Loading loop...</p>;
   }
 
   if (loopState.status === `error`) {
     return (
-      <LoopLayout>
-        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load loop">
-          {loopState.message}
-        </Notification>
-      </LoopLayout>
+      <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load loop">
+        {loopState.message}
+      </Notification>
     );
   }
 
   return (
-    <LoopLayout loopName={loop?.name ?? `Loop`}>
+    <>
+      <h1 className="p-heading--2">{loop?.name ?? `Loop`}</h1>
       {isPaused && pausedMessage ? (
         <Notification severity={NotificationSeverity.CAUTION} title="Loop is paused">
           {pausedMessage}
@@ -93,7 +87,6 @@ export function Loop({ loopId, tab }: LoopProps) {
       </nav>
       {tab === `details` ? <LoopDetails loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} onFeedback={setFeedback} onSaved={reloadLoop} /> : null}
       {tab === `personas` ? <LoopPersonas loopId={loopId} onFeedback={setFeedback} onRoutingStatusChange={handleRoutingStatusChange} /> : null}
-    </LoopLayout>
+    </>
   );
 }
-

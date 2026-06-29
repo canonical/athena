@@ -152,8 +152,7 @@ export function LoopList() {
   };
 
   return (
-    <section className="athena-home">
-      <p className="p-heading--5">Loops</p>
+    <>
       <h1 className="p-heading--2">Loops</h1>
       <p className="p-text--default">Create and manage the long-lived loops that hold Athena events.</p>
       {feedback ? (
@@ -230,6 +229,6 @@ export function LoopList() {
           }))}
         />
       ) : null}
-    </section>
+    </>
   );
 }

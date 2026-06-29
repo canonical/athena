@@ -2,6 +2,7 @@ import { ApplicationLayout, Chip, Notification, NotificationSeverity } from "@ca
 import { AuthenticationView } from "@components/authentication/Authentication.js";
 import { Event } from "@components/event/Event.js";
 import { Loop } from "@components/loop/Loop.js";
+import { LoopLayout } from "@components/loop/LoopLayout.js";
 import { LoopList } from "@components/loop/LoopList.js";
 import { Persona } from "@components/persona/Persona.js";
 import { PersonaList } from "@components/persona/PersonaList.js";
@@ -114,14 +115,20 @@ const authenticationRoute = createRoute({
   component: AuthenticationRouteView,
 });
 
-const loopListRoute = createRoute({
+const loopLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
+  id: `loop-layout`,
+  component: LoopLayout,
+});
+
+const loopListRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
   path: loopListPath,
   component: LoopList,
 });
 
 const loopDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => loopLayoutRoute,
   path: loopDetailPath,
   validateSearch: (search: Record<string, unknown>): LoopDetailSearch => ({
     tab: search.tab === `personas` ? `personas` : `details`,
@@ -147,7 +154,7 @@ const personaDetailRoute = createRoute({
   component: PersonaDetailView,
 });
 
-const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopListRoute, loopDetailRoute, eventRoute, personaRoute, personaDetailRoute]);
+const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopLayoutRoute.addChildren([loopListRoute, loopDetailRoute]), eventRoute, personaRoute, personaDetailRoute]);
 
 export const router = createRouter({
   routeTree,
