@@ -157,9 +157,7 @@ export const queryPersonaUpdate = async (personaId: string, input: PersonaUpdate
 };
 
 export const queryPersonaDefaultList = async (): Promise<Persona[]> => {
-  const result = await getPool().query<Persona>(
-    `SELECT ${personaColumnsUnqualified} FROM "persona" WHERE "isDefault" = TRUE ORDER BY "displayName" ASC`,
-  );
+  const result = await getPool().query<Persona>(`SELECT ${personaColumnsUnqualified} FROM "persona" WHERE "isDefault" = TRUE ORDER BY "displayName" ASC`);
 
   return result.rows;
 };

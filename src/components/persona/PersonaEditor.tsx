@@ -2,7 +2,7 @@ import { Button, Notification, NotificationSeverity, Select } from "@canonical/r
 import type { User } from "@components/authentication/session.schema.js";
 import { type FormEvent, useState } from "react";
 import { assignPersonaToLoop, createPersona, updatePersona } from "./persona.client.js";
-import type { Feedback, FormState, Persona as PersonaRecord, PersonaEditorProps } from "./persona.schema.js";
+import type { Feedback, FormState, PersonaEditorProps, Persona as PersonaRecord } from "./persona.schema.js";
 import { personaLifecycleStatuses } from "./persona.schema.js";
 
 export const isPersonaOwner = (persona: PersonaRecord, currentUser: User | null): boolean => {

@@ -1,3 +1,4 @@
+import type { AuthenticatedUser } from "@components/authentication/session.schema.js";
 import { isValidUuid } from "@components/utilities/validation.js";
 import { type Request, type Response, Router } from "express";
 import { LoopNotFoundError, LoopValidationError, loopCreate, loopDelete, loopGet, loopList, loopUpdate, validateCreateLoopRequest, validateUpdateLoopRequest } from "./loop.controller.js";
@@ -30,10 +31,19 @@ const getLoopId = (request: Request, response: Response): string | undefined => 
   return loopId;
 };
 
+const getUserId = (response: Response): string => {
+  const user = response.locals.user as AuthenticatedUser | undefined;
+
+  if (!user) {
+    throw new Error(`Authenticated user not found in request context.`);
+  }
+
+  return user.id;
+};
+
 loopRouter.post(`/loop-list`, async (request: Request, response: Response) => {
   try {
-    const user = response.locals.user!;
-    const loop = await loopCreate(validateCreateLoopRequest(request.body), user.id);
+    const loop = await loopCreate(validateCreateLoopRequest(request.body), getUserId(response));
     response.status(201).json(loop);
   } catch (error) {
     if (!sendLoopError(error, response)) {
@@ -42,9 +52,8 @@ loopRouter.post(`/loop-list`, async (request: Request, response: Response) => {
   }
 });
 
-loopRouter.get(`/loop-list`, async (request: Request, response: Response) => {
-  const user = response.locals.user!;
-  response.status(200).json(await loopList(user.id));
+loopRouter.get(`/loop-list`, async (_request: Request, response: Response) => {
+  response.status(200).json(await loopList(getUserId(response)));
 });
 
 loopRouter.get(`/loop/:loopId`, async (request: Request, response: Response) => {
@@ -55,8 +64,7 @@ loopRouter.get(`/loop/:loopId`, async (request: Request, response: Response) => 
       return;
     }
 
-    const user = response.locals.user!;
-    response.status(200).json(await loopGet(loopId, user.id));
+    response.status(200).json(await loopGet(loopId, getUserId(response)));
   } catch (error) {
     if (!sendLoopError(error, response)) {
       throw error;
@@ -72,8 +80,7 @@ loopRouter.put(`/loop/:loopId`, async (request: Request, response: Response) => 
       return;
     }
 
-    const user = response.locals.user!;
-    const loop = await loopUpdate(loopId, validateUpdateLoopRequest(request.body), user.id);
+    const loop = await loopUpdate(loopId, validateUpdateLoopRequest(request.body), getUserId(response));
     response.status(200).json(loop);
   } catch (error) {
     if (!sendLoopError(error, response)) {
@@ -90,8 +97,7 @@ loopRouter.delete(`/loop/:loopId`, async (request: Request, response: Response) 
       return;
     }
 
-    const user = response.locals.user!;
-    await loopDelete(loopId, user.id);
+    await loopDelete(loopId, getUserId(response));
     response.sendStatus(204);
   } catch (error) {
     if (!sendLoopError(error, response)) {
