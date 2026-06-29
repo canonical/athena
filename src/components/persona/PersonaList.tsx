@@ -64,7 +64,7 @@ export function PersonaList() {
               columns: [
                 {
                   content: (
-                    <Link to={`/personas/$personaId`} params={{ personaId: persona.id }}>
+                    <Link to={`/persona/$personaId`} params={{ personaId: persona.id }}>
                       {persona.isRouting ? `${persona.displayName} (R)` : persona.displayName}
                     </Link>
                   ),

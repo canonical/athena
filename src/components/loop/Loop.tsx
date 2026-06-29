@@ -61,24 +61,12 @@ export function Loop({ loopId, tab }: LoopProps) {
         <div role="tablist">
           <ul className="p-tabs__list">
             <li className="p-tabs__item" role="presentation">
-              <button
-                aria-selected={tab === `details`}
-                className={`p-tabs__link${tab === `details` ? ` is-active` : ``}`}
-                onClick={() => setTab(`details`)}
-                role="tab"
-                type="button"
-              >
+              <button aria-selected={tab === `details`} className={`p-tabs__link${tab === `details` ? ` is-active` : ``}`} onClick={() => setTab(`details`)} role="tab" type="button">
                 Details
               </button>
             </li>
             <li className="p-tabs__item" role="presentation">
-              <button
-                aria-selected={tab === `personas`}
-                className={`p-tabs__link${tab === `personas` ? ` is-active` : ``}`}
-                onClick={() => setTab(`personas`)}
-                role="tab"
-                type="button"
-              >
+              <button aria-selected={tab === `personas`} className={`p-tabs__link${tab === `personas` ? ` is-active` : ``}`} onClick={() => setTab(`personas`)} role="tab" type="button">
                 Personas
               </button>
             </li>

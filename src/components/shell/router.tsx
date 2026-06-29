@@ -19,7 +19,7 @@ const loopListPath = `/loop-list`;
 const loopDetailPath = `/loop/$loopId`;
 const eventsPath = `/events`;
 const personaListPath = `/persona-list`;
-const personaDetailPath = `/personas/$personaId`;
+const personaDetailPath = `/persona/$personaId`;
 
 type AuthenticationSearch = {
   returnTo?: string;

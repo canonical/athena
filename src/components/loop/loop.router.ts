@@ -30,7 +30,7 @@ const getLoopId = (request: Request, response: Response): string | undefined => 
   return loopId;
 };
 
-loopRouter.post(`/loops`, async (request: Request, response: Response) => {
+loopRouter.post(`/loop-list`, async (request: Request, response: Response) => {
   try {
     const user = response.locals.user!;
     const loop = await loopCreate(validateCreateLoopRequest(request.body), user.id);
@@ -42,12 +42,12 @@ loopRouter.post(`/loops`, async (request: Request, response: Response) => {
   }
 });
 
-loopRouter.get(`/loops`, async (request: Request, response: Response) => {
+loopRouter.get(`/loop-list`, async (request: Request, response: Response) => {
   const user = response.locals.user!;
   response.status(200).json(await loopList(user.id));
 });
 
-loopRouter.get(`/loops/:loopId`, async (request: Request, response: Response) => {
+loopRouter.get(`/loop/:loopId`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -64,7 +64,7 @@ loopRouter.get(`/loops/:loopId`, async (request: Request, response: Response) =>
   }
 });
 
-loopRouter.put(`/loops/:loopId`, async (request: Request, response: Response) => {
+loopRouter.put(`/loop/:loopId`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -82,7 +82,7 @@ loopRouter.put(`/loops/:loopId`, async (request: Request, response: Response) =>
   }
 });
 
-loopRouter.delete(`/loops/:loopId`, async (request: Request, response: Response) => {
+loopRouter.delete(`/loop/:loopId`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 

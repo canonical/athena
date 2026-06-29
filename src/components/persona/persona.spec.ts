@@ -1,7 +1,7 @@
 import { authenticate, createLoop, expect, test } from "../../../testing/playwright/index.js";
 
 test(`persona routes require authentication`, async ({ request }) => {
-  const [catalogResponse, listResponse] = await Promise.all([request.get(`/api/personas/catalog`), request.get(`/api/loops/00000000-0000-7000-8000-000000000001/personas`)]);
+  const [catalogResponse, listResponse] = await Promise.all([request.get(`/api/persona/catalog`), request.get(`/api/loop/00000000-0000-7000-8000-000000000001/persona-list`)]);
 
   expect(catalogResponse.status()).toBe(401);
   expect(listResponse.status()).toBe(401);
@@ -10,7 +10,7 @@ test(`persona routes require authentication`, async ({ request }) => {
 test(`persona catalog returns reference personas`, async ({ page }) => {
   await authenticate(page);
 
-  const response = await page.request.get(`http://athena.localhost/api/personas/catalog`);
+  const response = await page.request.get(`http://athena.localhost/api/persona/catalog`);
   expect(response.status()).toBe(200);
 
   const catalog = (await response.json()) as Array<{ id: string; displayName: string; usesCodingHarness: boolean; isRouting: boolean; isDefault: boolean }>;
@@ -34,7 +34,7 @@ test(`loop creation seeds an EM persona automatically`, async ({ page }) => {
 
   const loop = await createLoop(page, `Persona seed loop`);
 
-  const response = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
+  const response = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
   expect(response.status()).toBe(200);
 
   const personas = (await response.json()) as Array<{ isRouting: boolean; displayName: string; lifecycleStatus: string }>;
@@ -48,7 +48,7 @@ test(`personas support create read update and delete through the API`, async ({ 
 
   const loop = await createLoop(page, `Persona CRUD loop`);
 
-  const createResponse = await page.request.post(`http://athena.localhost/api/loops/${loop.id}/personas`, {
+  const createResponse = await page.request.post(`http://athena.localhost/api/loop/${loop.id}/persona-list`, {
     data: {
       displayName: `IC Persona`,
       personality: `You are a senior IC.`,
@@ -62,12 +62,12 @@ test(`personas support create read update and delete through the API`, async ({ 
   expect(created.usesCodingHarness).toBe(true);
   expect(created.isRouting).toBe(false);
 
-  const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
+  const listResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
   expect(listResponse.status()).toBe(200);
   const personas = (await listResponse.json()) as Array<{ id: string }>;
   expect(personas.map((p) => p.id)).toContain(created.id);
 
-  const updateResponse = await page.request.put(`http://athena.localhost/api/personas/${created.id}`, {
+  const updateResponse = await page.request.put(`http://athena.localhost/api/persona/${created.id}`, {
     data: {
       displayName: `IC Persona Updated`,
       personality: `You are a senior IC, updated.`,
@@ -81,7 +81,7 @@ test(`personas support create read update and delete through the API`, async ({ 
     displayName: `IC Persona Updated`,
   });
 
-  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loops/${loop.id}/personas/${created.id}`);
+  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loop/${loop.id}/persona/${created.id}`);
   expect(deleteResponse.status()).toBe(204);
 });
 
@@ -90,7 +90,7 @@ test(`routing persona cannot be deleted`, async ({ page }) => {
 
   const loop = await createLoop(page, `EM delete guard loop`);
 
-  const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
+  const listResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
   const personas = (await listResponse.json()) as Array<{ id: string; isRouting: boolean }>;
   const routingPersona = personas.find((p) => p.isRouting);
   expect(routingPersona).toBeDefined();
@@ -99,7 +99,7 @@ test(`routing persona cannot be deleted`, async ({ page }) => {
     throw new Error(`Routing persona not found.`);
   }
 
-  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loops/${loop.id}/personas/${routingPersona.id}`);
+  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loop/${loop.id}/persona/${routingPersona.id}`);
   expect(deleteResponse.status()).toBe(400);
   await expect(deleteResponse.json()).resolves.toEqual({ error: `Default personas cannot be deleted.` });
 });
@@ -109,7 +109,7 @@ test(`routing persona cannot be updated to use coding harness`, async ({ page })
 
   const loop = await createLoop(page, `EM harness guard loop`);
 
-  const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
+  const listResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
   const personas = (await listResponse.json()) as Array<{ id: string; isRouting: boolean; displayName: string; personality: string; lifecycleStatus: string }>;
   const routingPersona = personas.find((p) => p.isRouting);
   expect(routingPersona).toBeDefined();
@@ -118,7 +118,7 @@ test(`routing persona cannot be updated to use coding harness`, async ({ page })
     throw new Error(`Routing persona not found.`);
   }
 
-  const updateResponse = await page.request.put(`http://athena.localhost/api/personas/${routingPersona.id}`, {
+  const updateResponse = await page.request.put(`http://athena.localhost/api/persona/${routingPersona.id}`, {
     data: {
       displayName: routingPersona.displayName,
       personality: routingPersona.personality,
@@ -135,7 +135,7 @@ test(`personas reject missing required fields`, async ({ page }) => {
 
   const loop = await createLoop(page, `Persona validation loop`);
 
-  const response = await page.request.post(`http://athena.localhost/api/loops/${loop.id}/personas`, {
+  const response = await page.request.post(`http://athena.localhost/api/loop/${loop.id}/persona-list`, {
     data: {
       displayName: `   `,
       personality: `Valid personality`,
@@ -184,7 +184,7 @@ test(`loop detail page shows Personas tab with assigned personas and assign form
 
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 
-  const personas = (await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`)).json() as Promise<Array<{ displayName: string }>>;
+  const personas = (await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`)).json() as Promise<Array<{ displayName: string }>>;
   const personaList = await personas;
   expect(personaList.length).toBeGreaterThan(0);
 });

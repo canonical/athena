@@ -7,8 +7,8 @@ export type LoopPayload = {
 };
 
 export const loopApiPaths = {
-  list: getApiUrl(`/loops`),
-  byId: (loopId: string) => getApiUrl(`/loops/${loopId}`),
+  list: getApiUrl(`/loop-list`),
+  byId: (loopId: string) => getApiUrl(`/loop/${loopId}`),
 } as const;
 
 const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {

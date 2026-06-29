@@ -9,12 +9,12 @@ export type PersonaPayload = {
 };
 
 export const personaApiPaths = {
-  catalog: getApiUrl(`/personas/catalog`),
-  globalList: getApiUrl(`/personas`),
-  globalById: (personaId: string) => getApiUrl(`/personas/${personaId}`),
-  list: (loopId: string) => getApiUrl(`/loops/${loopId}/personas`),
-  loopAssignments: (loopId: string) => getApiUrl(`/loops/${loopId}/persona-assignments`),
-  loopPersonaById: (loopId: string, personaId: string) => getApiUrl(`/loops/${loopId}/personas/${personaId}`),
+  catalog: getApiUrl(`/persona/catalog`),
+  globalList: getApiUrl(`/persona-list`),
+  globalById: (personaId: string) => getApiUrl(`/persona/${personaId}`),
+  list: (loopId: string) => getApiUrl(`/loop/${loopId}/persona-list`),
+  loopAssignments: (loopId: string) => getApiUrl(`/persona-list?loop=${loopId}`),
+  loopPersonaById: (loopId: string, personaId: string) => getApiUrl(`/loop/${loopId}/persona/${personaId}`),
 } as const;
 
 const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {

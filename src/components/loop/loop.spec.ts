@@ -2,8 +2,8 @@ import { authenticate, createLoop, expect, test } from "../../../testing/playwri
 
 test(`loop routes require authentication`, async ({ request }) => {
   const [listResponse, createResponse] = await Promise.all([
-    request.get(`/api/loops`),
-    request.post(`/api/loops`, {
+    request.get(`/api/loop-list`),
+    request.post(`/api/loop-list`, {
       data: {
         name: `Unauthenticated loop`,
         description: `Should not be created`,
@@ -21,13 +21,13 @@ test(`loops support create read update and delete through the API`, async ({ pag
   const created = await createLoop(page, `Platform loop`, `Platform team work`);
   const another = await createLoop(page, `Operations loop`, `Operations team work`);
 
-  const listResponse = await page.request.get(`http://athena.localhost/api/loops`);
+  const listResponse = await page.request.get(`http://athena.localhost/api/loop-list`);
   expect(listResponse.status()).toBe(200);
 
   const loops = (await listResponse.json()) as Array<{ id: string; name: string }>;
   expect(loops.map((loop) => loop.id)).toEqual(expect.arrayContaining([created.id, another.id]));
 
-  const getResponse = await page.request.get(`http://athena.localhost/api/loops/${created.id}`);
+  const getResponse = await page.request.get(`http://athena.localhost/api/loop/${created.id}`);
   expect(getResponse.status()).toBe(200);
   await expect(getResponse.json()).resolves.toMatchObject({
     id: created.id,
@@ -35,7 +35,7 @@ test(`loops support create read update and delete through the API`, async ({ pag
     description: `Platform team work`,
   });
 
-  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${created.id}`, {
+  const updateResponse = await page.request.put(`http://athena.localhost/api/loop/${created.id}`, {
     data: {
       name: `Platform delivery`,
       description: `Updated description`,
@@ -48,10 +48,10 @@ test(`loops support create read update and delete through the API`, async ({ pag
     description: `Updated description`,
   });
 
-  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loops/${created.id}`);
+  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loop/${created.id}`);
   expect(deleteResponse.status()).toBe(204);
 
-  const deletedGetResponse = await page.request.get(`http://athena.localhost/api/loops/${created.id}`);
+  const deletedGetResponse = await page.request.get(`http://athena.localhost/api/loop/${created.id}`);
   expect(deletedGetResponse.status()).toBe(404);
   await expect(deletedGetResponse.json()).resolves.toEqual({ error: `Loop not found.` });
 });
@@ -59,7 +59,7 @@ test(`loops support create read update and delete through the API`, async ({ pag
 test(`loops reject missing names`, async ({ page }) => {
   await authenticate(page);
 
-  const response = await page.request.post(`http://athena.localhost/api/loops`, {
+  const response = await page.request.post(`http://athena.localhost/api/loop-list`, {
     data: {
       name: `   `,
       description: `Blank name`,

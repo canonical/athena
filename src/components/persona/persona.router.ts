@@ -67,16 +67,38 @@ const getUserId = (response: Response): string => {
   return user.id;
 };
 
-personaRouter.get(`/personas/catalog`, async (_request: Request, response: Response) => {
+personaRouter.get(`/persona/catalog`, async (_request: Request, response: Response) => {
   response.status(200).json(await personaCatalog());
 });
 
-personaRouter.get(`/personas`, async (_request: Request, response: Response) => {
+personaRouter.get(`/persona-list`, async (_request: Request, response: Response) => {
   response.status(200).json(await personaListGlobal());
 });
 
-personaRouter.post(`/personas`, async (request: Request, response: Response) => {
+personaRouter.post(`/persona-list`, async (request: Request, response: Response) => {
   try {
+    const rawLoopId = request.query.loop;
+
+    if (rawLoopId !== undefined) {
+      const loopId = typeof rawLoopId === `string` ? rawLoopId : ``;
+
+      if (!isValidUuid(loopId)) {
+        response.status(400).json({ error: `loopId must be a valid UUID.` });
+        return;
+      }
+
+      const { personaId: rawPersonaId } = request.body as { personaId?: unknown };
+
+      if (!rawPersonaId || typeof rawPersonaId !== `string`) {
+        response.status(400).json({ error: `personaId is required.` });
+        return;
+      }
+
+      await personaAssignToLoop(loopId, rawPersonaId);
+      response.sendStatus(204);
+      return;
+    }
+
     const persona = await personaCreateGlobal(validatePersonaInsertRequest(request.body), getUserId(response));
     response.status(201).json(persona);
   } catch (error) {
@@ -86,7 +108,7 @@ personaRouter.post(`/personas`, async (request: Request, response: Response) => 
   }
 });
 
-personaRouter.get(`/personas/:personaId`, async (request: Request, response: Response) => {
+personaRouter.get(`/persona/:personaId`, async (request: Request, response: Response) => {
   try {
     const personaId = getPersonaId(request, response);
 
@@ -102,7 +124,7 @@ personaRouter.get(`/personas/:personaId`, async (request: Request, response: Res
   }
 });
 
-personaRouter.put(`/personas/:personaId`, async (request: Request, response: Response) => {
+personaRouter.put(`/persona/:personaId`, async (request: Request, response: Response) => {
   try {
     const personaId = getPersonaId(request, response);
 
@@ -119,7 +141,7 @@ personaRouter.put(`/personas/:personaId`, async (request: Request, response: Res
   }
 });
 
-personaRouter.get(`/loops/:loopId/personas`, async (request: Request, response: Response) => {
+personaRouter.get(`/loop/:loopId/persona-list`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -135,7 +157,7 @@ personaRouter.get(`/loops/:loopId/personas`, async (request: Request, response: 
   }
 });
 
-personaRouter.post(`/loops/:loopId/personas`, async (request: Request, response: Response) => {
+personaRouter.post(`/loop/:loopId/persona-list`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -152,31 +174,7 @@ personaRouter.post(`/loops/:loopId/personas`, async (request: Request, response:
   }
 });
 
-personaRouter.post(`/loops/:loopId/persona-assignments`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    const { personaId: rawPersonaId } = request.body as { personaId?: unknown };
-
-    if (!rawPersonaId || typeof rawPersonaId !== `string`) {
-      response.status(400).json({ error: `personaId is required.` });
-      return;
-    }
-
-    await personaAssignToLoop(loopId, rawPersonaId);
-    response.sendStatus(204);
-  } catch (error) {
-    if (!sendPersonaError(error, response)) {
-      throw error;
-    }
-  }
-});
-
-personaRouter.delete(`/loops/:loopId/personas/:personaId`, async (request: Request, response: Response) => {
+personaRouter.delete(`/loop/:loopId/persona/:personaId`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
