@@ -24,6 +24,10 @@ type AuthenticationSearch = {
   returnTo?: string;
 };
 
+type LoopDetailSearch = {
+  tab?: `details` | `personas`;
+};
+
 function ShellLayout() {
   return (
     <ApplicationLayout
@@ -68,8 +72,9 @@ function AuthenticationRouteView() {
 
 function LoopDetailView() {
   const { loopId } = loopDetailRoute.useParams();
+  const { tab } = loopDetailRoute.useSearch();
 
-  return <Loop loopId={loopId} />;
+  return <Loop loopId={loopId} tab={tab ?? `details`} />;
 }
 
 function PersonaDetailView() {
@@ -118,6 +123,9 @@ const loopListRoute = createRoute({
 const loopDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: loopDetailPath,
+  validateSearch: (search: Record<string, unknown>): LoopDetailSearch => ({
+    tab: search.tab === `personas` ? `personas` : `details`,
+  }),
   component: LoopDetailView,
 });
 

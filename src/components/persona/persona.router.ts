@@ -5,18 +5,17 @@ import {
   PersonaNotFoundError,
   PersonaValidationError,
   personaAssignToLoop,
+  personaCatalog,
   personaCreate,
   personaCreateGlobal,
   personaDelete,
   personaGetById,
   personaList,
   personaListGlobal,
-  personaUpdate,
   personaUpdateGlobal,
   validatePersonaInsertRequest,
   validatePersonaUpdateRequest,
 } from "./persona.controller.js";
-import { referencePersonaCatalog } from "./persona.schema.js";
 
 export const personaRouter = Router();
 
@@ -68,8 +67,8 @@ const getUserId = (response: Response): string => {
   return user.id;
 };
 
-personaRouter.get(`/personas/catalog`, (_request: Request, response: Response) => {
-  response.status(200).json(referencePersonaCatalog);
+personaRouter.get(`/personas/catalog`, async (_request: Request, response: Response) => {
+  response.status(200).json(await personaCatalog());
 });
 
 personaRouter.get(`/personas`, async (_request: Request, response: Response) => {
@@ -170,29 +169,6 @@ personaRouter.post(`/loops/:loopId/persona-assignments`, async (request: Request
 
     await personaAssignToLoop(loopId, rawPersonaId);
     response.sendStatus(204);
-  } catch (error) {
-    if (!sendPersonaError(error, response)) {
-      throw error;
-    }
-  }
-});
-
-personaRouter.put(`/loops/:loopId/personas/:personaId`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    const personaId = getPersonaId(request, response);
-
-    if (!personaId) {
-      return;
-    }
-
-    const persona = await personaUpdate(loopId, personaId, validatePersonaUpdateRequest(request.body));
-    response.status(200).json(persona);
   } catch (error) {
     if (!sendPersonaError(error, response)) {
       throw error;

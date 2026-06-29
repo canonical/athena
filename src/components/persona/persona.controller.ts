@@ -2,17 +2,16 @@ import { isValidUuid } from "@components/utilities/validation.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 import { personaInsertSchema, personaUpdateSchema } from "./persona.schema.js";
 import {
-  queryPersonaActiveCount,
+  queryLoopPersonaById,
+  queryLoopPersonaList,
   queryPersonaAssignToLoop,
   queryPersonaById,
-  queryPersonaByIdGlobal,
   queryPersonaCreate,
   queryPersonaCreateGlobal,
+  queryPersonaDefaultList,
   queryPersonaDelete,
   queryPersonaList,
-  queryPersonaListAll,
   queryPersonaUpdate,
-  queryPersonaUpdateGlobal,
 } from "./persona.service.js";
 
 export class PersonaValidationError extends Error {}
@@ -27,14 +26,6 @@ const validateLoopId = (loopId: string): void => {
 const validatePersonaId = (personaId: string): void => {
   if (!isValidUuid(personaId)) {
     throw new PersonaValidationError(`personaId must be a valid UUID.`);
-  }
-};
-
-const validatePersonaConstraintsAfterChange = async (loopId: string): Promise<void> => {
-  const counts = await queryPersonaActiveCount(loopId);
-
-  if (counts.withCodingHarness < 1) {
-    throw new PersonaValidationError(`At least one active persona with a coding harness is required.`);
   }
 };
 
@@ -61,17 +52,17 @@ export const validatePersonaUpdateRequest = (value: unknown): PersonaUpdate => {
 export const personaList = async (loopId: string): Promise<Persona[]> => {
   validateLoopId(loopId);
 
-  return queryPersonaList(loopId);
+  return queryLoopPersonaList(loopId);
 };
 
 export const personaListGlobal = async (): Promise<Persona[]> => {
-  return queryPersonaListAll();
+  return queryPersonaList();
 };
 
 export const personaGetById = async (personaId: string): Promise<Persona> => {
   validatePersonaId(personaId);
 
-  const persona = await queryPersonaByIdGlobal(personaId);
+  const persona = await queryPersonaById(personaId);
 
   if (!persona) {
     throw new PersonaNotFoundError(`Persona not found.`);
@@ -90,35 +81,10 @@ export const personaCreateGlobal = async (input: PersonaInsert, ownerId: string)
   return queryPersonaCreateGlobal(input, false, ownerId);
 };
 
-export const personaUpdate = async (loopId: string, personaId: string, input: PersonaUpdate): Promise<Persona> => {
-  validateLoopId(loopId);
-  validatePersonaId(personaId);
-
-  const existing = await queryPersonaById(personaId, loopId);
-
-  if (!existing) {
-    throw new PersonaNotFoundError(`Persona not found.`);
-  }
-
-  if (existing.isRouting && input.usesCodingHarness) {
-    throw new PersonaValidationError(`A routing persona cannot use a coding harness.`);
-  }
-
-  const updated = await queryPersonaUpdate(personaId, loopId, input);
-
-  if (!updated) {
-    throw new PersonaNotFoundError(`Persona not found.`);
-  }
-
-  await validatePersonaConstraintsAfterChange(loopId);
-
-  return updated;
-};
-
 export const personaUpdateGlobal = async (personaId: string, input: PersonaUpdate): Promise<Persona> => {
   validatePersonaId(personaId);
 
-  const existing = await queryPersonaByIdGlobal(personaId);
+  const existing = await queryPersonaById(personaId);
 
   if (!existing) {
     throw new PersonaNotFoundError(`Persona not found.`);
@@ -128,7 +94,7 @@ export const personaUpdateGlobal = async (personaId: string, input: PersonaUpdat
     throw new PersonaValidationError(`A routing persona cannot use a coding harness.`);
   }
 
-  const updated = await queryPersonaUpdateGlobal(personaId, input);
+  const updated = await queryPersonaUpdate(personaId, input);
 
   if (!updated) {
     throw new PersonaNotFoundError(`Persona not found.`);
@@ -141,7 +107,7 @@ export const personaAssignToLoop = async (loopId: string, personaId: string): Pr
   validateLoopId(loopId);
   validatePersonaId(personaId);
 
-  const persona = await queryPersonaByIdGlobal(personaId);
+  const persona = await queryPersonaById(personaId);
 
   if (!persona) {
     throw new PersonaNotFoundError(`Persona not found.`);
@@ -154,7 +120,7 @@ export const personaDelete = async (loopId: string, personaId: string): Promise<
   validateLoopId(loopId);
   validatePersonaId(personaId);
 
-  const existing = await queryPersonaById(personaId, loopId);
+  const existing = await queryLoopPersonaById(personaId, loopId);
 
   if (!existing) {
     throw new PersonaNotFoundError(`Persona not found.`);
@@ -169,4 +135,8 @@ export const personaDelete = async (loopId: string, personaId: string): Promise<
   if (!deleted) {
     throw new PersonaNotFoundError(`Persona not found.`);
   }
+};
+
+export const personaCatalog = async (): Promise<Persona[]> => {
+  return queryPersonaDefaultList();
 };

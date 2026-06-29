@@ -1,5 +1,5 @@
 import { getApiUrl } from "@components/config/frontend.client.js";
-import type { Persona, ReferencePersona } from "./persona.schema.js";
+import type { Persona } from "./persona.schema.js";
 
 export type PersonaPayload = {
   displayName: string;
@@ -13,8 +13,8 @@ export const personaApiPaths = {
   globalList: getApiUrl(`/personas`),
   globalById: (personaId: string) => getApiUrl(`/personas/${personaId}`),
   list: (loopId: string) => getApiUrl(`/loops/${loopId}/personas`),
-  byId: (loopId: string, personaId: string) => getApiUrl(`/loops/${loopId}/personas/${personaId}`),
   loopAssignments: (loopId: string) => getApiUrl(`/loops/${loopId}/persona-assignments`),
+  loopPersonaById: (loopId: string, personaId: string) => getApiUrl(`/loops/${loopId}/personas/${personaId}`),
 } as const;
 
 const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
@@ -26,17 +26,17 @@ const readErrorMessage = async (response: Response, fallback: string): Promise<s
   }
 };
 
-export const fetchPersonaCatalog = async (): Promise<ReferencePersona[]> => {
+export const fetchPersonaCatalog = async (): Promise<Persona[]> => {
   const response = await fetch(personaApiPaths.catalog, { credentials: `include` });
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Persona catalog request failed with status ${response.status}`));
   }
 
-  return response.json() as Promise<ReferencePersona[]>;
+  return response.json() as Promise<Persona[]>;
 };
 
-export const fetchPersonaListAll = async (): Promise<Persona[]> => {
+export const fetchPersonaList = async (): Promise<Persona[]> => {
   const response = await fetch(personaApiPaths.globalList, { credentials: `include` });
 
   if (!response.ok) {
@@ -56,7 +56,7 @@ export const fetchPersonaById = async (personaId: string): Promise<Persona> => {
   return response.json() as Promise<Persona>;
 };
 
-export const fetchPersonaList = async (loopId: string): Promise<Persona[]> => {
+export const fetchLoopPersonaList = async (loopId: string): Promise<Persona[]> => {
   const response = await fetch(personaApiPaths.list(loopId), { credentials: `include` });
 
   if (!response.ok) {
@@ -66,7 +66,7 @@ export const fetchPersonaList = async (loopId: string): Promise<Persona[]> => {
   return response.json() as Promise<Persona[]>;
 };
 
-export const createPersonaGlobal = async (payload: PersonaPayload): Promise<Persona> => {
+export const createPersona = async (payload: PersonaPayload): Promise<Persona> => {
   const response = await fetch(personaApiPaths.globalList, {
     method: `POST`,
     headers: { "Content-Type": `application/json` },
@@ -81,38 +81,8 @@ export const createPersonaGlobal = async (payload: PersonaPayload): Promise<Pers
   return response.json() as Promise<Persona>;
 };
 
-export const updatePersonaGlobal = async (personaId: string, payload: PersonaPayload): Promise<Persona> => {
+export const updatePersona = async (personaId: string, payload: PersonaPayload): Promise<Persona> => {
   const response = await fetch(personaApiPaths.globalById(personaId), {
-    method: `PUT`,
-    headers: { "Content-Type": `application/json` },
-    credentials: `include`,
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, `Persona update failed with status ${response.status}`));
-  }
-
-  return response.json() as Promise<Persona>;
-};
-
-export const createPersona = async (loopId: string, payload: PersonaPayload): Promise<Persona> => {
-  const response = await fetch(personaApiPaths.list(loopId), {
-    method: `POST`,
-    headers: { "Content-Type": `application/json` },
-    credentials: `include`,
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, `Persona creation failed with status ${response.status}`));
-  }
-
-  return response.json() as Promise<Persona>;
-};
-
-export const updatePersona = async (loopId: string, personaId: string, payload: PersonaPayload): Promise<Persona> => {
-  const response = await fetch(personaApiPaths.byId(loopId, personaId), {
     method: `PUT`,
     headers: { "Content-Type": `application/json` },
     credentials: `include`,
@@ -140,7 +110,7 @@ export const assignPersonaToLoop = async (loopId: string, personaId: string): Pr
 };
 
 export const deletePersona = async (loopId: string, personaId: string): Promise<void> => {
-  const response = await fetch(personaApiPaths.byId(loopId, personaId), {
+  const response = await fetch(personaApiPaths.loopPersonaById(loopId, personaId), {
     method: `DELETE`,
     credentials: `include`,
   });

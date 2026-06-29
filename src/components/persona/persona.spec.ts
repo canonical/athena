@@ -13,24 +13,20 @@ test(`persona catalog returns reference personas`, async ({ page }) => {
   const response = await page.request.get(`http://athena.localhost/api/personas/catalog`);
   expect(response.status()).toBe(200);
 
-  const catalog = (await response.json()) as Array<{ role: string; displayName: string; usesCodingHarness: boolean; isRouting: boolean }>;
+  const catalog = (await response.json()) as Array<{ id: string; displayName: string; usesCodingHarness: boolean; isRouting: boolean; isDefault: boolean }>;
   expect(catalog.length).toBeGreaterThan(0);
 
-  const roles = catalog.map((p) => p.role);
-  expect(roles).toContain(`em`);
-  expect(roles).toContain(`ic`);
-  expect(roles).toContain(`cr`);
-  expect(roles).toContain(`pm`);
-  expect(roles).toContain(`qa`);
-  expect(roles).toContain(`ux`);
+  for (const persona of catalog) {
+    expect(persona.isDefault).toBe(true);
+  }
 
-  const em = catalog.find((p) => p.role === `em`);
-  expect(em?.isRouting).toBe(true);
-  expect(em?.usesCodingHarness).toBe(false);
+  const routing = catalog.find((p) => p.isRouting);
+  expect(routing).toBeDefined();
+  expect(routing?.usesCodingHarness).toBe(false);
 
-  const ic = catalog.find((p) => p.role === `ic`);
-  expect(ic?.usesCodingHarness).toBe(true);
-  expect(ic?.isRouting).toBe(false);
+  const harness = catalog.find((p) => p.usesCodingHarness);
+  expect(harness).toBeDefined();
+  expect(harness?.isRouting).toBe(false);
 });
 
 test(`loop creation seeds an EM persona automatically`, async ({ page }) => {
@@ -71,7 +67,7 @@ test(`personas support create read update and delete through the API`, async ({ 
   const personas = (await listResponse.json()) as Array<{ id: string }>;
   expect(personas.map((p) => p.id)).toContain(created.id);
 
-  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${created.id}`, {
+  const updateResponse = await page.request.put(`http://athena.localhost/api/personas/${created.id}`, {
     data: {
       displayName: `IC Persona Updated`,
       personality: `You are a senior IC, updated.`,
@@ -122,7 +118,7 @@ test(`routing persona cannot be updated to use coding harness`, async ({ page })
     throw new Error(`Routing persona not found.`);
   }
 
-  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${routingPersona.id}`, {
+  const updateResponse = await page.request.put(`http://athena.localhost/api/personas/${routingPersona.id}`, {
     data: {
       displayName: routingPersona.displayName,
       personality: routingPersona.personality,
@@ -132,32 +128,6 @@ test(`routing persona cannot be updated to use coding harness`, async ({ page })
   });
   expect(updateResponse.status()).toBe(400);
   await expect(updateResponse.json()).resolves.toEqual({ error: `A routing persona cannot use a coding harness.` });
-});
-
-test(`deactivating the last coding harness persona is rejected`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Harness constraint loop`);
-
-  const listResponse = await page.request.get(`http://athena.localhost/api/loops/${loop.id}/personas`);
-  const personas = (await listResponse.json()) as Array<{ id: string; displayName: string; personality: string; usesCodingHarness: boolean; isRouting: boolean; lifecycleStatus: string }>;
-  const ic = personas.find((p) => p.usesCodingHarness && !p.isRouting);
-  expect(ic).toBeDefined();
-
-  if (!ic) {
-    throw new Error(`Coding harness persona not found.`);
-  }
-
-  const updateResponse = await page.request.put(`http://athena.localhost/api/loops/${loop.id}/personas/${ic.id}`, {
-    data: {
-      displayName: ic.displayName,
-      personality: ic.personality,
-      usesCodingHarness: ic.usesCodingHarness,
-      lifecycleStatus: `archived`,
-    },
-  });
-  expect(updateResponse.status()).toBe(400);
-  await expect(updateResponse.json()).resolves.toEqual({ error: `At least one active persona with a coding harness is required.` });
 });
 
 test(`personas reject missing required fields`, async ({ page }) => {

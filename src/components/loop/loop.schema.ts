@@ -39,6 +39,7 @@ export type Tab = "details" | "personas";
 
 export type LoopProps = {
   loopId: string;
+  tab: Tab;
 };
 
 export type LoopDetailsProps = {

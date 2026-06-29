@@ -1,13 +1,15 @@
 import { Notification, NotificationSeverity } from "@canonical/react-components";
+import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { LoopDetails } from "./LoopDetails.js";
+import { LoopLayout } from "./LoopLayout.js";
 import { LoopPersonas } from "./LoopPersonas.js";
 import { useLoop } from "./loop.query.js";
 import type { Feedback, LoopProps, Tab } from "./loop.schema.js";
 
-export function Loop({ loopId }: LoopProps) {
+export function Loop({ loopId, tab }: LoopProps) {
   const { state: loopState, reload: reloadLoop } = useLoop(loopId);
-  const [activeTab, setActiveTab] = useState<Tab>(`details`);
+  const navigate = useNavigate();
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [activeRoutingCount, setActiveRoutingCount] = useState<number | null>(null);
 
@@ -17,7 +19,7 @@ export function Loop({ loopId }: LoopProps) {
     setActiveRoutingCount(count);
   }, []);
 
-  const isPaused = activeRoutingCount !== null && activeRoutingCount !== 1;
+  const isPaused = activeRoutingCount !== 1;
 
   const pausedMessage =
     activeRoutingCount === 0
@@ -26,28 +28,31 @@ export function Loop({ loopId }: LoopProps) {
         ? `This loop has ${activeRoutingCount} active routing personas and is paused. Exactly one is required. Go to the Personas tab and remove or archive the extras.`
         : null;
 
+  const setTab = (next: Tab) => {
+    void navigate({ to: `/loop/$loopId`, params: { loopId }, search: { tab: next } });
+    setFeedback(null);
+  };
+
   if (loopState.status === `loading`) {
     return (
-      <section className="athena-home">
+      <LoopLayout>
         <p className="p-text--default">Loading loop...</p>
-      </section>
+      </LoopLayout>
     );
   }
 
   if (loopState.status === `error`) {
     return (
-      <section className="athena-home">
+      <LoopLayout>
         <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load loop">
           {loopState.message}
         </Notification>
-      </section>
+      </LoopLayout>
     );
   }
 
   return (
-    <section className="athena-home">
-      <p className="p-heading--5">Loops</p>
-      <h1 className="p-heading--2">{loop?.name ?? `Loop`}</h1>
+    <LoopLayout loopName={loop?.name ?? `Loop`}>
       {isPaused && pausedMessage ? (
         <Notification severity={NotificationSeverity.CAUTION} title="Loop is paused">
           {pausedMessage}
@@ -63,12 +68,9 @@ export function Loop({ loopId }: LoopProps) {
           <ul className="p-tabs__list">
             <li className="p-tabs__item" role="presentation">
               <button
-                aria-selected={activeTab === `details`}
-                className={`p-tabs__link${activeTab === `details` ? ` is-active` : ``}`}
-                onClick={() => {
-                  setActiveTab(`details`);
-                  setFeedback(null);
-                }}
+                aria-selected={tab === `details`}
+                className={`p-tabs__link${tab === `details` ? ` is-active` : ``}`}
+                onClick={() => setTab(`details`)}
                 role="tab"
                 type="button"
               >
@@ -77,12 +79,9 @@ export function Loop({ loopId }: LoopProps) {
             </li>
             <li className="p-tabs__item" role="presentation">
               <button
-                aria-selected={activeTab === `personas`}
-                className={`p-tabs__link${activeTab === `personas` ? ` is-active` : ``}`}
-                onClick={() => {
-                  setActiveTab(`personas`);
-                  setFeedback(null);
-                }}
+                aria-selected={tab === `personas`}
+                className={`p-tabs__link${tab === `personas` ? ` is-active` : ``}`}
+                onClick={() => setTab(`personas`)}
                 role="tab"
                 type="button"
               >
@@ -92,8 +91,9 @@ export function Loop({ loopId }: LoopProps) {
           </ul>
         </div>
       </nav>
-      {activeTab === `details` ? <LoopDetails loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} onFeedback={setFeedback} onSaved={reloadLoop} /> : null}
-      {activeTab === `personas` ? <LoopPersonas loopId={loopId} onFeedback={setFeedback} onRoutingStatusChange={handleRoutingStatusChange} /> : null}
-    </section>
+      {tab === `details` ? <LoopDetails loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} onFeedback={setFeedback} onSaved={reloadLoop} /> : null}
+      {tab === `personas` ? <LoopPersonas loopId={loopId} onFeedback={setFeedback} onRoutingStatusChange={handleRoutingStatusChange} /> : null}
+    </LoopLayout>
   );
 }
+

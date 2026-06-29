@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchPersonaById, fetchPersonaCatalog, fetchPersonaList, fetchPersonaListAll } from "./persona.client.js";
-import type { Persona, ReferencePersona } from "./persona.schema.js";
+import { fetchLoopPersonaList, fetchPersonaById, fetchPersonaCatalog, fetchPersonaList } from "./persona.client.js";
+import type { Persona } from "./persona.schema.js";
 
 export type PersonaListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; personas: Persona[] };
 
 export type PersonaState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; persona: Persona };
 
-export type CatalogState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; catalog: ReferencePersona[] };
+export type CatalogState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; catalog: Persona[] };
 
 export const usePersonaList = (loopId: string | null) => {
   const [state, setState] = useState<PersonaListState>({ status: `loading` });
@@ -22,7 +22,7 @@ export const usePersonaList = (loopId: string | null) => {
 
     setState({ status: `loading` });
 
-    fetchPersonaList(loopId)
+    fetchLoopPersonaList(loopId)
       .then((personas) => {
         if (active) {
           setState({ status: `success`, personas });
@@ -56,7 +56,7 @@ export const usePersonaListAll = () => {
 
     setState({ status: `loading` });
 
-    fetchPersonaListAll()
+    fetchPersonaList()
       .then((personas) => {
         if (active) {
           setState({ status: `success`, personas });

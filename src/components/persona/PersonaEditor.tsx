@@ -1,8 +1,8 @@
 import { Button, Notification, NotificationSeverity, Select } from "@canonical/react-components";
 import type { User } from "@components/authentication/session.schema.js";
 import { type FormEvent, useState } from "react";
-import { createPersona, createPersonaGlobal, updatePersona, updatePersonaGlobal } from "./persona.client.js";
-import type { Feedback, FormState, PersonaEditorProps, Persona as PersonaRecord, ReferencePersona } from "./persona.schema.js";
+import { assignPersonaToLoop, createPersona, updatePersona } from "./persona.client.js";
+import type { Feedback, FormState, Persona as PersonaRecord, PersonaEditorProps } from "./persona.schema.js";
 import { personaLifecycleStatuses } from "./persona.schema.js";
 
 export const isPersonaOwner = (persona: PersonaRecord, currentUser: User | null): boolean => {
@@ -49,7 +49,7 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
   const [isBusy, setIsBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
-  const applyTemplate = (ref: ReferencePersona) => {
+  const applyTemplate = (ref: PersonaRecord) => {
     setForm({
       displayName: ref.displayName,
       personality: ref.personality,
@@ -66,18 +66,14 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
 
     try {
       if (editingPersona) {
-        if (loopId) {
-          await updatePersona(loopId, editingPersona.id, form);
-        } else {
-          await updatePersonaGlobal(editingPersona.id, form);
-        }
+        await updatePersona(editingPersona.id, form);
         onSuccess(`${form.displayName} has been updated.`);
       } else {
+        const created = await createPersona(form);
         if (loopId) {
-          await createPersona(loopId, form);
+          await assignPersonaToLoop(loopId, created.id);
           onSuccess(`${form.displayName} has been added to the loop.`);
         } else {
-          await createPersonaGlobal(form);
           onSuccess(`${form.displayName} has been created.`);
         }
       }
@@ -101,7 +97,7 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
           <p className="p-text--default">Select a reference persona to pre-fill the form below with a standard personality definition.</p>
           <div style={{ display: `flex`, flexWrap: `wrap`, gap: `0.5rem` }}>
             {catalogTemplates.map((ref) => (
-              <Button appearance="base" key={ref.role} onClick={() => applyTemplate(ref)} type="button">
+              <Button appearance="base" key={ref.id} onClick={() => applyTemplate(ref)} type="button">
                 {ref.displayName}
               </Button>
             ))}
