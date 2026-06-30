@@ -111,7 +111,7 @@ test(`routing persona cannot be deleted`, async ({ page }) => {
   await expect(deleteResponse.json()).resolves.toEqual({ error: `Default personas cannot be deleted.` });
 });
 
-test(`routing persona cannot be updated to use coding harness`, async ({ page }) => {
+test(`default personas cannot be edited`, async ({ page }) => {
   await authenticate(page);
 
   const loop = await createLoop(page, `EM harness guard loop`);
@@ -133,8 +133,24 @@ test(`routing persona cannot be updated to use coding harness`, async ({ page })
       lifecycleStatus: routingPersona.lifecycleStatus,
     },
   });
-  expect(updateResponse.status()).toBe(400);
-  await expect(updateResponse.json()).resolves.toEqual({ error: `A routing persona cannot use a coding harness.` });
+  expect(updateResponse.status()).toBe(403);
+  await expect(updateResponse.json()).resolves.toEqual({ error: `Only the persona owner may edit it.` });
+});
+
+test(`persona owner can update their own persona`, async ({ page }) => {
+  await authenticate(page);
+
+  const createResponse = await page.request.post(`http://athena.localhost/api/persona-list`, {
+    data: { displayName: `My IC`, personality: `An IC I own.`, usesCodingHarness: true, lifecycleStatus: `active` },
+  });
+  expect(createResponse.status()).toBe(201);
+  const created = (await createResponse.json()) as { id: string };
+
+  const updateResponse = await page.request.put(`http://athena.localhost/api/persona/${created.id}`, {
+    data: { displayName: `My IC updated`, personality: `Updated personality.`, usesCodingHarness: true, lifecycleStatus: `active` },
+  });
+  expect(updateResponse.status()).toBe(200);
+  await expect(updateResponse.json()).resolves.toMatchObject({ id: created.id, displayName: `My IC updated` });
 });
 
 test(`personas reject missing required fields`, async ({ page }) => {

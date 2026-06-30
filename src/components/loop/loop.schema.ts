@@ -1,4 +1,5 @@
 import type { NotificationSeverity } from "@canonical/react-components";
+import type { PersonaListState } from "../persona/persona.query.js";
 import { z } from "zod";
 
 const requiredString = (message: string) => z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string(message));
@@ -52,6 +53,7 @@ export type LoopDetailsProps = {
 
 export type LoopPersonasProps = {
   loopId: string;
+  personaListState: PersonaListState;
+  reloadPersonaList: () => void;
   onFeedback: (feedback: Feedback | null) => void;
-  onRoutingStatusChange: (activeRoutingCount: number) => void;
 };

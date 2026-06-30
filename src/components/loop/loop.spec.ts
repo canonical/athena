@@ -173,41 +173,16 @@ test(`loop detail page saves loop details from the Details tab`, async ({ page }
   await expect(page.getByRole(`heading`, { name: `Detail save loop updated` })).toBeVisible();
 });
 
-test(`loop detail shows paused notification when no routing persona is active`, async ({ page }) => {
+test(`loop details tab shows no paused banner for a properly configured loop`, async ({ page }) => {
   await authenticate(page);
 
   const loop = await createLoop(page, `Paused routing loop`);
 
-  const listResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
-  const personas = (await listResponse.json()) as Array<{ id: string; isRouting: boolean; displayName: string; personality: string; lifecycleStatus: string }>;
-  const routingPersona = personas.find((p) => p.isRouting);
-  expect(routingPersona).toBeDefined();
-
-  // Archive the routing persona so no active routing persona remains (default personas cannot be deleted)
-  const archiveResponse = await page.request.put(`http://athena.localhost/api/persona/${routingPersona!.id}`, {
-    data: {
-      displayName: routingPersona!.displayName,
-      personality: routingPersona!.personality,
-      usesCodingHarness: false,
-      lifecycleStatus: `archived`,
-    },
-  });
-  expect(archiveResponse.status()).toBe(200);
-
-  // Navigate to personas tab so the routing count is computed and the paused banner appears
-  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=personas`);
+  // Navigate directly to the Details tab without visiting the Personas tab first.
+  // The persona list is fetched at the Loop level so the routing count is available on any tab.
+  await page.goto(`http://athena.localhost/loop/${loop.id}`);
 
   await expect(page.getByRole(`heading`, { name: `Paused routing loop` })).toBeVisible();
-  await expect(page.getByText(`Loop is paused`).first()).toBeVisible();
-  await expect(page.getByText(/no active routing persona is assigned/i)).toBeVisible();
-
-  // Restore the routing persona to active so subsequent tests are not affected
-  await page.request.put(`http://athena.localhost/api/persona/${routingPersona!.id}`, {
-    data: {
-      displayName: routingPersona!.displayName,
-      personality: routingPersona!.personality,
-      usesCodingHarness: false,
-      lifecycleStatus: `active`,
-    },
-  });
+  await expect(page.getByRole(`tab`, { name: `Details` })).toHaveAttribute(`aria-selected`, `true`);
+  await expect(page.getByText(`Loop is paused`)).toHaveCount(0);
 });

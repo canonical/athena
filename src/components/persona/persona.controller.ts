@@ -16,6 +16,7 @@ import {
 
 export class PersonaValidationError extends Error {}
 export class PersonaNotFoundError extends Error {}
+export class PersonaForbiddenError extends Error {}
 
 const validateLoopId = (loopId: string): void => {
   if (!isValidUuid(loopId)) {
@@ -81,13 +82,17 @@ export const personaCreateGlobal = async (input: PersonaInsert, ownerId: string)
   return queryPersonaCreateGlobal(input, false, ownerId);
 };
 
-export const personaUpdateGlobal = async (personaId: string, input: PersonaUpdate): Promise<Persona> => {
+export const personaUpdateGlobal = async (personaId: string, input: PersonaUpdate, requestUserId: string): Promise<Persona> => {
   validatePersonaId(personaId);
 
   const existing = await queryPersonaById(personaId);
 
   if (!existing) {
     throw new PersonaNotFoundError(`Persona not found.`);
+  }
+
+  if (existing.owner !== requestUserId) {
+    throw new PersonaForbiddenError(`Only the persona owner may edit it.`);
   }
 
   if (existing.isRouting && input.usesCodingHarness) {

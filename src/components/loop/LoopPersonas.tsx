@@ -1,7 +1,7 @@
 import { Button, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
 import { useCurrentUser } from "@components/authentication/authentication.query.js";
-import { usePersonaList, usePersonaListAll } from "@components/persona/persona.query.js";
-import { type FormEvent, useEffect, useState } from "react";
+import { usePersonaListAll } from "@components/persona/persona.query.js";
+import { type FormEvent, useState } from "react";
 import { isPersonaOwner, PersonaEditor, personaEditorKey } from "../persona/PersonaEditor.js";
 import { assignPersonaToLoop, deletePersona } from "../persona/persona.client.js";
 import type { Persona as PersonaRecord } from "../persona/persona.schema.js";
@@ -13,9 +13,8 @@ const lifecycleStatusLabel: Record<string, string> = {
   archived: `Archived`,
 };
 
-export function LoopPersonas({ loopId, onFeedback, onRoutingStatusChange }: LoopPersonasProps) {
+export function LoopPersonas({ loopId, personaListState, reloadPersonaList, onFeedback }: LoopPersonasProps) {
   const currentUser = useCurrentUser();
-  const { state: personaListState, reload: reloadPersonaList } = usePersonaList(loopId);
   const { state: personaListAllState } = usePersonaListAll();
   const [editingPersona, setEditingPersona] = useState<PersonaRecord | null>(null);
   const [cloneSource, setCloneSource] = useState<PersonaRecord | null>(null);
@@ -28,12 +27,7 @@ export function LoopPersonas({ loopId, onFeedback, onRoutingStatusChange }: Loop
   const unassignedPersonaList = personaListAllState.status === `success` ? personaListAllState.personas.filter((p) => !assignedIds.has(p.id)) : [];
 
   const activeRoutingCount = personaListState.status === `success` ? personaListState.personas.filter((p) => p.isRouting && p.lifecycleStatus === `active`).length : null;
-
-  useEffect(() => {
-    if (activeRoutingCount !== null) {
-      onRoutingStatusChange(activeRoutingCount);
-    }
-  }, [activeRoutingCount, onRoutingStatusChange]);
+  const activeCodingHarnessCount = personaListState.status === `success` ? personaListState.personas.filter((p) => p.usesCodingHarness && p.lifecycleStatus === `active`).length : null;
 
   const handleEditorSuccess = (message: string) => {
     onFeedback({
@@ -114,18 +108,28 @@ export function LoopPersonas({ loopId, onFeedback, onRoutingStatusChange }: Loop
 
   const isOwner = (persona: PersonaRecord): boolean => isPersonaOwner(persona, currentUser);
 
-  const pausedReason =
+  const routingPausedReason =
     activeRoutingCount === 0
       ? `No active routing persona is assigned. Assign or activate a routing persona to resume the loop.`
       : activeRoutingCount !== null && activeRoutingCount > 1
         ? `${activeRoutingCount} active routing personas are assigned. Exactly one is required. Remove or archive the extras to resume the loop.`
         : null;
 
+  const codingHarnessPausedReason =
+    activeCodingHarnessCount !== null && activeCodingHarnessCount === 0
+      ? `No active coding-harness persona is assigned. Assign or activate a coding-harness persona to resume the loop.`
+      : null;
+
   return (
     <>
-      {pausedReason ? (
+      {routingPausedReason ? (
         <Notification severity={NotificationSeverity.CAUTION} title="Loop is paused">
-          {pausedReason}
+          {routingPausedReason}
+        </Notification>
+      ) : null}
+      {codingHarnessPausedReason ? (
+        <Notification severity={NotificationSeverity.CAUTION} title="Loop is paused">
+          {codingHarnessPausedReason}
         </Notification>
       ) : null}
       <PersonaEditor cloneSource={cloneSource} editingPersona={editingPersona} key={personaEditorKey(editingPersona, cloneSource)} loopId={loopId} onCancel={handleEditorCancel} onSuccess={handleEditorSuccess} />

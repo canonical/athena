@@ -2,6 +2,7 @@ import type { AuthenticatedUser } from "@components/authentication/session.schem
 import { isValidUuid } from "@components/utilities/validation.js";
 import { type Request, type Response, Router } from "express";
 import {
+  PersonaForbiddenError,
   PersonaNotFoundError,
   PersonaValidationError,
   personaAssignToLoop,
@@ -27,6 +28,11 @@ const sendPersonaError = (error: unknown, response: Response): boolean => {
 
   if (error instanceof PersonaNotFoundError) {
     response.status(404).json({ error: error.message });
+    return true;
+  }
+
+  if (error instanceof PersonaForbiddenError) {
+    response.status(403).json({ error: error.message });
     return true;
   }
 
@@ -132,7 +138,7 @@ personaRouter.put(`/persona/:personaId`, async (request: Request, response: Resp
       return;
     }
 
-    const persona = await personaUpdateGlobal(personaId, validatePersonaUpdateRequest(request.body));
+    const persona = await personaUpdateGlobal(personaId, validatePersonaUpdateRequest(request.body), getUserId(response));
     response.status(200).json(persona);
   } catch (error) {
     if (!sendPersonaError(error, response)) {
