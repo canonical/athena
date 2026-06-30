@@ -26,8 +26,8 @@ if (process.env.COVERAGE) {
 }
 
 app.use(apiRoot, requireAuthentication);
-app.use(apiRoot, loopRouter);
 app.use(apiRoot, eventRouter);
+app.use(apiRoot, loopRouter);
 app.use(apiRoot, personaRouter);
 app.use(staticRouter);
 
