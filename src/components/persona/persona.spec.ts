@@ -319,3 +319,117 @@ test(`persona detail page allows assigning persona to a loop`, async ({ page }) 
 
   await expect(page.getByText(`has been assigned to ${loop.name}`)).toBeVisible();
 });
+
+test(`persona routes return 400 for invalid UUID in path`, async ({ page }) => {
+  await authenticate(page);
+
+  const validLoopId = (await createLoop(page, `UUID guard loop`)).id;
+  const invalidId = `not-a-uuid`;
+  const validPersonaId = `00000000-0000-7000-8000-000000000001`;
+
+  const [getPersona, putPersona, getLoopList, postLoopList, deleteInvalidLoop, deleteInvalidPersona] = await Promise.all([
+    page.request.get(`http://athena.localhost/api/persona/${invalidId}`),
+    page.request.put(`http://athena.localhost/api/persona/${invalidId}`, { data: { displayName: `x`, personality: `y`, usesCodingHarness: false, lifecycleStatus: `active` } }),
+    page.request.get(`http://athena.localhost/api/loop/${invalidId}/persona-list`),
+    page.request.post(`http://athena.localhost/api/loop/${invalidId}/persona-list`, { data: { displayName: `x`, personality: `y`, usesCodingHarness: false, lifecycleStatus: `active` } }),
+    page.request.delete(`http://athena.localhost/api/loop/${invalidId}/persona/${validPersonaId}`),
+    page.request.delete(`http://athena.localhost/api/loop/${validLoopId}/persona/${invalidId}`),
+  ]);
+
+  expect(getPersona.status()).toBe(400);
+  expect(putPersona.status()).toBe(400);
+  expect(getLoopList.status()).toBe(400);
+  expect(postLoopList.status()).toBe(400);
+  expect(deleteInvalidLoop.status()).toBe(400);
+  expect(deleteInvalidPersona.status()).toBe(400);
+  await expect(getPersona.json()).resolves.toEqual({ error: `personaId must be a valid UUID.` });
+  await expect(getLoopList.json()).resolves.toEqual({ error: `loopId must be a valid UUID.` });
+});
+
+test(`POST /persona-list?loop= returns 400 for invalid loop UUID`, async ({ page }) => {
+  await authenticate(page);
+
+  const response = await page.request.post(`http://athena.localhost/api/persona-list?loop=not-a-uuid`, {
+    data: { personaId: `00000000-0000-7000-8000-000000000001` },
+  });
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toEqual({ error: `loopId must be a valid UUID.` });
+});
+
+test(`POST /persona-list?loop= returns 400 for non-UUID personaId value`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Non-UUID persona assign loop`);
+
+  const response = await page.request.post(`http://athena.localhost/api/persona-list?loop=${loop.id}`, {
+    data: { personaId: `not-a-uuid` },
+  });
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toEqual({ error: `personaId must be a valid UUID.` });
+});
+
+test(`PUT /persona/:id returns 400 for missing required fields`, async ({ page }) => {
+  await authenticate(page);
+
+  const catalogResponse = await page.request.get(`http://athena.localhost/api/persona/catalog`);
+  const catalog = (await catalogResponse.json()) as Array<{ id: string }>;
+  const catalogPersona = catalog[0];
+  expect(catalogPersona).toBeDefined();
+
+  const response = await page.request.put(`http://athena.localhost/api/persona/${catalogPersona!.id}`, {
+    data: { displayName: `   `, personality: `Valid personality`, usesCodingHarness: false, lifecycleStatus: `active` },
+  });
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toEqual({ error: `displayName is required.` });
+});
+
+test(`PUT /persona/:id returns 404 for unknown persona`, async ({ page }) => {
+  await authenticate(page);
+
+  const response = await page.request.put(`http://athena.localhost/api/persona/00000000-0000-7000-8000-000000000099`, {
+    data: { displayName: `Name`, personality: `Personality`, usesCodingHarness: false, lifecycleStatus: `active` },
+  });
+  expect(response.status()).toBe(404);
+  await expect(response.json()).resolves.toEqual({ error: `Persona not found.` });
+});
+
+test(`DELETE /loop/:loopId/persona/:personaId returns 404 when persona not assigned to loop`, async ({ page }) => {
+  await authenticate(page);
+
+  const [loop, otherLoop] = await Promise.all([createLoop(page, `Delete unassigned loop`), createLoop(page, `Other loop for unassigned test`)]);
+
+  const createResponse = await page.request.post(`http://athena.localhost/api/persona-list`, {
+    data: { displayName: `Unassigned persona`, personality: `Not in the target loop.`, usesCodingHarness: false, lifecycleStatus: `active` },
+  });
+  const created = (await createResponse.json()) as { id: string };
+
+  // Assign persona to otherLoop but NOT to loop
+  await page.request.post(`http://athena.localhost/api/persona-list?loop=${otherLoop.id}`, {
+    data: { personaId: created.id },
+  });
+
+  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loop/${loop.id}/persona/${created.id}`);
+  expect(deleteResponse.status()).toBe(404);
+  await expect(deleteResponse.json()).resolves.toEqual({ error: `Persona not found.` });
+});
+
+test(`loop detail Personas tab allows removing a non-default persona`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Remove persona loop`);
+
+  // Create and assign a non-default persona via API
+  const createResponse = await page.request.post(`http://athena.localhost/api/loop/${loop.id}/persona-list`, {
+    data: { displayName: `Removable IC`, personality: `An IC that can be removed.`, usesCodingHarness: false, lifecycleStatus: `active` },
+  });
+  expect(createResponse.status()).toBe(201);
+  const created = (await createResponse.json()) as { displayName: string };
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=personas`);
+
+  await expect(page.getByRole(`gridcell`, { name: created.displayName, exact: true }).first()).toBeVisible();
+  await page.getByRole(`button`, { name: `Remove ${created.displayName}` }).click();
+
+  await expect(page.getByText(`${created.displayName} has been removed from this loop.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: created.displayName, exact: true })).toHaveCount(0);
+});

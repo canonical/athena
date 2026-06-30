@@ -126,6 +126,53 @@ test(`loop detail page tabs are deep-linkable`, async ({ page }) => {
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 });
 
+test(`loop routes return 400 for invalid UUID in path`, async ({ page }) => {
+  await authenticate(page);
+
+  const [getResponse, putResponse, deleteResponse] = await Promise.all([
+    page.request.get(`http://athena.localhost/api/loop/not-a-uuid`),
+    page.request.put(`http://athena.localhost/api/loop/not-a-uuid`, { data: { name: `x` } }),
+    page.request.delete(`http://athena.localhost/api/loop/not-a-uuid`),
+  ]);
+
+  expect(getResponse.status()).toBe(400);
+  expect(putResponse.status()).toBe(400);
+  expect(deleteResponse.status()).toBe(400);
+  await expect(getResponse.json()).resolves.toEqual({ error: `loopId must be a valid UUID.` });
+});
+
+test(`loop routes return 404 for unknown loop id`, async ({ page }) => {
+  await authenticate(page);
+
+  const unknownId = `00000000-0000-7000-8000-000000000099`;
+  const [getResponse, putResponse, deleteResponse] = await Promise.all([
+    page.request.get(`http://athena.localhost/api/loop/${unknownId}`),
+    page.request.put(`http://athena.localhost/api/loop/${unknownId}`, {
+      data: { name: `Updated name`, description: `desc` },
+    }),
+    page.request.delete(`http://athena.localhost/api/loop/${unknownId}`),
+  ]);
+
+  expect(getResponse.status()).toBe(404);
+  expect(putResponse.status()).toBe(404);
+  expect(deleteResponse.status()).toBe(404);
+  await expect(getResponse.json()).resolves.toEqual({ error: `Loop not found.` });
+});
+
+test(`loop detail page saves loop details from the Details tab`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Detail save loop`, `Original description`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}`);
+
+  await expect(page.getByRole(`tab`, { name: `Details` })).toHaveAttribute(`aria-selected`, `true`);
+  await page.getByLabel(`Loop name`).fill(`Detail save loop updated`);
+  await page.getByRole(`button`, { name: `Save loop` }).click();
+
+  await expect(page.getByText(`Detail save loop updated has been updated.`)).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Detail save loop updated` })).toBeVisible();
+});
+
 test(`loop detail shows paused notification when no routing persona is active`, async ({ page }) => {
   await authenticate(page);
 
