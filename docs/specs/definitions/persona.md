@@ -34,7 +34,7 @@ Users can manage personas in a loop with the following constraints:
 3. Users who do not own a persona can clone it (creating a new persona owned by them).
 4. Users can remove personas from a loop (does not delete the persona unless it is non-default with no remaining loop assignments).
 5. Default personas cannot be deleted.
-6. Each loop must always have at least one active routing persona and at least one active coding-harness persona.
+6. Each loop must always have exactly one active routing persona and at least one active coding-harness persona.
 
 ## Deterministic Routing Inputs
 
