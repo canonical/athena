@@ -304,10 +304,7 @@ test(`POST /persona-list?loop= returns 404 for unknown loop`, async ({ page }) =
   const catalogPersona = catalog[0];
   expect(catalogPersona).toBeDefined();
 
-  const response = await page.request.post(
-    `http://athena.localhost/api/persona-list?loop=00000000-0000-7000-8000-000000000099`,
-    { data: { personaId: catalogPersona?.id } },
-  );
+  const response = await page.request.post(`http://athena.localhost/api/persona-list?loop=00000000-0000-7000-8000-000000000099`, { data: { personaId: catalogPersona?.id } });
   expect(response.status()).toBe(404);
   await expect(response.json()).resolves.toEqual({ error: `Cannot assign persona: loop not found or access denied.` });
 });
