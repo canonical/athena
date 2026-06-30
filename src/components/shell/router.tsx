@@ -2,6 +2,10 @@ import { ApplicationLayout, Chip, Notification, NotificationSeverity } from "@ca
 import { AuthenticationView } from "@components/authentication/Authentication.js";
 import { Event } from "@components/event/Event.js";
 import { Loop } from "@components/loop/Loop.js";
+import { LoopLayout } from "@components/loop/LoopLayout.js";
+import { LoopList } from "@components/loop/LoopList.js";
+import { Persona } from "@components/persona/Persona.js";
+import { PersonaList } from "@components/persona/PersonaList.js";
 import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
 
 import athenaLogo from "./athena-logo.svg";
@@ -11,11 +15,18 @@ import "./shell.scss";
 
 const rootPath = `/`;
 const authenticationPath = `/authentication`;
-const loopsPath = `/loops`;
+const loopListPath = `/loop-list`;
+const loopDetailPath = `/loop/$loopId`;
 const eventsPath = `/events`;
+const personaListPath = `/persona-list`;
+const personaDetailPath = `/persona/$personaId`;
 
 type AuthenticationSearch = {
   returnTo?: string;
+};
+
+type LoopDetailSearch = {
+  tab?: `details` | `personas`;
 };
 
 function ShellLayout() {
@@ -60,6 +71,19 @@ function AuthenticationRouteView() {
   return <AuthenticationView returnTo={returnTo ?? rootPath} />;
 }
 
+function LoopDetailView() {
+  const { loopId } = loopDetailRoute.useParams();
+  const { tab } = loopDetailRoute.useSearch();
+
+  return <Loop loopId={loopId} tab={tab ?? `details`} />;
+}
+
+function PersonaDetailView() {
+  const { personaId } = personaDetailRoute.useParams();
+
+  return <Persona personaId={personaId} />;
+}
+
 function NotFoundView() {
   return (
     <section className="athena-home">
@@ -91,10 +115,25 @@ const authenticationRoute = createRoute({
   component: AuthenticationRouteView,
 });
 
-const loopRoute = createRoute({
+const loopLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: loopsPath,
-  component: Loop,
+  id: `loop-layout`,
+  component: LoopLayout,
+});
+
+const loopListRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopListPath,
+  component: LoopList,
+});
+
+const loopDetailRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopDetailPath,
+  validateSearch: (search: Record<string, unknown>): LoopDetailSearch => ({
+    tab: search.tab === `personas` ? `personas` : `details`,
+  }),
+  component: LoopDetailView,
 });
 
 const eventRoute = createRoute({
@@ -103,7 +142,19 @@ const eventRoute = createRoute({
   component: Event,
 });
 
-const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopRoute, eventRoute]);
+const personaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: personaListPath,
+  component: PersonaList,
+});
+
+const personaDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: personaDetailPath,
+  component: PersonaDetailView,
+});
+
+const routeTree = rootRoute.addChildren([overviewRoute, authenticationRoute, loopLayoutRoute.addChildren([loopListRoute, loopDetailRoute]), eventRoute, personaRoute, personaDetailRoute]);
 
 export const router = createRouter({
   routeTree,

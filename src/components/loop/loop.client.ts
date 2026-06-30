@@ -7,8 +7,8 @@ export type LoopPayload = {
 };
 
 export const loopApiPaths = {
-  list: getApiUrl(`/loops`),
-  byId: (loopId: string) => getApiUrl(`/loops/${loopId}`),
+  list: getApiUrl(`/loop-list`),
+  byId: (loopId: string) => getApiUrl(`/loop/${loopId}`),
 } as const;
 
 const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
@@ -20,7 +20,7 @@ const readErrorMessage = async (response: Response, fallback: string): Promise<s
   }
 };
 
-export const fetchLoops = async (): Promise<Loop[]> => {
+export const fetchLoopList = async (): Promise<Loop[]> => {
   const response = await fetch(loopApiPaths.list, { credentials: `include` });
 
   if (!response.ok) {

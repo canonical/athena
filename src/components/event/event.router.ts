@@ -1,12 +1,22 @@
+import type { AuthenticatedUser } from "@components/authentication/session.schema.js";
 import { type Request, type Response, Router } from "express";
 import { EventAccessError, EventValidationError, eventCreate, eventList } from "./event.controller.js";
 
 export const eventRouter = Router();
 
+const getUserId = (response: Response): string => {
+  const user = response.locals.user as AuthenticatedUser | undefined;
+
+  if (!user) {
+    throw new Error(`Authenticated user not found in request context.`);
+  }
+
+  return user.id;
+};
+
 eventRouter.post(`/loop/events`, async (request: Request, response: Response) => {
   try {
-    const user = response.locals.user!;
-    const result = await eventCreate(request.body, user.id);
+    const result = await eventCreate(request.body, getUserId(response));
 
     response.status(201).json(result);
   } catch (error) {
@@ -24,9 +34,8 @@ eventRouter.post(`/loop/events`, async (request: Request, response: Response) =>
   }
 });
 
-eventRouter.get(`/loop/events`, async (request: Request, response: Response) => {
-  const user = response.locals.user!;
-  const events = await eventList(user.id);
+eventRouter.get(`/loop/events`, async (_request: Request, response: Response) => {
+  const events = await eventList(getUserId(response));
 
   response.status(200).json(events);
 });

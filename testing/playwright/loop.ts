@@ -2,7 +2,7 @@ import type { Page } from "./test.js";
 import { expect } from "./test.js";
 
 export const createLoop = async (page: Page, name: string, description = `${name} description`) => {
-  const response = await page.request.post(`http://athena.localhost/api/loops`, {
+  const response = await page.request.post(`http://athena.localhost/api/loop-list`, {
     data: {
       name,
       description,

@@ -1,236 +1,87 @@
-import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
-import { type FormEvent, useState } from "react";
-import { createLoop, deleteLoop, updateLoop } from "./loop.client.js";
-import type { LoopsState } from "./loop.query.js";
-import { useLoops } from "./loop.query.js";
-import { loopInsertSchema, loopUpdateSchema } from "./loop.schema.js";
+import { Notification, NotificationSeverity } from "@canonical/react-components";
+import { useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { usePersonaList } from "../persona/persona.query.js";
+import { LoopDetails } from "./LoopDetails.js";
+import { LoopPersonas } from "./LoopPersonas.js";
+import { useLoop } from "./loop.query.js";
+import type { Feedback, LoopProps, Tab } from "./loop.schema.js";
 
-type Feedback = {
-  severity: NotificationSeverity;
-  title: string;
-  message: string;
-};
-
-type LoopItem = Extract<LoopsState, { status: "success" }>["loops"][number];
-
-const formatTimestamp = (value: Date | string) => new Date(value).toLocaleString();
-
-export function Loop() {
-  const { state, reload } = useLoops();
-  const [createName, setCreateName] = useState(``);
-  const [createDescription, setCreateDescription] = useState(``);
-  const [editingLoop, setEditingLoop] = useState<LoopItem | null>(null);
-  const [editName, setEditName] = useState(``);
-  const [editDescription, setEditDescription] = useState(``);
-  const [busyLoopId, setBusyLoopId] = useState<string | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+export function Loop({ loopId, tab }: LoopProps) {
+  const { state: loopState, reload: reloadLoop } = useLoop(loopId);
+  const { state: personaListState, reload: reloadPersonaList } = usePersonaList(loopId);
+  const navigate = useNavigate();
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
-  const resetEditState = () => {
-    setEditingLoop(null);
-    setEditName(``);
-    setEditDescription(``);
-    setIsSaving(false);
-  };
+  const loop = loopState.status === `success` ? loopState.loop : null;
 
-  const startEditing = (loop: LoopItem) => {
-    setEditingLoop(loop);
-    setEditName(loop.name);
-    setEditDescription(loop.description ?? ``);
+  const personas = personaListState.status === `success` ? personaListState.personas : null;
+  const activeRoutingCount = personas !== null ? personas.filter((p) => p.isRouting && p.lifecycleStatus === `active`).length : null;
+  const activeCodingHarnessCount = personas !== null ? personas.filter((p) => p.usesCodingHarness && p.lifecycleStatus === `active`).length : null;
+
+  const routingPausedMessage =
+    activeRoutingCount === 0
+      ? `This loop has no active routing persona and is paused. Go to the Personas tab and assign or activate a routing persona.`
+      : activeRoutingCount !== null && activeRoutingCount > 1
+        ? `This loop has ${activeRoutingCount} active routing personas and is paused. Exactly one is required. Go to the Personas tab and remove or archive the extras.`
+        : null;
+
+  const codingHarnessPausedMessage =
+    activeCodingHarnessCount !== null && activeCodingHarnessCount === 0 ? `This loop has no active coding-harness persona and is paused. Go to the Personas tab and assign or activate a coding-harness persona.` : null;
+
+  const setTab = (next: Tab) => {
+    void navigate({ to: `/loop/$loopId`, params: { loopId }, search: { tab: next } });
     setFeedback(null);
   };
 
-  const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  if (loopState.status === `loading`) {
+    return <p className="p-text--default">Loading loop...</p>;
+  }
 
-    const parseResult = loopInsertSchema.safeParse({ name: createName, description: createDescription });
-
-    if (!parseResult.success) {
-      setFeedback({
-        severity: NotificationSeverity.NEGATIVE,
-        title: `Unable to create loop`,
-        message: parseResult.error.issues[0]?.message ?? `Invalid input.`,
-      });
-      return;
-    }
-
-    setIsCreating(true);
-    setFeedback(null);
-
-    try {
-      const loop = await createLoop({
-        name: createName,
-        description: createDescription,
-      });
-
-      setCreateName(``);
-      setCreateDescription(``);
-      setFeedback({
-        severity: NotificationSeverity.INFORMATION,
-        title: `Loop created`,
-        message: `${loop.name} is ready to receive events.`,
-      });
-      reload();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setFeedback({
-        severity: NotificationSeverity.NEGATIVE,
-        title: `Unable to create loop`,
-        message,
-      });
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!editingLoop) {
-      return;
-    }
-
-    const parseResult = loopUpdateSchema.safeParse({ name: editName, description: editDescription });
-
-    if (!parseResult.success) {
-      setFeedback({
-        severity: NotificationSeverity.NEGATIVE,
-        title: `Unable to update loop`,
-        message: parseResult.error.issues[0]?.message ?? `Invalid input.`,
-      });
-      return;
-    }
-
-    setIsSaving(true);
-    setFeedback(null);
-
-    try {
-      const loop = await updateLoop(editingLoop.id, {
-        name: editName,
-        description: editDescription,
-      });
-
-      setFeedback({
-        severity: NotificationSeverity.INFORMATION,
-        title: `Loop updated`,
-        message: `${loop.name} has been updated.`,
-      });
-      resetEditState();
-      reload();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setFeedback({
-        severity: NotificationSeverity.NEGATIVE,
-        title: `Unable to update loop`,
-        message,
-      });
-      setIsSaving(false);
-    }
-  };
-
-  const handleDelete = async (loop: LoopItem) => {
-    setBusyLoopId(loop.id);
-    setFeedback(null);
-
-    try {
-      await deleteLoop(loop.id);
-      setFeedback({
-        severity: NotificationSeverity.INFORMATION,
-        title: `Loop deleted`,
-        message: `${loop.name} has been deleted.`,
-      });
-
-      if (editingLoop?.id === loop.id) {
-        resetEditState();
-      }
-
-      reload();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setFeedback({
-        severity: NotificationSeverity.NEGATIVE,
-        title: `Unable to delete loop`,
-        message,
-      });
-    } finally {
-      setBusyLoopId(null);
-    }
-  };
+  if (loopState.status === `error`) {
+    return (
+      <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load loop">
+        {loopState.message}
+      </Notification>
+    );
+  }
 
   return (
-    <section className="athena-home">
-      <p className="p-heading--5">Loops</p>
-      <h1 className="p-heading--2">Loops</h1>
-      <p className="p-text--default">Create and manage the long-lived loops that hold Athena events.</p>
+    <>
+      <h1 className="p-heading--2">{loop?.name ?? `Loop`}</h1>
+      {routingPausedMessage ? (
+        <Notification severity={NotificationSeverity.CAUTION} title="Loop is paused">
+          {routingPausedMessage}
+        </Notification>
+      ) : null}
+      {codingHarnessPausedMessage ? (
+        <Notification severity={NotificationSeverity.CAUTION} title="Loop is paused">
+          {codingHarnessPausedMessage}
+        </Notification>
+      ) : null}
       {feedback ? (
         <Notification severity={feedback.severity} title={feedback.title}>
           {feedback.message}
         </Notification>
       ) : null}
-      <div className="p-strip is-shallow">
-        <form onSubmit={handleCreate}>
-          <h2 className="p-heading--4">Create loop</h2>
-          <label htmlFor="create-loop-name">Loop name</label>
-          <input id="create-loop-name" name="create-loop-name" onChange={(event) => setCreateName(event.target.value)} required type="text" value={createName} />
-          <label htmlFor="create-loop-description">Loop description</label>
-          <textarea id="create-loop-description" name="create-loop-description" onChange={(event) => setCreateDescription(event.target.value)} rows={3} value={createDescription} />
-          <Button appearance="positive" disabled={isCreating} type="submit">
-            {isCreating ? `Creating loop...` : `Create loop`}
-          </Button>
-        </form>
-      </div>
-      {editingLoop ? (
-        <div className="p-strip is-shallow">
-          <form onSubmit={handleSave}>
-            <h2 className="p-heading--4">Edit loop</h2>
-            <label htmlFor="edit-loop-name">Loop name</label>
-            <input id="edit-loop-name" name="edit-loop-name" onChange={(event) => setEditName(event.target.value)} required type="text" value={editName} />
-            <label htmlFor="edit-loop-description">Loop description</label>
-            <textarea id="edit-loop-description" name="edit-loop-description" onChange={(event) => setEditDescription(event.target.value)} rows={3} value={editDescription} />
-            <div>
-              <Button appearance="positive" disabled={isSaving} type="submit">
-                {isSaving ? `Saving loop...` : `Save loop`}
-              </Button>
-              <Button appearance="base" onClick={resetEditState} type="button">
-                Cancel edit
-              </Button>
-            </div>
-          </form>
+      <nav aria-label="Loop sections" className="p-tabs">
+        <div role="tablist">
+          <ul className="p-tabs__list">
+            <li className="p-tabs__item" role="presentation">
+              <button aria-selected={tab === `details`} className={`p-tabs__link${tab === `details` ? ` is-active` : ``}`} onClick={() => setTab(`details`)} role="tab" type="button">
+                Details
+              </button>
+            </li>
+            <li className="p-tabs__item" role="presentation">
+              <button aria-selected={tab === `personas`} className={`p-tabs__link${tab === `personas` ? ` is-active` : ``}`} onClick={() => setTab(`personas`)} role="tab" type="button">
+                Personas
+              </button>
+            </li>
+          </ul>
         </div>
-      ) : null}
-      {state.status === `loading` ? <p className="p-text--default">Loading loops...</p> : null}
-      {state.status === `error` ? (
-        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load loops">
-          {state.message}
-        </Notification>
-      ) : null}
-      {state.status === `success` && state.loops.length === 0 ? <p className="p-text--default">No loops yet. Create a loop to start organizing events.</p> : null}
-      {state.status === `success` && state.loops.length > 0 ? (
-        <MainTable
-          headers={[{ content: "Name" }, { content: "Description" }, { content: "Updated at" }, { content: "Actions" }]}
-          rows={state.loops.map((loop) => ({
-            key: loop.id,
-            columns: [
-              { content: loop.name },
-              { content: loop.description ?? "—" },
-              { content: formatTimestamp(loop.updatedAt) },
-              {
-                content: (
-                  <div>
-                    <Button appearance="base" onClick={() => startEditing(loop)} type="button">
-                      {`Edit ${loop.name}`}
-                    </Button>
-                    <Button appearance="negative" disabled={busyLoopId === loop.id} onClick={() => handleDelete(loop)} type="button">
-                      {busyLoopId === loop.id ? `Deleting ${loop.name}...` : `Delete ${loop.name}`}
-                    </Button>
-                  </div>
-                ),
-              },
-            ],
-          }))}
-        />
-      ) : null}
-    </section>
+      </nav>
+      {tab === `details` ? <LoopDetails loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} onFeedback={setFeedback} onSaved={reloadLoop} /> : null}
+      {tab === `personas` ? <LoopPersonas loopId={loopId} personaListState={personaListState} reloadPersonaList={reloadPersonaList} onFeedback={setFeedback} /> : null}
+    </>
   );
 }
