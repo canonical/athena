@@ -100,7 +100,7 @@ personaRouter.post(`/persona-list`, async (request: Request, response: Response)
         return;
       }
 
-      await personaAssignToLoop(loopId, rawPersonaId);
+      await personaAssignToLoop(loopId, rawPersonaId, getUserId(response));
       response.sendStatus(204);
       return;
     }

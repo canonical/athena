@@ -1,3 +1,4 @@
+import { queryLoopForUser } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/validation.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 import { personaInsertSchema, personaUpdateSchema } from "./persona.schema.js";
@@ -117,9 +118,15 @@ export const personaUpdateGlobal = async (personaId: string, input: PersonaUpdat
   return updated;
 };
 
-export const personaAssignToLoop = async (loopId: string, personaId: string): Promise<void> => {
+export const personaAssignToLoop = async (loopId: string, personaId: string, userId: string): Promise<void> => {
   validateLoopId(loopId);
   validatePersonaId(personaId);
+
+  const loop = await queryLoopForUser(loopId, userId);
+
+  if (!loop) {
+    throw new PersonaNotFoundError(`Cannot assign persona: loop not found or access denied.`);
+  }
 
   const persona = await queryPersonaById(personaId);
 
