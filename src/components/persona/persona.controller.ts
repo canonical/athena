@@ -2,6 +2,7 @@ import { isValidUuid } from "@components/utilities/validation.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 import { personaInsertSchema, personaUpdateSchema } from "./persona.schema.js";
 import {
+  queryLoopMembership,
   queryLoopPersonaById,
   queryLoopPersonaList,
   queryPersonaAssignToLoop,
@@ -50,8 +51,12 @@ export const validatePersonaUpdateRequest = (value: unknown): PersonaUpdate => {
   return result.data;
 };
 
-export const personaList = async (loopId: string): Promise<Persona[]> => {
+export const personaList = async (loopId: string, userId: string): Promise<Persona[]> => {
   validateLoopId(loopId);
+
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new PersonaNotFoundError(`Persona not found.`);
+  }
 
   return queryLoopPersonaList(loopId);
 };
@@ -74,6 +79,10 @@ export const personaGetById = async (personaId: string): Promise<Persona> => {
 
 export const personaCreate = async (loopId: string, input: PersonaInsert, ownerId: string): Promise<Persona> => {
   validateLoopId(loopId);
+
+  if (!(await queryLoopMembership(loopId, ownerId))) {
+    throw new PersonaNotFoundError(`Persona not found.`);
+  }
 
   return queryPersonaCreate(loopId, input, false, ownerId);
 };
@@ -121,9 +130,13 @@ export const personaAssignToLoop = async (loopId: string, personaId: string): Pr
   await queryPersonaAssignToLoop(loopId, personaId);
 };
 
-export const personaDelete = async (loopId: string, personaId: string): Promise<void> => {
+export const personaDelete = async (loopId: string, personaId: string, userId: string): Promise<void> => {
   validateLoopId(loopId);
   validatePersonaId(personaId);
+
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new PersonaNotFoundError(`Persona not found.`);
+  }
 
   const existing = await queryLoopPersonaById(personaId, loopId);
 

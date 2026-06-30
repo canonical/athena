@@ -166,6 +166,12 @@ export const queryPersonaAssignToLoop = async (loopId: string, personaId: string
   await getPool().query(`INSERT INTO "loopPersona" ("loop", "persona") VALUES ($1, $2) ON CONFLICT DO NOTHING`, [loopId, personaId]);
 };
 
+export const queryLoopMembership = async (loopId: string, userId: string): Promise<boolean> => {
+  const result = await getPool().query(`SELECT 1 FROM "loopUser" WHERE "loop" = $1 AND "user" = $2`, [loopId, userId]);
+
+  return Boolean(result.rowCount);
+};
+
 export const queryPersonaDelete = async (personaId: string, loopId: string): Promise<boolean> => {
   const client = await getPool().connect();
 

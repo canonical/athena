@@ -155,7 +155,7 @@ personaRouter.get(`/loop/:loopId/persona-list`, async (request: Request, respons
       return;
     }
 
-    response.status(200).json(await personaList(loopId));
+    response.status(200).json(await personaList(loopId, getUserId(response)));
   } catch (error) {
     if (!sendPersonaError(error, response)) {
       throw error;
@@ -194,7 +194,7 @@ personaRouter.delete(`/loop/:loopId/persona/:personaId`, async (request: Request
       return;
     }
 
-    await personaDelete(loopId, personaId);
+    await personaDelete(loopId, personaId, getUserId(response));
     response.sendStatus(204);
   } catch (error) {
     if (!sendPersonaError(error, response)) {
