@@ -115,8 +115,7 @@ export function LoopPersonas({ loopId, personaListState, reloadPersonaList, onFe
         ? `${activeRoutingCount} active routing personas are assigned. Exactly one is required. Remove or archive the extras to resume the loop.`
         : null;
 
-  const codingHarnessPausedReason =
-    activeCodingHarnessCount !== null && activeCodingHarnessCount === 0 ? `No active coding-harness persona is assigned. Assign or activate a coding-harness persona to resume the loop.` : null;
+  const codingHarnessPausedReason = activeCodingHarnessCount !== null && activeCodingHarnessCount === 0 ? `No active coding-harness persona is assigned. Assign or activate a coding-harness persona to resume the loop.` : null;
 
   return (
     <>
