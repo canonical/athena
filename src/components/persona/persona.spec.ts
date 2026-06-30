@@ -291,7 +291,7 @@ test(`persona detail page shows persona information`, async ({ page }) => {
   await page.goto(`http://athena.localhost/persona/${routingPersona!.id}`);
 
   await expect(page.getByText(`Persona details`)).toBeVisible();
-  await expect(page.getByText(`Assign to loop`)).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Assign to loop` })).toBeVisible();
   await expect(page.getByText(`Routing persona`)).toBeVisible();
 });
 
@@ -312,7 +312,7 @@ test(`persona detail page allows assigning persona to a loop`, async ({ page }) 
 
   await page.goto(`http://athena.localhost/persona/${created.id}`);
 
-  await expect(page.getByText(`Assign to loop`)).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Assign to loop` })).toBeVisible();
 
   await page.getByLabel(`Loop`).selectOption({ label: loop.name });
   await page.getByRole(`button`, { name: `Assign to loop` }).click();

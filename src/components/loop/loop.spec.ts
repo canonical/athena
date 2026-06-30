@@ -151,8 +151,8 @@ test(`loop detail shows paused notification when no routing persona is active`, 
   await page.goto(`http://athena.localhost/loop/${loop.id}?tab=personas`);
 
   await expect(page.getByRole(`heading`, { name: `Paused routing loop` })).toBeVisible();
-  await expect(page.getByText(`Loop is paused`)).toBeVisible();
-  await expect(page.getByText(/no active routing persona/i)).toBeVisible();
+  await expect(page.getByText(`Loop is paused`).first()).toBeVisible();
+  await expect(page.getByText(/no active routing persona is assigned/i)).toBeVisible();
 
   // Restore the routing persona to active so subsequent tests are not affected
   await page.request.put(`http://athena.localhost/api/persona/${routingPersona!.id}`, {
