@@ -20,7 +20,7 @@ export const sideNavigationItems: SideNavigationProps["items"] = [
       {
         icon: "applications",
         label: "Loops",
-        href: `/loops`,
+        href: `/loop-list`,
       },
       {
         icon: "queue",
@@ -30,7 +30,7 @@ export const sideNavigationItems: SideNavigationProps["items"] = [
       {
         icon: "user-group",
         label: "Personas",
-        nonInteractive: true,
+        href: `/persona-list`,
       },
       {
         icon: "code",
