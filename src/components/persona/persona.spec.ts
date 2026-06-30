@@ -296,6 +296,22 @@ test(`POST /persona-list?loop= returns 404 for unknown persona`, async ({ page }
   await expect(response.json()).resolves.toEqual({ error: `Persona not found.` });
 });
 
+test(`POST /persona-list?loop= returns 404 for unknown loop`, async ({ page }) => {
+  await authenticate(page);
+
+  const catalogResponse = await page.request.get(`http://athena.localhost/api/persona/catalog`);
+  const catalog = (await catalogResponse.json()) as Array<{ id: string }>;
+  const catalogPersona = catalog[0];
+  expect(catalogPersona).toBeDefined();
+
+  const response = await page.request.post(
+    `http://athena.localhost/api/persona-list?loop=00000000-0000-7000-8000-000000000099`,
+    { data: { personaId: catalogPersona?.id } },
+  );
+  expect(response.status()).toBe(404);
+  await expect(response.json()).resolves.toEqual({ error: `Cannot assign persona: loop not found or access denied.` });
+});
+
 test(`persona detail page shows persona information`, async ({ page }) => {
   await authenticate(page);
 
