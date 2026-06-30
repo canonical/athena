@@ -1,6 +1,6 @@
 import type { NotificationSeverity } from "@canonical/react-components";
-import type { PersonaListState } from "../persona/persona.query.js";
 import { z } from "zod";
+import type { PersonaListState } from "../persona/persona.query.js";
 
 const requiredString = (message: string) => z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string(message));
 

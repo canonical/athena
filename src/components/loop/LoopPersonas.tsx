@@ -116,9 +116,7 @@ export function LoopPersonas({ loopId, personaListState, reloadPersonaList, onFe
         : null;
 
   const codingHarnessPausedReason =
-    activeCodingHarnessCount !== null && activeCodingHarnessCount === 0
-      ? `No active coding-harness persona is assigned. Assign or activate a coding-harness persona to resume the loop.`
-      : null;
+    activeCodingHarnessCount !== null && activeCodingHarnessCount === 0 ? `No active coding-harness persona is assigned. Assign or activate a coding-harness persona to resume the loop.` : null;
 
   return (
     <>

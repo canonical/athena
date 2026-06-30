@@ -233,9 +233,9 @@ test(`GET persona by id returns the persona`, async ({ page }) => {
   const first = catalog[0];
   expect(first).toBeDefined();
 
-  const response = await page.request.get(`http://athena.localhost/api/persona/${first!.id}`);
+  const response = await page.request.get(`http://athena.localhost/api/persona/${first?.id}`);
   expect(response.status()).toBe(200);
-  await expect(response.json()).resolves.toMatchObject({ id: first!.id, displayName: first!.displayName });
+  await expect(response.json()).resolves.toMatchObject({ id: first?.id, displayName: first?.displayName });
 });
 
 test(`GET persona by id returns 404 for unknown id`, async ({ page }) => {
@@ -304,7 +304,7 @@ test(`persona detail page shows persona information`, async ({ page }) => {
   const routingPersona = catalog.find((p) => p.isRouting);
   expect(routingPersona).toBeDefined();
 
-  await page.goto(`http://athena.localhost/persona/${routingPersona!.id}`);
+  await page.goto(`http://athena.localhost/persona/${routingPersona?.id}`);
 
   await expect(page.getByText(`Persona details`)).toBeVisible();
   await expect(page.getByRole(`heading`, { name: `Assign to loop` })).toBeVisible();
@@ -392,7 +392,7 @@ test(`PUT /persona/:id returns 400 for missing required fields`, async ({ page }
   const catalogPersona = catalog[0];
   expect(catalogPersona).toBeDefined();
 
-  const response = await page.request.put(`http://athena.localhost/api/persona/${catalogPersona!.id}`, {
+  const response = await page.request.put(`http://athena.localhost/api/persona/${catalogPersona?.id}`, {
     data: { displayName: `   `, personality: `Valid personality`, usesCodingHarness: false, lifecycleStatus: `active` },
   });
   expect(response.status()).toBe(400);

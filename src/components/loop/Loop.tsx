@@ -1,11 +1,11 @@
 import { Notification, NotificationSeverity } from "@canonical/react-components";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { usePersonaList } from "../persona/persona.query.js";
 import { LoopDetails } from "./LoopDetails.js";
 import { LoopPersonas } from "./LoopPersonas.js";
 import { useLoop } from "./loop.query.js";
 import type { Feedback, LoopProps, Tab } from "./loop.schema.js";
-import { usePersonaList } from "../persona/persona.query.js";
 
 export function Loop({ loopId, tab }: LoopProps) {
   const { state: loopState, reload: reloadLoop } = useLoop(loopId);
@@ -27,9 +27,7 @@ export function Loop({ loopId, tab }: LoopProps) {
         : null;
 
   const codingHarnessPausedMessage =
-    activeCodingHarnessCount !== null && activeCodingHarnessCount === 0
-      ? `This loop has no active coding-harness persona and is paused. Go to the Personas tab and assign or activate a coding-harness persona.`
-      : null;
+    activeCodingHarnessCount !== null && activeCodingHarnessCount === 0 ? `This loop has no active coding-harness persona and is paused. Go to the Personas tab and assign or activate a coding-harness persona.` : null;
 
   const setTab = (next: Tab) => {
     void navigate({ to: `/loop/$loopId`, params: { loopId }, search: { tab: next } });
