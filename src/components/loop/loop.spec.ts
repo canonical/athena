@@ -96,3 +96,75 @@ test(`loops page supports create update and delete`, async ({ page }) => {
   await expect(page.getByText(`UI loop updated has been deleted.`)).toBeVisible();
   await expect(page.getByRole(`gridcell`, { name: `UI loop updated`, exact: true })).toHaveCount(0);
 });
+
+test(`loop list allows navigating to loop detail page`, async ({ page }) => {
+  await authenticate(page);
+  await page.goto(`http://athena.localhost/loop-list`);
+
+  await page.getByLabel(`Loop name`).fill(`Navigation test loop`);
+  await page.getByLabel(`Loop description`).fill(`Loop for navigation test`);
+  await page.getByRole(`button`, { name: `Create loop` }).click();
+
+  await expect(page.getByText(`Navigation test loop is ready to receive events.`)).toBeVisible();
+
+  await page.getByRole(`link`, { name: `Navigation test loop` }).click();
+
+  await expect(page.getByRole(`heading`, { name: `Navigation test loop` })).toBeVisible();
+  await expect(page.getByRole(`tab`, { name: `Details` })).toBeVisible();
+  await expect(page.getByRole(`tab`, { name: `Personas` })).toBeVisible();
+});
+
+test(`loop detail page tabs are deep-linkable`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Deep link tab loop`);
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=personas`);
+
+  await expect(page.getByRole(`heading`, { name: `Deep link tab loop` })).toBeVisible();
+  await expect(page.getByRole(`tab`, { name: `Personas` })).toHaveAttribute(`aria-selected`, `true`);
+  await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
+});
+
+test(`loop detail shows paused notification when no routing persona is active`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Paused routing loop`);
+
+  const listResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
+  const personas = (await listResponse.json()) as Array<{ id: string; isRouting: boolean; displayName: string; personality: string; lifecycleStatus: string }>;
+  const routingPersona = personas.find((p) => p.isRouting);
+  expect(routingPersona).toBeDefined();
+
+  if (!routingPersona) {
+    throw new Error(`Routing persona not found.`);
+  }
+
+  // Archive the routing persona so no active routing persona remains (default personas cannot be deleted)
+  const archiveResponse = await page.request.put(`http://athena.localhost/api/persona/${routingPersona.id}`, {
+    data: {
+      displayName: routingPersona.displayName,
+      personality: routingPersona.personality,
+      usesCodingHarness: false,
+      lifecycleStatus: `archived`,
+    },
+  });
+  expect(archiveResponse.status()).toBe(200);
+
+  // Navigate to personas tab so the routing count is computed and the paused banner appears
+  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=personas`);
+
+  await expect(page.getByRole(`heading`, { name: `Paused routing loop` })).toBeVisible();
+  await expect(page.getByText(`Loop is paused`)).toBeVisible();
+  await expect(page.getByText(/no active routing persona/i)).toBeVisible();
+
+  // Restore the routing persona to active so subsequent tests are not affected
+  await page.request.put(`http://athena.localhost/api/persona/${routingPersona.id}`, {
+    data: {
+      displayName: routingPersona.displayName,
+      personality: routingPersona.personality,
+      usesCodingHarness: false,
+      lifecycleStatus: `active`,
+    },
+  });
+});
