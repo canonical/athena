@@ -217,13 +217,9 @@ test(`GET persona by id returns the persona`, async ({ page }) => {
   const first = catalog[0];
   expect(first).toBeDefined();
 
-  if (!first) {
-    throw new Error(`No catalog personas found.`);
-  }
-
-  const response = await page.request.get(`http://athena.localhost/api/persona/${first.id}`);
+  const response = await page.request.get(`http://athena.localhost/api/persona/${first!.id}`);
   expect(response.status()).toBe(200);
-  await expect(response.json()).resolves.toMatchObject({ id: first.id, displayName: first.displayName });
+  await expect(response.json()).resolves.toMatchObject({ id: first!.id, displayName: first!.displayName });
 });
 
 test(`GET persona by id returns 404 for unknown id`, async ({ page }) => {
@@ -292,11 +288,7 @@ test(`persona detail page shows persona information`, async ({ page }) => {
   const routingPersona = catalog.find((p) => p.isRouting);
   expect(routingPersona).toBeDefined();
 
-  if (!routingPersona) {
-    throw new Error(`No routing persona found in catalog.`);
-  }
-
-  await page.goto(`http://athena.localhost/persona/${routingPersona.id}`);
+  await page.goto(`http://athena.localhost/persona/${routingPersona!.id}`);
 
   await expect(page.getByText(`Persona details`)).toBeVisible();
   await expect(page.getByText(`Assign to loop`)).toBeVisible();

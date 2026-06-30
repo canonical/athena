@@ -136,15 +136,11 @@ test(`loop detail shows paused notification when no routing persona is active`, 
   const routingPersona = personas.find((p) => p.isRouting);
   expect(routingPersona).toBeDefined();
 
-  if (!routingPersona) {
-    throw new Error(`Routing persona not found.`);
-  }
-
   // Archive the routing persona so no active routing persona remains (default personas cannot be deleted)
-  const archiveResponse = await page.request.put(`http://athena.localhost/api/persona/${routingPersona.id}`, {
+  const archiveResponse = await page.request.put(`http://athena.localhost/api/persona/${routingPersona!.id}`, {
     data: {
-      displayName: routingPersona.displayName,
-      personality: routingPersona.personality,
+      displayName: routingPersona!.displayName,
+      personality: routingPersona!.personality,
       usesCodingHarness: false,
       lifecycleStatus: `archived`,
     },
@@ -159,10 +155,10 @@ test(`loop detail shows paused notification when no routing persona is active`, 
   await expect(page.getByText(/no active routing persona/i)).toBeVisible();
 
   // Restore the routing persona to active so subsequent tests are not affected
-  await page.request.put(`http://athena.localhost/api/persona/${routingPersona.id}`, {
+  await page.request.put(`http://athena.localhost/api/persona/${routingPersona!.id}`, {
     data: {
-      displayName: routingPersona.displayName,
-      personality: routingPersona.personality,
+      displayName: routingPersona!.displayName,
+      personality: routingPersona!.personality,
       usesCodingHarness: false,
       lifecycleStatus: `active`,
     },
