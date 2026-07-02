@@ -33,6 +33,10 @@ Implementation order:
 5. System event
 6. Manual override event
 
+### RAG Index (depends on provider/embeddings contract)
+
+- [ ] Deliver [rag-index.plan.md](./rag-index.plan.md): loop-scoped semantic RAG index over recorded history (Tier 1), assembly, pure semantic ranking, single fixed embedding model, Postgres with pgvector, per-persona access, strictly per-loop, targeting event-source-driven loops. Open decision: embedding source.
+
 ### Phase 0: Foundations
 
 - [ ] Finalize webhook secret storage model for verifiable HMAC (replace hash-only wording with envelope-encryption/KMS style key management).
