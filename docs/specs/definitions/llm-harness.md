@@ -10,21 +10,23 @@ The goals are:
 - explicit loop-admin control of execution providers
 - forward-compatible support for additional harnesses and model providers
 
-## Role-specific execution mode
+## Routing-selected execution environment
 
-Execution mode is selected by persona responsibility.
+Execution environment is selected per event step by the active routing persona (`isRouting = true`) based on event context and the loop persona list provided by Athena.
 
-- IC and CR personas must execute coding work through a configured coding harness integration.
-- Other personas execute through a direct LLM runtime using an OpenAI API-compatible interface.
+- Persona definitions are behavior profiles and do not enforce a fixed role dropdown.
+- The routing persona can choose a harness-backed execution path or the deterministic Athena thread execution path.
+- If an event step is not handled in a harness, it must be handled in the deterministic Athena thread.
+- Athena validates the routing decision against loop configuration and deterministic policy before execution.
 
-Athena routing authority remains unchanged. Provider selection does not change ownership, handoff, or approval semantics.
+Athena routing authority remains unchanged. Execution-environment selection does not change ownership, handoff, or approval semantics.
 
 ## Loop-admin configuration authority
 
 Loop administrators configure provider settings for their loop.
 
-- Loop administrators configure an ordered coding harness profile list for IC and CR persona execution.
-- Loop administrators configure an ordered OpenAI API-compatible LLM provider profile list for all non-IC and non-CR persona execution.
+- Loop administrators configure an ordered coding harness profile list that can be selected by routing decisions.
+- Loop administrators configure an ordered OpenAI API-compatible LLM provider profile list for deterministic Athena thread execution when harness is not selected.
 - Order is priority-based (`1..N`) and is evaluated deterministically from highest to lowest priority.
 - Loop administrators can update these profiles over time.
 - Provider profile updates must be auditable with actor, timestamp, prior value, and new value.
@@ -55,9 +57,9 @@ Validated harness candidates for current and future use:
 
 Additional harnesses may be added to the catalog after capability and security validation.
 
-## Non-coding persona LLM runtime policy
+## Deterministic Athena thread runtime policy
 
-All personas except IC and CR must use an OpenAI API-compatible interface configured per loop.
+When routing does not select a harness-backed path, execution must run in the deterministic Athena thread using the loop's configured OpenAI API-compatible provider profiles.
 
 - Each configured profile must define provider endpoint, model identifier, and credential reference.
 - The loop configuration must include a deterministic provider priority order.
@@ -81,7 +83,8 @@ When validation fails:
 
 ## Deterministic failover model
 
-- For each execution request, Athena attempts the highest-priority configured provider first.
+- For each execution request, Athena first resolves the execution environment from the routing decision (harness-backed path or deterministic Athena thread path).
+- Within the selected path, Athena attempts the highest-priority configured provider first.
 - If that provider is unavailable, Athena attempts the next configured provider in order until one succeeds or the list is exhausted.
 - Failover traversal order must be deterministic and auditable.
 - Successful execution through a fallback provider does not change loop ownership or event semantics.
@@ -106,3 +109,26 @@ When validation fails:
 - Tool execution semantics and records: [tool-usage.md](./tool-usage.md)
 - Routing and ownership protocol: [interaction.protocol.md](./interaction.protocol.md)
 - Loop ownership and membership model: [theloop.md](./theloop.md)
+
+## Provider and Harness Deterministic Failover Diagram
+
+```mermaid
+flowchart TD
+   A[Execution request] --> B[Routing persona selects execution environment]
+   B --> C{Harness selected?}
+   C -->|Yes| D[Use coding harness priority list]
+   C -->|No| E[Use deterministic Athena thread provider list]
+   D --> F[Evaluate enabled profiles in deterministic order]
+   E --> F
+   F --> G{Execution succeeds?}
+   G -->|Yes| H[Persist selection and audit metadata]
+   G -->|No| I{More profiles available?}
+   I -->|Yes| J[Try next profile by priority]
+   J --> G
+   I -->|No| K[Pause loop for provider unavailability]
+   K --> L[Keep events open]
+   L --> M[Run deterministic availability checks]
+   M --> N{Eligible profile recovered?}
+   N -->|Yes| O[Resume loop and continue execution]
+   N -->|No| M
+```
