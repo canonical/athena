@@ -126,8 +126,8 @@ and new value), consistent with [llm-harness.md](./llm-harness.md).
   budget), and ranking. The MVP ranks by semantic similarity only, tie-broken by
   `orderKey` then entry id; recency, kind weighting, and grouping are deferred, but
   entry metadata is stored so they can be added later without re-indexing.
-- `embedding`: `providerRef`, `model`, and `modelVersion`. The concrete embedding
-  source, model, and vector dimension are an open decision; see
+- `embedding`: `providerRef`, `model`, and `modelVersion`. The MVP pins a concrete
+  model and dimension; see
   [rag-index.plan.md](../implementation-plans/rag-index.plan.md).
 - `retention` (future): retention and compaction for long-lived indexes.
 - `curatedWrites` (future): enables Tier 2 commits; see

@@ -51,27 +51,19 @@ Out of scope (deferred):
 - The `Retrieve` pull tool (assembly-only for v1).
 - An evaluation harness or proxy metrics.
 
-## Open decisions
+## Decisions
 
-One decision is unresolved and gates the items under it; it should be settled
-before implementation starts.
-
-- **Embedding source.** Where embeddings come from is undecided. Leading
-  candidates, all OpenAI-compatible: GitHub Models graduating to Microsoft Foundry
-  Models (the GitHub ecosystem already used for the Copilot harness), or OpenRouter
-  (an independent gateway). Using the Copilot API directly is excluded — it is
-  ToS-restricted to official Copilot clients.
-
-Downstream of that one decision:
-
-- The embedding model, and therefore the `vector(<dim>)` dimension (for example
-  `text-embedding-3-small` is 1536).
-- Whether embeddings flow through the loop OpenAI provider contract, and hence the
-  sequencing: extend
-  [openai-api-connection.plan.md](./openai-api-connection.plan.md) first, or stub
-  embeddings and retrofit.
-- Whether [openai-api-connection.plan.md](./openai-api-connection.plan.md) needs an
-  embeddings-capability note.
+- Embeddings extend the loop OpenAI-compatible provider contract (a profile with an
+  `embeddingModel`, called at `/v1/embeddings`), so
+  [openai-api-connection.plan.md](./openai-api-connection.plan.md) grows an
+  embeddings capability. The provider is per-loop config, not a fixed vendor.
+- The MVP pins `text-embedding-3-small` (1536 dimensions), reachable over
+  `/v1/embeddings` via GitHub Models/Foundry or OpenRouter. The choice is reversible:
+  each entry stores its source `text` and the index is rebuildable from the event
+  log, so switching models is a re-embed via the re-index path — a same-dimension
+  swap is pure re-embed, a different dimension also needs a column migration.
+- Build order: implement the provider contract with its embeddings extension first;
+  stub embeddings only in tests, not as a shipped shortcut.
 
 ## Dependencies and assumptions
 
@@ -80,9 +72,10 @@ Downstream of that one decision:
    embeddings via a separate `POST /v1/embeddings` endpoint, distinct from chat
    completions. Not every OpenAI API-compatible provider implements it, so
    embeddings are an optional provider capability.
-2. A single embedding model is fixed for the MVP. The chosen model fixes the vector
-   dimension used in the schema. Changing the model later is a migration and is out
-   of scope.
+2. A single embedding model is pinned for the MVP, fixing the schema's vector
+   dimension. The specific model and the reversibility of that choice are in
+   [Decisions](#decisions); automated migration tooling for model changes is out of
+   scope.
 3. Events have immutable content and a mutable lifecycle (`created` to `routed` to
    `completed` or `blocked`). An entry is committed when an event reaches a terminal
    status, capturing both the ask and the outcome.
@@ -160,7 +153,7 @@ Downstream of that one decision:
   `originPersona` symbolic id from `event.emittedByPersona`.
 - `kind` (TEXT): record kind, stored for future ranking; unused in MVP ranking.
 - `text` (TEXT): the deterministic projection that was embedded.
-- `embedding` (`vector(<dim>)`): dimension fixed by the MVP model.
+- `embedding` (`vector(1536)`): the MVP model's dimension (`text-embedding-3-small`).
 - Entries are immutable; there is no update or supersession path in the MVP.
 - Postgres indexes: btree `(index, orderKey)` for isolation and as-of; no global ANN
   index (see [Storage](#storage-postgres-and-pgvector)).

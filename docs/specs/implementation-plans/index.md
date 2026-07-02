@@ -35,7 +35,7 @@ Implementation order:
 
 ### RAG Index (depends on provider/embeddings contract)
 
-- [ ] Deliver [rag-index.plan.md](./rag-index.plan.md): loop-scoped semantic RAG index over recorded history (Tier 1), assembly, pure semantic ranking, single fixed embedding model, Postgres with pgvector, per-persona access, strictly per-loop, targeting event-source-driven loops. Open decision: embedding source.
+- [ ] Deliver [rag-index.plan.md](./rag-index.plan.md): loop-scoped semantic RAG index over recorded history (Tier 1), assembly, pure semantic ranking, single fixed embedding model, Postgres with pgvector, per-persona access, strictly per-loop, targeting event-source-driven loops. Embeds via the OpenAI-compatible provider contract (`text-embedding-3-small`, 1536).
 
 ### Phase 0: Foundations
 
