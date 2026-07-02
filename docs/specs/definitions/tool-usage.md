@@ -9,8 +9,8 @@ Harness and LLM provider selection rules are defined in [llm-harness.md](./llm-h
 Tools extend persona capability. Tools do not change Athena routing authority.
 
 - Athena remains deterministic orchestration code.
-- Athena routes unassigned events to the engineering manager persona.
-- Only the engineering manager persona can push an event with an assigned persona.
+- Athena routes unassigned events to the active routing persona (`isRouting = true`).
+- Only the active routing persona (`isRouting = true`) can push an event with an assigned persona.
 - Tool outputs are context inputs for personas; they are not ownership decisions.
 
 ## Tool usage model
@@ -67,7 +67,7 @@ Collect factual context that improves engineering manager and assigned persona d
 ### Event integration
 
 Research output is appended to event context and consumed by the current owner.
-If routing is needed after research, Athena routes through the engineering manager persona per [theloop.md](./theloop.md).
+If routing is needed after research, Athena routes through the active routing persona (`isRouting = true`) per [theloop.md](./theloop.md).
 
 ## Initial tool catalog to populate
 
@@ -123,3 +123,22 @@ When an optimization runtime is used, each tool execution record should also inc
 ## Event source mapping
 
 Tool-triggered work should be represented as a tool execution event source as defined in [event.md](./event.md).
+
+## Tool Execution Lifecycle Diagram
+
+```mermaid
+stateDiagram-v2
+      [*] --> Requested
+      Requested --> Running: executionState = running
+      Running --> Succeeded: executionState = succeeded
+      Running --> Failed: executionState = failed
+
+      Failed --> Requested: retry as a new execution record
+      Failed --> [*]: continue with partial evidence or blocked handoff
+      Succeeded --> [*]
+
+      note right of Failed
+         Disallowed tool calls are recorded as failed
+         with a policy-denied failure summary.
+      end note
+```
