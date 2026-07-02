@@ -2,16 +2,20 @@
 
 Athena is the deterministic orchestration system. The loop describes the deterministic processes Athena executes as it routes events through personas and manages their outcomes.
 
-Athena routes each event to the engineering manager persona, and the engineering manager persona decides the next assigned persona for execution.
+Athena routes each event to the loop's active routing persona (`isRouting = true`), and that routing persona decides the next assigned persona for execution.
 
-Only the engineering manager persona can push an event to the loop with an assigned persona.
+Only the active routing persona (`isRouting = true`) can push an event to the loop with an assigned persona.
 
-For each routing decision, Athena deterministically feeds the engineering manager persona with the loop's persisted persona roster and the corresponding persona definition context defined in [persona.md](./persona.md).
+For each routing decision, Athena deterministically feeds the active routing persona (`isRouting = true`) with the loop's persisted persona roster and the corresponding persona definition context defined in [persona.md](./persona.md).
 
-1. When an event is created with no assigned persona, Athena asks the engineering manager persona for an assignment.
+The active routing persona (`isRouting = true`) can involve the user in the loop through the chat interface before finalizing assignment when clarification, approval, or scope confirmation is needed.
+
+1. When an event is created with no assigned persona, Athena asks the active routing persona (`isRouting = true`) for an assignment.
+
+   The routing persona may ask follow-up questions through the chat interface and incorporate the user's response before selecting the next assigned persona.
 
    Personas:
-   - Engineering manager persona
+   - Routing persona (`isRouting = true`)
 
    Files:
    - [responsibility.rules.md](./responsibility.rules.md)
@@ -31,11 +35,11 @@ For each routing decision, Athena deterministically feeds the engineering manage
 
 3. Event entity requirements are defined in [event.md](./event.md).
 
-4. If a persona cannot complete an event due to ambiguity, dependency, missing approval, or other blockers, it performs a blocked handoff back to the loop. Athena then routes the returned event to the engineering manager persona. See the blocked handoff protocol in [handoff.definition.md](./handoff.definition.md).
+4. If a persona cannot complete an event due to ambiguity, dependency, missing approval, or other blockers, it performs a blocked handoff back to the loop. Athena then routes the returned event to the active routing persona (`isRouting = true`). See the blocked handoff protocol in [handoff.definition.md](./handoff.definition.md).
 
    Personas:
    - Assigned persona
-   - Engineering manager persona
+   - Routing persona (`isRouting = true`)
 
    Files:
    - [handoff.definition.md](./handoff.definition.md)
@@ -52,7 +56,7 @@ For each routing decision, Athena deterministically feeds the engineering manage
 6. A completion or blocked event concludes only the current step. The loop itself remains available for future events and follow-up work.
 
    Personas:
-   - Engineering manager persona
+   - Routing persona (`isRouting = true`)
 
    Files:
    - [interaction.protocol.md](./interaction.protocol.md)
@@ -62,7 +66,7 @@ For each routing decision, Athena deterministically feeds the engineering manage
 
 A loop and user relationship is many-to-many. A user can belong to multiple loops, and a loop can include multiple users. Each loop groups the events that belong to an ongoing work context.
 
-Every loop must include exactly one engineering manager persona. The engineering manager persona is the required fallback owner for blocked events and unresolved ownership decisions. Users can edit the engineering manager persona, but they cannot create or delete it.
+Every loop must include exactly one engineering manager persona. This engineering manager persona is the required active routing persona (`isRouting = true`) and fallback owner for blocked events and unresolved ownership decisions. Users can edit the engineering manager persona, but they cannot create or delete it.
 
 - A loop has a human-readable name and an optional description to identify the work context.
 - Loop-user membership is represented through the `loopUser` junction relation.
@@ -76,3 +80,19 @@ Every loop must include exactly one engineering manager persona. The engineering
 ## Event Reference
 
 Event entity semantics, required fields, outcomes, and sources are defined in [event.md](./event.md).
+
+## Loop Orchestration Diagram
+
+```mermaid
+flowchart TD
+   A[Event created with no assigned persona] --> B[Athena routes event to routing persona ]
+   B --> C[Routing persona evaluates context and may involve user via chat]
+   C --> U[User responds in chat interface]
+   U --> C
+   C --> D[Athena routes event to assigned persona]
+   D --> E{Persona outcome}
+   E -->|completed| F[Event completed and user notified]
+   E -->|blocked| G[Blocked handoff back to loop]
+   G --> B
+   F --> H[Loop remains open for future events]
+```

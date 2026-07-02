@@ -7,6 +7,7 @@ A Persona is an execution profile used by Athena routing. Personas are defined i
 - Personas are persisted in the database independently of any specific loop.
 - Persona records provide the behavior and personality context Athena passes during routing and execution.
 - Persona membership and definitions are resolved from loop data at runtime.
+- Persona definitions describe behavior and execution preferences; they do not enforce a fixed role dropdown.
 
 ## Persona Ownership
 
@@ -34,7 +35,8 @@ Users can manage personas in a loop with the following constraints:
 3. Users who do not own a persona can clone it (creating a new persona owned by them).
 4. Users can remove personas from a loop (does not delete the persona unless it is non-default with no remaining loop assignments).
 5. Default personas cannot be deleted.
-6. Each loop must always have exactly one active routing persona and at least one active coding-harness persona.
+6. Each loop must always have exactly one active routing persona.
+7. Event execution environment (harness-backed path or deterministic Athena thread path) is selected per event by routing decision as defined in [llm-harness.md](./llm-harness.md).
 
 ## Deterministic Routing Inputs
 
@@ -44,3 +46,57 @@ Athena deterministically provides the routing persona with:
 - each persona's current personality/definition context
 
 These deterministic inputs are used by the routing persona to select the next assigned persona for each routing decision.
+
+## Persona, Loop, and Event Data Model Diagram
+
+```mermaid
+erDiagram
+	USER ||--o{ PERSONA : owns
+	LOOP ||--o{ EVENT : contains
+	LOOP ||--o{ LOOP_USER : has
+	USER ||--o{ LOOP_USER : belongs_to
+	LOOP ||--o{ LOOP_PERSONA : configures
+	PERSONA ||--o{ LOOP_PERSONA : assigned_to
+	PERSONA ||--o{ EVENT : assigned_on
+
+	USER {
+		string id PK
+	}
+
+	LOOP {
+		uuid id PK
+		string name
+		string description
+	}
+
+	PERSONA {
+		uuid id PK
+		string displayName
+		string personality
+		boolean usesCodingHarness
+		boolean isRouting
+		boolean isDefault
+		string owner FK
+		string lifecycleStatus
+	}
+
+	EVENT {
+		uuid id PK
+		uuid loopId FK
+		uuid assignedPersonaId FK
+		string eventType
+		string status
+	}
+
+	LOOP_USER {
+		uuid loopId FK
+		string userId FK
+		string role
+	}
+
+	LOOP_PERSONA {
+		uuid loopId FK
+		uuid personaId FK
+		boolean active
+	}
+```
