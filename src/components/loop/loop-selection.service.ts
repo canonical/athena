@@ -32,6 +32,8 @@ type SelectionAudit = {
   skipped: Array<{ assignmentId: string; reason: string }>;
 };
 
+const creditWeightDivisor = 10;
+
 export type SelectionResolution = {
   selected: {
     assignmentId: string;
@@ -121,7 +123,7 @@ const selectWeightedRoundRobin = (candidates: SelectionCandidate[], cursor: numb
   }
 
   const weighted = [...candidates].sort(deterministicOrder).flatMap((candidate) => {
-    const weight = Math.max(1, Math.round((candidate.selectionWeight || 1) * ((candidate.remainingCreditPercentage ?? 0) / 10 || 1)));
+    const weight = Math.max(1, Math.round((candidate.selectionWeight || 1) * ((candidate.remainingCreditPercentage ?? 0) / creditWeightDivisor || 1)));
     return Array.from({ length: weight }).map(() => candidate);
   });
 

@@ -36,6 +36,9 @@ export const config = {
       secret: requiredEnv.getEnv(`SECRET_KEY`),
       maxAgeMs: env.getNumber(`SESSION_MAX_AGE`, 24 * 60 * 60 * 1000),
     },
+    credentials: {
+      encryptionKey: requiredEnv.getEnv(`CREDENTIAL_ENCRYPTION_KEY`),
+    },
   },
   database: {
     connectionString: requiredEnv.getEnv(`POSTGRESQL_DB_CONNECT_STRING`),

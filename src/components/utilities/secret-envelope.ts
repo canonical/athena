@@ -12,7 +12,7 @@ const algorithm = `aes-256-gcm`;
 const ivLength = 12;
 const keyVersion = `v1`;
 
-const getEncryptionKey = (): Buffer => createHash(`sha256`).update(config.authentication.session.secret).digest();
+const getEncryptionKey = (): Buffer => createHash(`sha256`).update(config.authentication.credentials.encryptionKey).digest();
 
 export const encryptSecret = (value: string): SecretEnvelope => {
   const iv = randomBytes(ivLength);
