@@ -165,7 +165,7 @@ export const queryLoopHarnessAssignmentCreate = async (loopId: string, harnessDe
 };
 
 export const queryLoopHarnessAssignmentUpdateByAdmin = async (loopId: string, harnessDefinitionId: string, input: LoopHarnessAssignmentAdminUpdate): Promise<LoopHarnessAssignment | undefined> => {
-  const result = await getPool().query<LoopHarnessAssignment>(
+  const result = await getPool().query(
     `
       UPDATE "loopHarnessDefinition"
       SET
@@ -182,27 +182,7 @@ export const queryLoopHarnessAssignmentUpdateByAdmin = async (loopId: string, ha
         "healthStatus" = COALESCE($11, "healthStatus")
       WHERE "loop" = $12
         AND "harnessDefinition" = $13
-      RETURNING
-        "loop",
-        "harnessDefinition",
-        "priority",
-        "priorityOverride",
-        "enabled",
-        "timeoutMs",
-        "maxRetries",
-        "selectionWeight",
-        "assignmentOverrides",
-        "remainingCreditPercentage",
-        "remainingCreditValue",
-        "cooldownUntil",
-        "healthStatus",
-        "lastUsedAt",
-        "lastFailedAt",
-        "failureCount",
-        "createdAt",
-        "updatedAt",
-        '' AS "displayName",
-        '' AS "harnessType"
+      RETURNING 1
     `,
     [
       input.priority ?? null,
@@ -221,7 +201,12 @@ export const queryLoopHarnessAssignmentUpdateByAdmin = async (loopId: string, ha
     ],
   );
 
-  return result.rows[0];
+  if (!result.rowCount) {
+    return undefined;
+  }
+
+  const assignments = await queryLoopHarnessAssignmentList(loopId);
+  return assignments.find((assignment) => assignment.harnessDefinition === harnessDefinitionId);
 };
 
 export const queryLoopHarnessAssignmentDelete = async (loopId: string, harnessDefinitionId: string): Promise<boolean> => {
