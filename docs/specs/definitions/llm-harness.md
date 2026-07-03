@@ -37,7 +37,9 @@ Athena routing authority remains unchanged. Execution-environment selection does
 
 ## Coding harness catalog
 
-Athena should maintain a registered harness catalog with per-entry lifecycle state.
+A **worker** is an external AI coding agent that executes work on behalf of Athena personas (e.g., GitHub Copilot Cloud Agent). A **harness** is the owner-scoped connection profile Athena uses to invoke a worker: it holds credentials, timeout/retry configuration, and the `workerType` field that identifies which external agent system the harness connects to.
+
+Athena should maintain a registered worker type catalog with per-entry lifecycle state.
 
 MVP catalog policy:
 

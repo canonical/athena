@@ -18,8 +18,8 @@ export class HarnessValidationError extends Error {}
 export class HarnessNotFoundError extends Error {}
 export class HarnessForbiddenError extends Error {}
 
-const enforceMvpHarnessType = (harnessType: string): void => {
-  if (harnessType !== `github-copilot-cloud-agent`) {
+const enforceMvpWorkerType = (workerType: string): void => {
+  if (workerType !== `github-copilot-cloud-agent`) {
     throw new HarnessValidationError(`Only github-copilot-cloud-agent is executable in MVP.`);
   }
 };
@@ -43,7 +43,7 @@ export const validateHarnessDefinitionInsertRequest = (value: unknown): HarnessD
     throw new HarnessValidationError(result.error.issues[0]?.message ?? `Invalid harness definition request.`);
   }
 
-  enforceMvpHarnessType(result.data.harnessType);
+  enforceMvpWorkerType(result.data.workerType);
 
   return result.data;
 };
@@ -138,7 +138,7 @@ export const loopHarnessAssignmentCreate = async (loopId: string, userId: string
     throw new HarnessNotFoundError(`Harness definition not found.`);
   }
 
-  enforceMvpHarnessType(definition.harnessType);
+  enforceMvpWorkerType(definition.workerType);
 
   await queryLoopHarnessAssignmentCreate(loopId, input.harnessDefinition);
 };

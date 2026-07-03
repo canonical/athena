@@ -1,13 +1,13 @@
 import { z } from "zod";
 
-export const harnessTypes = [`github-copilot-cloud-agent`, `openai-codex`, `claude-code`, `devin`, `juju-machine-charm`] as const;
+export const workerTypes = [`github-copilot-cloud-agent`, `openai-codex`, `claude-code`, `devin`, `juju-machine-charm`] as const;
 export const lifecycleStatuses = [`active`, `deprecated`, `archived`] as const;
 
 const requiredString = (message: string) => z.preprocess((value) => (typeof value === `string` ? value.trim() || undefined : undefined), z.string(message));
 
 export const harnessDefinitionInsertSchema = z.object({
   displayName: requiredString(`displayName is required.`),
-  harnessType: z.enum(harnessTypes, `harnessType is required.`),
+  workerType: z.enum(workerTypes, `workerType is required.`),
   apiKey: requiredString(`apiKey is required.`),
   lifecycleStatus: z.enum(lifecycleStatuses).default(`active`),
 });
@@ -43,7 +43,7 @@ export type HarnessDefinition = {
   id: string;
   owner: string;
   displayName: string;
-  harnessType: (typeof harnessTypes)[number];
+  workerType: (typeof workerTypes)[number];
   lifecycleStatus: (typeof lifecycleStatuses)[number];
   hasCredential: boolean;
   createdAt: Date | string;
@@ -70,5 +70,5 @@ export type LoopHarnessAssignment = {
   createdAt: Date | string;
   updatedAt: Date | string;
   displayName: string;
-  harnessType: string;
+  workerType: string;
 };

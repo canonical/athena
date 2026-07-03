@@ -220,7 +220,7 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
           hd."credentialIv",
           hd."credentialAuthTag",
           hd."credentialKeyVersion",
-          hd."harnessType" AS "definitionType"
+          hd."workerType" AS "definitionType"
         FROM "loopHarnessDefinition" lhd
         JOIN "harnessDefinition" hd ON hd."id" = lhd."harnessDefinition"
         WHERE lhd."loop" = $1

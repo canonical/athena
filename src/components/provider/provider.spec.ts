@@ -78,7 +78,7 @@ test(`harness definitions enforce MVP harness policy at save time`, async ({ pag
   const response = await page.request.post(`http://athena.localhost/api/harness-definition-list`, {
     data: {
       displayName: `Non-mvp harness`,
-      harnessType: `openai-codex`,
+      workerType: `openai-codex`,
       apiKey: `copilot-key`,
       lifecycleStatus: `active`,
     },
@@ -105,7 +105,7 @@ test(`owner-scoped definition mutation blocks non-owners`, async ({ page }) => {
         INSERT INTO "harnessDefinition" (
           "owner",
           "displayName",
-          "harnessType",
+          "workerType",
           "credentialCiphertext",
           "credentialIv",
           "credentialAuthTag",
@@ -268,7 +268,7 @@ test(`execution hook audits skipped non-mvp harness assignments without leaking 
         INSERT INTO "harnessDefinition" (
           "owner",
           "displayName",
-          "harnessType",
+          "workerType",
           "credentialCiphertext",
           "credentialIv",
           "credentialAuthTag",
