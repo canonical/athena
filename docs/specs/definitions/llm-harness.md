@@ -37,7 +37,7 @@ Athena routing authority remains unchanged. Execution-environment selection does
 
 ## Coding harness catalog
 
-A **runner** is the execution environment that hosts a harness; a **harness** is the AI coding agent tool that runs within a runner. Together they form a **worker** — the unit of agentic execution Athena dispatches to. See [worker.md](./worker.md) for normative definitions of all three concepts.
+A **runner** is the execution environment that hosts a harness; a **harness** is the AI coding agent tool that runs within a runner. See [worker.md](./worker.md) for normative definitions and the proprietary vs open runner distinction.
 
 Athena should maintain a registered runner type catalog with per-entry lifecycle state. A harness definition record stores `runnerType` to identify which execution environment it connects to.
 
@@ -49,10 +49,11 @@ MVP catalog policy:
 
 ### Runner catalog
 
-| Runner | Identifier | Status |
-|---|---|---|
-| GitHub Copilot Cloud | `github-copilot-cloud` | MVP — only executable runner |
-| Juju VM | `juju-vm` | MVP+1 — Athena-owned implementation target |
+| Runner | Type | Identifier | Status |
+|---|---|---|---|
+| GitHub Copilot Cloud | Proprietary | `github-copilot-cloud` | MVP — only executable runner |
+| Juju VM | Open (Athena-owned) | `juju-vm` | Post-MVP (MVP+1) — Athena-owned implementation target |
+| Local Ubuntu binary | Open (user-managed) | `local-ubuntu` | Post-MVP — discouraged for production use |
 
 Juju VM is a runner; it hosts harness processes. It is not itself a harness.
 
@@ -60,13 +61,12 @@ Juju VM is a runner; it hosts harness processes. It is not itself a harness.
 
 The harness (agent tool) running within a runner:
 
-| Harness | Typical runner | Status |
+| Harness | Compatible runners | Status |
 |---|---|---|
 | GitHub Copilot | `github-copilot-cloud` (bundled) | MVP |
-| OpenCode | `juju-vm` | Post-MVP candidate |
-| Claude Code | `juju-vm` | Post-MVP candidate |
-| OpenAI Codex | `juju-vm` and cloud | Post-MVP candidate |
-| Devin (Cognition) | Managed (vendor) | Post-MVP candidate |
+| OpenCode | `juju-vm`, `local-ubuntu` | Post-MVP candidate |
+| Claude Code | `juju-vm`, `local-ubuntu` | Post-MVP candidate |
+| Additional open harnesses | `juju-vm`, `local-ubuntu` | Post-MVP — subject to open runner contract |
 
 Additional runners and harnesses may be added to the catalog after capability and security validation.
 

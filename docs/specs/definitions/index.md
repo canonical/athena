@@ -15,4 +15,4 @@ Normative definition files for Athena orchestration rules and constraints.
 - [tool-usage.md](./tool-usage.md)
 - [user-request.md](./user-request.md)
 - [webhook-event.md](./webhook-event.md)
-- [worker.md](./worker.md)
+- [worker.md](./worker.md) — runner and harness concepts
