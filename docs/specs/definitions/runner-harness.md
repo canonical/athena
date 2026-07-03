@@ -21,7 +21,7 @@ Runners fall into two categories:
 **Open runners** expose a standard interface defined and implemented in the Athena codebase. Any harness that conforms to the Athena open runner contract can be deployed on an open runner without a bespoke adapter per harness.
 
 - **Juju VM** — an Athena-owned virtual machine provisioned via a Juju machine charm. The charm is implemented in the Athena codebase and defines the open runner standard that eligible harnesses must satisfy. **Post-MVP (MVP+1) — Athena-owned implementation target.**
-- **Local Ubuntu binary** — a user-managed Ubuntu machine running the Athena open runner binary. Suitable for local testing or a disposable virtual machine with internet access. Running on a personal local machine is discouraged for production workloads. **Post-MVP.**
+- **Local Ubuntu binary** — a user-managed Ubuntu machine running the Athena open runner binary. Suitable for local testing or a disposable virtual machine with internet access. Running on a personal local machine is discouraged for production workloads due to security exposure, unpredictable availability, and lack of isolation from the developer's environment. **Post-MVP.**
 
 ### Harness
 

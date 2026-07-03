@@ -37,7 +37,7 @@ Athena routing authority remains unchanged. Execution-environment selection does
 
 ## Coding harness catalog
 
-A **runner** is the execution environment that hosts a harness; a **harness** is the AI coding agent tool that runs within a runner. See [worker.md](./worker.md) for normative definitions and the proprietary vs open runner distinction.
+A **runner** is the execution environment that hosts a harness; a **harness** is the AI coding agent tool that runs within a runner. See [runner-harness.md](./runner-harness.md) for normative definitions and the proprietary vs open runner distinction.
 
 Athena should maintain a registered runner type catalog with per-entry lifecycle state. A harness definition record stores `runnerType` to identify which execution environment it connects to.
 

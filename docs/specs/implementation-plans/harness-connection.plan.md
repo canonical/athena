@@ -16,7 +16,7 @@ Define owner-scoped harness definitions, loop assignments, and deterministic har
 
 ## Runner and harness catalog
 
-Runners are execution environments that host harnesses. Harnesses are the AI coding agent tools that run within runners. See [worker.md](../definitions/worker.md) for normative definitions and the proprietary vs open runner distinction.
+Runners are execution environments that host harnesses. Harnesses are the AI coding agent tools that run within runners. See [runner-harness.md](../definitions/runner-harness.md) for normative definitions and the proprietary vs open runner distinction.
 
 1. **GitHub Copilot Cloud** (`github-copilot-cloud`) — MVP executable runner; required for harness-backed execution in Phase 1. Hosts the GitHub Copilot coding agent.
 2. **Juju VM** (`juju-vm`) — MVP+1 Athena-owned runner target; can host multiple harness types (OpenCode, Claude Code, Codex, etc.).
