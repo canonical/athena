@@ -1,5 +1,5 @@
-import { config } from "@components/config/config.js";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { config } from "@components/config/config.js";
 
 export type SecretEnvelope = {
   ciphertext: string;

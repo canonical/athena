@@ -120,12 +120,10 @@ const selectWeightedRoundRobin = (candidates: SelectionCandidate[], cursor: numb
     return null;
   }
 
-  const weighted = [...candidates]
-    .sort(deterministicOrder)
-    .flatMap((candidate) => {
-      const weight = Math.max(1, Math.round((candidate.selectionWeight || 1) * ((candidate.remainingCreditPercentage ?? 0) / 10 || 1)));
-      return Array.from({ length: weight }).map(() => candidate);
-    });
+  const weighted = [...candidates].sort(deterministicOrder).flatMap((candidate) => {
+    const weight = Math.max(1, Math.round((candidate.selectionWeight || 1) * ((candidate.remainingCreditPercentage ?? 0) / 10 || 1)));
+    return Array.from({ length: weight }).map(() => candidate);
+  });
 
   if (weighted.length === 0) {
     return null;

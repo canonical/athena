@@ -1,7 +1,6 @@
 import { getPool } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
-import type { LoopHarnessAssignment } from "./harness.schema.js";
-import type { HarnessDefinition, HarnessDefinitionInsert, HarnessDefinitionUpdate, LoopHarnessAssignmentAdminUpdate } from "./harness.schema.js";
+import type { HarnessDefinition, HarnessDefinitionInsert, HarnessDefinitionUpdate, LoopHarnessAssignment, LoopHarnessAssignmentAdminUpdate } from "./harness.schema.js";
 
 const harnessColumns = `"id", "owner", "displayName", "harnessType", "lifecycleStatus", "createdAt", "updatedAt"`;
 

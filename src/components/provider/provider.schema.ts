@@ -5,9 +5,7 @@ export const providerLifecycleStatuses = [`active`, `deprecated`, `archived`] as
 
 const requiredString = (message: string) => z.preprocess((value) => (typeof value === `string` ? value.trim() || undefined : undefined), z.string(message));
 
-const httpsUrlSchema = z
-  .url(`baseUrl must be a valid URL.`)
-  .refine((value) => value.startsWith(`https://`), { message: `baseUrl must use HTTPS.` });
+const httpsUrlSchema = z.url(`baseUrl must be a valid URL.`).refine((value) => value.startsWith(`https://`), { message: `baseUrl must use HTTPS.` });
 
 export const providerDefinitionInsertSchema = z.object({
   displayName: requiredString(`displayName is required.`),

@@ -1,5 +1,5 @@
-import { authenticate, createLoop, expect, test } from "../../../testing/playwright/index.js";
 import { Client } from "pg";
+import { authenticate, createLoop, expect, test } from "../../../testing/playwright/index.js";
 
 const defaultDbConnectionString = `postgresql://athena:${process.env.POSTGRES_PASSWORD || `athena`}@localhost:5432/athena`;
 const dbConnectionString = process.env.APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING || defaultDbConnectionString;
@@ -150,10 +150,7 @@ test(`loop members can assign definitions but non-admins cannot mutate priority 
   const providerDefinition = (await providerCreate.json()) as { id: string };
 
   const nonAdminLoopId = await withDb(async (client) => {
-    const loopResult = await client.query<{ id: string }>(`INSERT INTO "loop" ("name", "description") VALUES ($1, $2) RETURNING "id"`, [
-      `Non-admin assignment loop ${Date.now()}`,
-      `loop for permissions check`,
-    ]);
+    const loopResult = await client.query<{ id: string }>(`INSERT INTO "loop" ("name", "description") VALUES ($1, $2) RETURNING "id"`, [`Non-admin assignment loop ${Date.now()}`, `loop for permissions check`]);
     const loopId = loopResult.rows[0]?.id;
 
     if (!loopId) {
