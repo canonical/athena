@@ -1,17 +1,17 @@
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/validation.js";
-import type { LoopProviderAssignment, LoopProviderAssignmentAdminUpdate, LoopProviderAssignmentInsert, ProviderDefinition, ProviderDefinitionInsert, ProviderDefinitionUpdate } from "./provider.schema.js";
-import { loopProviderAssignmentAdminUpdateSchema, loopProviderAssignmentInsertSchema, providerDefinitionInsertSchema, providerDefinitionUpdateSchema } from "./provider.schema.js";
+import type { LoopProvider, LoopProviderAdminUpdate, LoopProviderInsert, Provider, ProviderInsert, ProviderUpdate } from "./provider.schema.js";
+import { loopProviderAdminUpdateSchema, loopProviderInsertSchema, providerInsertSchema, providerUpdateSchema } from "./provider.schema.js";
 import {
-  queryLoopProviderAssignmentCreate,
-  queryLoopProviderAssignmentDelete,
-  queryLoopProviderAssignmentList,
-  queryLoopProviderAssignmentUpdateByAdmin,
-  queryProviderDefinitionByIdForOwner,
-  queryProviderDefinitionCreate,
-  queryProviderDefinitionDelete,
-  queryProviderDefinitionListByOwner,
-  queryProviderDefinitionUpdate,
+  queryLoopProviderCreate,
+  queryLoopProviderDelete,
+  queryLoopProviderList,
+  queryLoopProviderUpdateByAdmin,
+  queryProviderByIdForOwner,
+  queryProviderCreate,
+  queryProviderDelete,
+  queryProviderListByOwner,
+  queryProviderUpdate,
 } from "./provider.service.js";
 
 export class ProviderValidationError extends Error {}
@@ -24,9 +24,9 @@ const validateLoopId = (loopId: string): void => {
   }
 };
 
-const validateProviderDefinitionId = (providerDefinitionId: string): void => {
-  if (!isValidUuid(providerDefinitionId)) {
-    throw new ProviderValidationError(`providerDefinitionId must be a valid UUID.`);
+const validateProviderId = (providerId: string): void => {
+  if (!isValidUuid(providerId)) {
+    throw new ProviderValidationError(`providerId must be a valid UUID.`);
   }
 };
 
@@ -36,11 +36,11 @@ const enforceOpenRouterOnly = (providerType: string): void => {
   }
 };
 
-export const validateProviderDefinitionInsertRequest = (value: unknown): ProviderDefinitionInsert => {
-  const result = providerDefinitionInsertSchema.safeParse(value);
+export const validateProviderInsertRequest = (value: unknown): ProviderInsert => {
+  const result = providerInsertSchema.safeParse(value);
 
   if (!result.success) {
-    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid provider definition request.`);
+    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid provider request.`);
   }
 
   enforceOpenRouterOnly(result.data.providerType);
@@ -48,11 +48,11 @@ export const validateProviderDefinitionInsertRequest = (value: unknown): Provide
   return result.data;
 };
 
-export const validateProviderDefinitionUpdateRequest = (value: unknown): ProviderDefinitionUpdate => {
-  const result = providerDefinitionUpdateSchema.safeParse(value);
+export const validateProviderUpdateRequest = (value: unknown): ProviderUpdate => {
+  const result = providerUpdateSchema.safeParse(value);
 
   if (!result.success) {
-    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid provider definition request.`);
+    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid provider request.`);
   }
 
   enforceOpenRouterOnly(result.data.providerType);
@@ -60,92 +60,92 @@ export const validateProviderDefinitionUpdateRequest = (value: unknown): Provide
   return result.data;
 };
 
-export const validateLoopProviderAssignmentInsertRequest = (value: unknown): LoopProviderAssignmentInsert => {
-  const result = loopProviderAssignmentInsertSchema.safeParse(value);
+export const validateLoopProviderInsertRequest = (value: unknown): LoopProviderInsert => {
+  const result = loopProviderInsertSchema.safeParse(value);
 
   if (!result.success) {
-    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid loop provider assignment request.`);
+    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid loop provider request.`);
   }
 
   return result.data;
 };
 
-export const validateLoopProviderAssignmentAdminUpdateRequest = (value: unknown): LoopProviderAssignmentAdminUpdate => {
-  const result = loopProviderAssignmentAdminUpdateSchema.safeParse(value);
+export const validateLoopProviderAdminUpdateRequest = (value: unknown): LoopProviderAdminUpdate => {
+  const result = loopProviderAdminUpdateSchema.safeParse(value);
 
   if (!result.success) {
-    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid loop provider assignment update request.`);
+    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid loop provider update request.`);
   }
 
   return result.data;
 };
 
-export const providerDefinitionList = async (ownerId: string): Promise<ProviderDefinition[]> => queryProviderDefinitionListByOwner(ownerId);
+export const providerList = async (ownerId: string): Promise<Provider[]> => queryProviderListByOwner(ownerId);
 
-export const providerDefinitionGet = async (providerDefinitionId: string, ownerId: string): Promise<ProviderDefinition> => {
-  validateProviderDefinitionId(providerDefinitionId);
+export const providerGet = async (providerId: string, ownerId: string): Promise<Provider> => {
+  validateProviderId(providerId);
 
-  const definition = await queryProviderDefinitionByIdForOwner(providerDefinitionId, ownerId);
+  const provider = await queryProviderByIdForOwner(providerId, ownerId);
 
-  if (!definition) {
-    throw new ProviderNotFoundError(`Provider definition not found.`);
+  if (!provider) {
+    throw new ProviderNotFoundError(`Provider not found.`);
   }
 
-  return definition;
+  return provider;
 };
 
-export const providerDefinitionCreate = async (input: ProviderDefinitionInsert, ownerId: string): Promise<ProviderDefinition> => queryProviderDefinitionCreate(input, ownerId);
+export const providerCreate = async (input: ProviderInsert, ownerId: string): Promise<Provider> => queryProviderCreate(input, ownerId);
 
-export const providerDefinitionUpdate = async (providerDefinitionId: string, ownerId: string, input: ProviderDefinitionUpdate): Promise<ProviderDefinition> => {
-  validateProviderDefinitionId(providerDefinitionId);
+export const providerUpdate = async (providerId: string, ownerId: string, input: ProviderUpdate): Promise<Provider> => {
+  validateProviderId(providerId);
 
-  const updated = await queryProviderDefinitionUpdate(providerDefinitionId, ownerId, input);
+  const updated = await queryProviderUpdate(providerId, ownerId, input);
 
   if (!updated) {
-    throw new ProviderNotFoundError(`Provider definition not found.`);
+    throw new ProviderNotFoundError(`Provider not found.`);
   }
 
   return updated;
 };
 
-export const providerDefinitionDelete = async (providerDefinitionId: string, ownerId: string): Promise<void> => {
-  validateProviderDefinitionId(providerDefinitionId);
+export const providerDelete = async (providerId: string, ownerId: string): Promise<void> => {
+  validateProviderId(providerId);
 
-  if (!(await queryProviderDefinitionDelete(providerDefinitionId, ownerId))) {
-    throw new ProviderNotFoundError(`Provider definition not found.`);
+  if (!(await queryProviderDelete(providerId, ownerId))) {
+    throw new ProviderNotFoundError(`Provider not found.`);
   }
 };
 
-export const loopProviderAssignmentList = async (loopId: string, userId: string): Promise<LoopProviderAssignment[]> => {
+export const loopProviderList = async (loopId: string, userId: string): Promise<LoopProvider[]> => {
   validateLoopId(loopId);
 
   if (!(await queryLoopMembership(loopId, userId))) {
     throw new ProviderNotFoundError(`Loop not found.`);
   }
 
-  return queryLoopProviderAssignmentList(loopId);
+  return queryLoopProviderList(loopId);
 };
 
-export const loopProviderAssignmentCreate = async (loopId: string, userId: string, input: LoopProviderAssignmentInsert): Promise<void> => {
+export const loopProviderCreate = async (loopId: string, userId: string, input: LoopProviderInsert): Promise<void> => {
   validateLoopId(loopId);
-  validateProviderDefinitionId(input.providerDefinition);
+  validateProviderId(input.provider);
 
   if (!(await queryLoopMembership(loopId, userId))) {
     throw new ProviderNotFoundError(`Loop not found.`);
   }
 
-  const definition = await queryProviderDefinitionByIdForOwner(input.providerDefinition, userId);
+  const provider = await queryProviderByIdForOwner(input.provider, userId);
 
-  if (!definition) {
-    throw new ProviderNotFoundError(`Provider definition not found.`);
+  if (!provider) {
+    throw new ProviderNotFoundError(`Provider not found.`);
   }
 
-  await queryLoopProviderAssignmentCreate(loopId, input.providerDefinition);
+  await queryLoopProviderCreate(loopId, input.provider);
 };
 
-export const loopProviderAssignmentUpdateByAdmin = async (loopId: string, providerDefinitionId: string, userId: string, input: LoopProviderAssignmentAdminUpdate): Promise<LoopProviderAssignment> => {
+export const loopProviderUpdateByAdmin = async (loopId: string, providerId: string, userId: string, input: LoopProviderAdminUpdate): Promise<LoopProvider> => {
   validateLoopId(loopId);
-  validateProviderDefinitionId(providerDefinitionId);
+  validateProviderId(providerId);
 
   const loop = await queryLoopForUser(loopId, userId);
 
@@ -157,18 +157,18 @@ export const loopProviderAssignmentUpdateByAdmin = async (loopId: string, provid
     throw new ProviderForbiddenError(`Only loop admins may edit priority and overrides.`);
   }
 
-  const updated = await queryLoopProviderAssignmentUpdateByAdmin(loopId, providerDefinitionId, input);
+  const updated = await queryLoopProviderUpdateByAdmin(loopId, providerId, input);
 
   if (!updated) {
-    throw new ProviderNotFoundError(`Loop provider assignment not found.`);
+    throw new ProviderNotFoundError(`Loop provider not found.`);
   }
 
   return updated;
 };
 
-export const loopProviderAssignmentDelete = async (loopId: string, providerDefinitionId: string, userId: string): Promise<void> => {
+export const loopProviderDelete = async (loopId: string, providerId: string, userId: string): Promise<void> => {
   validateLoopId(loopId);
-  validateProviderDefinitionId(providerDefinitionId);
+  validateProviderId(providerId);
 
   const loop = await queryLoopForUser(loopId, userId);
 
@@ -180,7 +180,7 @@ export const loopProviderAssignmentDelete = async (loopId: string, providerDefin
     throw new ProviderForbiddenError(`Only loop admins may remove assignments.`);
   }
 
-  if (!(await queryLoopProviderAssignmentDelete(loopId, providerDefinitionId))) {
-    throw new ProviderNotFoundError(`Loop provider assignment not found.`);
+  if (!(await queryLoopProviderDelete(loopId, providerId))) {
+    throw new ProviderNotFoundError(`Loop provider not found.`);
   }
 };

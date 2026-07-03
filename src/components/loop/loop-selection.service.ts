@@ -204,27 +204,27 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
     const result = await client.query<SelectionCandidate>(
       `
         SELECT
-          lhd."harnessDefinition" AS "assignmentId",
-          lhd."priority",
-          lhd."priorityOverride",
-          lhd."enabled",
-          lhd."selectionWeight",
-          lhd."remainingCreditPercentage",
-          lhd."remainingCreditValue",
-          lhd."lastUsedAt",
-          lhd."cooldownUntil",
-          lhd."healthStatus",
-          lhd."createdAt" AS "assignmentCreatedAt",
-          hd."createdAt" AS "definitionCreatedAt",
-          hd."credentialCiphertext",
-          hd."credentialIv",
-          hd."credentialAuthTag",
-          hd."credentialKeyVersion",
-          hd."runnerType" AS "definitionType"
-        FROM "loopHarnessDefinition" lhd
-        JOIN "harnessDefinition" hd ON hd."id" = lhd."harnessDefinition"
-        WHERE lhd."loop" = $1
-          AND hd."lifecycleStatus" = 'active'
+          lh."harness" AS "assignmentId",
+          lh."priority",
+          lh."priorityOverride",
+          lh."enabled",
+          lh."selectionWeight",
+          lh."remainingCreditPercentage",
+          lh."remainingCreditValue",
+          lh."lastUsedAt",
+          lh."cooldownUntil",
+          lh."healthStatus",
+          lh."createdAt" AS "assignmentCreatedAt",
+          h."createdAt" AS "definitionCreatedAt",
+          h."credentialCiphertext",
+          h."credentialIv",
+          h."credentialAuthTag",
+          h."credentialKeyVersion",
+          h."runnerType" AS "definitionType"
+        FROM "loopHarness" lh
+        JOIN "harness" h ON h."id" = lh."harness"
+        WHERE lh."loop" = $1
+          AND h."lifecycleStatus" = 'active'
       `,
       [loopId],
     );
@@ -235,28 +235,28 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
   const result = await client.query<SelectionCandidate>(
     `
       SELECT
-        lpd."providerDefinition" AS "assignmentId",
-        lpd."priority",
-        lpd."priorityOverride",
-        lpd."enabled",
-        lpd."selectionWeight",
-        lpd."remainingCreditPercentage",
-        lpd."remainingCreditValue",
-        lpd."lastUsedAt",
-        lpd."cooldownUntil",
-        lpd."healthStatus",
-        lpd."createdAt" AS "assignmentCreatedAt",
-        pd."createdAt" AS "definitionCreatedAt",
-        pd."credentialCiphertext",
-        pd."credentialIv",
-        pd."credentialAuthTag",
-        pd."credentialKeyVersion",
-        pd."providerType" AS "definitionType"
-      FROM "loopProviderDefinition" lpd
-      JOIN "providerDefinition" pd ON pd."id" = lpd."providerDefinition"
-      WHERE lpd."loop" = $1
-        AND pd."lifecycleStatus" = 'active'
-        AND pd."providerType" = 'openrouter'
+        lp."provider" AS "assignmentId",
+        lp."priority",
+        lp."priorityOverride",
+        lp."enabled",
+        lp."selectionWeight",
+        lp."remainingCreditPercentage",
+        lp."remainingCreditValue",
+        lp."lastUsedAt",
+        lp."cooldownUntil",
+        lp."healthStatus",
+        lp."createdAt" AS "assignmentCreatedAt",
+        p."createdAt" AS "definitionCreatedAt",
+        p."credentialCiphertext",
+        p."credentialIv",
+        p."credentialAuthTag",
+        p."credentialKeyVersion",
+        p."providerType" AS "definitionType"
+      FROM "loopProvider" lp
+      JOIN "provider" p ON p."id" = lp."provider"
+      WHERE lp."loop" = $1
+        AND p."lifecycleStatus" = 'active'
+        AND p."providerType" = 'openrouter'
     `,
     [loopId],
   );
@@ -275,11 +275,11 @@ const updateCursor = async (client: PoolClient, loopId: string, pool: SelectionP
 
 const touchLastUsed = async (client: PoolClient, loopId: string, pool: SelectionPoolType, assignmentId: string): Promise<void> => {
   if (pool === `copilot`) {
-    await client.query(`UPDATE "loopHarnessDefinition" SET "lastUsedAt" = NOW() WHERE "loop" = $1 AND "harnessDefinition" = $2`, [loopId, assignmentId]);
+    await client.query(`UPDATE "loopHarness" SET "lastUsedAt" = NOW() WHERE "loop" = $1 AND "harness" = $2`, [loopId, assignmentId]);
     return;
   }
 
-  await client.query(`UPDATE "loopProviderDefinition" SET "lastUsedAt" = NOW() WHERE "loop" = $1 AND "providerDefinition" = $2`, [loopId, assignmentId]);
+  await client.query(`UPDATE "loopProvider" SET "lastUsedAt" = NOW() WHERE "loop" = $1 AND "provider" = $2`, [loopId, assignmentId]);
 };
 
 const evaluateSelection = (algorithm: string, candidates: SelectionCandidate[], cursor: number): { selected: SelectionCandidate | null; algorithmUsed: string; fallbackReason: string | null } => {

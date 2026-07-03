@@ -2,7 +2,7 @@
 
 ## Objective
 
-Define owner-scoped harness definitions, loop assignments, and deterministic harness key selection for IC and CR personas within Athena's routing model.
+Define owner-scoped harness definitions, loop assignments, and deterministic harness key selection within Athena's routing model.
 
 ## Scope
 
@@ -12,7 +12,6 @@ Define owner-scoped harness definitions, loop assignments, and deterministic har
 - MVP execution constraint (GitHub Copilot Cloud Agent only)
 - Multi-key selection algorithms
 - Fallback and unavailability behavior
-- Audit trail for assignment and selection outcomes
 
 ## Runner and harness catalog
 
@@ -50,9 +49,8 @@ When a harness-backed persona executes:
 
 ### MVP execution constraint
 
-1. In MVP, the only executable runner is `github-copilot-cloud`.
-2. Harness definitions targeting other runner types are rejected at save time.
-3. Execution-time selection re-enforces the MVP rule and skips non-compliant entries with audit reason.
+1. In MVP, `github-copilot-cloud` is the only available runner type. No other runner types can be configured.
+2. Execution-time selection skips any non-compliant entries with a recorded reason.
 
 ## Validation and safety gates
 
@@ -62,20 +60,6 @@ When a harness-backed persona executes:
 4. Assignment overrides are mutable only by loop admins.
 5. Selection must record deterministic tie-breakers and fallback reason.
 
-## Observability and auditability
-
-Every harness selection attempt captures:
-
-1. `loopId`
-2. `selectedAssignmentId` (or null)
-3. `algorithmRequested`
-4. `algorithmUsed`
-5. `fallbackReason`
-6. `skipped[]` with assignment ID and reason
-7. timestamp
-
-Definition and assignment lifecycle updates must audit actor, target ID, and before/after snapshots with secret redaction.
-
 ## Implementation steps
 
 1. Add owner-scoped harness definition persistence with encrypted credential envelope fields.
@@ -83,16 +67,16 @@ Definition and assignment lifecycle updates must audit actor, target ID, and bef
 3. Implement owner-only definition CRUD.
 4. Implement member assignment CRUD and admin-only ordering/override mutation.
 5. Implement deterministic selection algorithms and fallback policy for Copilot pool.
-6. Add execution-time hook to resolve selected harness key and record audit metadata.
+6. Add execution-time hook to resolve selected harness key.
 7. Add E2E tests for permissions, deterministic ordering, MVP enforcement, and redaction.
 
 ## Acceptance criteria
 
 1. Owners can manage harness definitions independent of loops.
 2. Loop members can assign harness definitions; only admins can edit order/overrides.
-3. MVP constraint is enforced at save-time and execution-time.
-4. Harness selection is deterministic and auditable.
-5. Secret material is never exposed via API responses, logs, or audit payloads.
+3. MVP constraint is enforced at execution-time.
+4. Harness selection is deterministic.
+5. Secret material is never exposed via API responses or logs.
 
 ## Related specs
 

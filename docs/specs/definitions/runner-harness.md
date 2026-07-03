@@ -20,8 +20,8 @@ Runners fall into two categories:
 
 **Open runners** expose a standard interface defined and implemented in the Athena codebase. Any harness that conforms to the Athena open runner contract can be deployed on an open runner without a bespoke adapter per harness.
 
-- **Juju VM** — an Athena-owned virtual machine provisioned via a Juju machine charm. The charm is implemented in the Athena codebase and defines the open runner standard that eligible harnesses must satisfy. **Post-MVP (MVP+1) — Athena-owned implementation target.**
-- **Local Ubuntu binary** — a user-managed Ubuntu machine running the Athena open runner binary. Suitable for local testing or a disposable virtual machine with internet access. Running on a personal local machine is discouraged for production workloads due to security exposure, unpredictable availability, and lack of isolation from the developer's environment. **Post-MVP.**
+- **Juju VM** — an Athena-owned virtual machine provisioned via a Juju machine charm. The charm is implemented in the Athena codebase and defines the open runner standard that eligible harnesses must satisfy. **Post-MVP — Athena-owned implementation target.**
+- **Local Ubuntu binary** — a binary that can run on any Ubuntu machine and implements the Athena open runner interface. Running on a disposable virtual machine with internet access is the recommended approach. Running on a personal local machine is discouraged due to security exposure, unpredictable availability, and lack of isolation from the developer's environment. **Post-MVP.**
 
 ### Harness
 
@@ -56,8 +56,8 @@ For proprietary runners that bundle a single harness (e.g., GitHub Copilot Cloud
 | Runner | Type | Identifier | Status |
 |---|---|---|---|
 | GitHub Copilot Cloud | Proprietary | `github-copilot-cloud` | MVP — only executable runner |
-| Juju VM | Open (Athena-owned) | `juju-vm` | Post-MVP (MVP+1) — Athena-owned implementation target |
-| Local Ubuntu binary | Open (user-managed) | `local-ubuntu` | Post-MVP — discouraged for production use |
+| Juju VM | Open (Athena-owned) | `juju-vm` | Post-MVP — Athena-owned implementation target |
+| Local Ubuntu binary | Open (user-managed) | `local-ubuntu` | Post-MVP — disposable VMs recommended, local machines discouraged |
 
 ### Harnesses
 
@@ -70,7 +70,7 @@ For proprietary runners that bundle a single harness (e.g., GitHub Copilot Cloud
 
 ## MVP constraint
 
-In MVP, the only executable runner is **GitHub Copilot Cloud** (`github-copilot-cloud`). Harness definitions targeting any other runner type are rejected at creation time and skipped at execution time with an auditable reason.
+In MVP, GitHub Copilot Cloud (`github-copilot-cloud`) is the only available runner type. No other runner type can be selected or configured during the MVP phase. Post-MVP runner types will be added to the available options as they are implemented and validated.
 
 ## Cross references
 

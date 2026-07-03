@@ -5,19 +5,19 @@ import {
   HarnessForbiddenError,
   HarnessNotFoundError,
   HarnessValidationError,
-  harnessDefinitionCreate,
-  harnessDefinitionDelete,
-  harnessDefinitionGet,
-  harnessDefinitionList,
-  harnessDefinitionUpdate,
-  loopHarnessAssignmentCreate,
-  loopHarnessAssignmentDelete,
-  loopHarnessAssignmentList,
-  loopHarnessAssignmentUpdateByAdmin,
-  validateHarnessDefinitionInsertRequest,
-  validateHarnessDefinitionUpdateRequest,
-  validateLoopHarnessAssignmentAdminUpdateRequest,
-  validateLoopHarnessAssignmentInsertRequest,
+  harnessCreate,
+  harnessDelete,
+  harnessGet,
+  harnessList,
+  harnessUpdate,
+  loopHarnessCreate,
+  loopHarnessDelete,
+  loopHarnessList,
+  loopHarnessUpdateByAdmin,
+  validateHarnessInsertRequest,
+  validateHarnessUpdateRequest,
+  validateLoopHarnessAdminUpdateRequest,
+  validateLoopHarnessInsertRequest,
 } from "./harness.controller.js";
 
 export const harnessRouter = Router();
@@ -51,16 +51,16 @@ const getUserId = (response: Response): string => {
   return user.id;
 };
 
-const getHarnessDefinitionId = (request: Request, response: Response): string | undefined => {
-  const raw = request.params.harnessDefinitionId;
-  const harnessDefinitionId = Array.isArray(raw) ? (raw[0] ?? ``) : (raw ?? ``);
+const getHarnessId = (request: Request, response: Response): string | undefined => {
+  const raw = request.params.harnessId;
+  const harnessId = Array.isArray(raw) ? (raw[0] ?? ``) : (raw ?? ``);
 
-  if (!isValidUuid(harnessDefinitionId)) {
-    response.status(400).json({ error: `harnessDefinitionId must be a valid UUID.` });
+  if (!isValidUuid(harnessId)) {
+    response.status(400).json({ error: `harnessId must be a valid UUID.` });
     return undefined;
   }
 
-  return harnessDefinitionId;
+  return harnessId;
 };
 
 const getLoopId = (request: Request, response: Response): string | undefined => {
@@ -75,13 +75,13 @@ const getLoopId = (request: Request, response: Response): string | undefined => 
   return loopId;
 };
 
-harnessRouter.get(`/harness-definition-list`, async (_request: Request, response: Response) => {
-  response.status(200).json(await harnessDefinitionList(getUserId(response)));
+harnessRouter.get(`/harness-list`, async (_request: Request, response: Response) => {
+  response.status(200).json(await harnessList(getUserId(response)));
 });
 
-harnessRouter.post(`/harness-definition-list`, async (request: Request, response: Response) => {
+harnessRouter.post(`/harness-list`, async (request: Request, response: Response) => {
   try {
-    response.status(201).json(await harnessDefinitionCreate(validateHarnessDefinitionInsertRequest(request.body), getUserId(response)));
+    response.status(201).json(await harnessCreate(validateHarnessInsertRequest(request.body), getUserId(response)));
   } catch (error) {
     if (!sendHarnessError(error, response)) {
       throw error;
@@ -89,15 +89,15 @@ harnessRouter.post(`/harness-definition-list`, async (request: Request, response
   }
 });
 
-harnessRouter.get(`/harness-definition/:harnessDefinitionId`, async (request: Request, response: Response) => {
+harnessRouter.get(`/harness/:harnessId`, async (request: Request, response: Response) => {
   try {
-    const harnessDefinitionId = getHarnessDefinitionId(request, response);
+    const harnessId = getHarnessId(request, response);
 
-    if (!harnessDefinitionId) {
+    if (!harnessId) {
       return;
     }
 
-    response.status(200).json(await harnessDefinitionGet(harnessDefinitionId, getUserId(response)));
+    response.status(200).json(await harnessGet(harnessId, getUserId(response)));
   } catch (error) {
     if (!sendHarnessError(error, response)) {
       throw error;
@@ -105,15 +105,15 @@ harnessRouter.get(`/harness-definition/:harnessDefinitionId`, async (request: Re
   }
 });
 
-harnessRouter.put(`/harness-definition/:harnessDefinitionId`, async (request: Request, response: Response) => {
+harnessRouter.put(`/harness/:harnessId`, async (request: Request, response: Response) => {
   try {
-    const harnessDefinitionId = getHarnessDefinitionId(request, response);
+    const harnessId = getHarnessId(request, response);
 
-    if (!harnessDefinitionId) {
+    if (!harnessId) {
       return;
     }
 
-    response.status(200).json(await harnessDefinitionUpdate(harnessDefinitionId, getUserId(response), validateHarnessDefinitionUpdateRequest(request.body)));
+    response.status(200).json(await harnessUpdate(harnessId, getUserId(response), validateHarnessUpdateRequest(request.body)));
   } catch (error) {
     if (!sendHarnessError(error, response)) {
       throw error;
@@ -121,15 +121,15 @@ harnessRouter.put(`/harness-definition/:harnessDefinitionId`, async (request: Re
   }
 });
 
-harnessRouter.delete(`/harness-definition/:harnessDefinitionId`, async (request: Request, response: Response) => {
+harnessRouter.delete(`/harness/:harnessId`, async (request: Request, response: Response) => {
   try {
-    const harnessDefinitionId = getHarnessDefinitionId(request, response);
+    const harnessId = getHarnessId(request, response);
 
-    if (!harnessDefinitionId) {
+    if (!harnessId) {
       return;
     }
 
-    await harnessDefinitionDelete(harnessDefinitionId, getUserId(response));
+    await harnessDelete(harnessId, getUserId(response));
     response.sendStatus(204);
   } catch (error) {
     if (!sendHarnessError(error, response)) {
@@ -138,7 +138,7 @@ harnessRouter.delete(`/harness-definition/:harnessDefinitionId`, async (request:
   }
 });
 
-harnessRouter.get(`/loop/:loopId/harness-assignment-list`, async (request: Request, response: Response) => {
+harnessRouter.get(`/loop/:loopId/harness-list`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -146,7 +146,7 @@ harnessRouter.get(`/loop/:loopId/harness-assignment-list`, async (request: Reque
       return;
     }
 
-    response.status(200).json(await loopHarnessAssignmentList(loopId, getUserId(response)));
+    response.status(200).json(await loopHarnessList(loopId, getUserId(response)));
   } catch (error) {
     if (!sendHarnessError(error, response)) {
       throw error;
@@ -154,7 +154,7 @@ harnessRouter.get(`/loop/:loopId/harness-assignment-list`, async (request: Reque
   }
 });
 
-harnessRouter.post(`/loop/:loopId/harness-assignment-list`, async (request: Request, response: Response) => {
+harnessRouter.post(`/loop/:loopId/harness-list`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -162,7 +162,7 @@ harnessRouter.post(`/loop/:loopId/harness-assignment-list`, async (request: Requ
       return;
     }
 
-    await loopHarnessAssignmentCreate(loopId, getUserId(response), validateLoopHarnessAssignmentInsertRequest(request.body));
+    await loopHarnessCreate(loopId, getUserId(response), validateLoopHarnessInsertRequest(request.body));
     response.sendStatus(204);
   } catch (error) {
     if (!sendHarnessError(error, response)) {
@@ -171,7 +171,7 @@ harnessRouter.post(`/loop/:loopId/harness-assignment-list`, async (request: Requ
   }
 });
 
-harnessRouter.put(`/loop/:loopId/harness-assignment/:harnessDefinitionId/admin`, async (request: Request, response: Response) => {
+harnessRouter.put(`/loop/:loopId/harness/:harnessId/admin`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -179,13 +179,13 @@ harnessRouter.put(`/loop/:loopId/harness-assignment/:harnessDefinitionId/admin`,
       return;
     }
 
-    const harnessDefinitionId = getHarnessDefinitionId(request, response);
+    const harnessId = getHarnessId(request, response);
 
-    if (!harnessDefinitionId) {
+    if (!harnessId) {
       return;
     }
 
-    response.status(200).json(await loopHarnessAssignmentUpdateByAdmin(loopId, harnessDefinitionId, getUserId(response), validateLoopHarnessAssignmentAdminUpdateRequest(request.body)));
+    response.status(200).json(await loopHarnessUpdateByAdmin(loopId, harnessId, getUserId(response), validateLoopHarnessAdminUpdateRequest(request.body)));
   } catch (error) {
     if (!sendHarnessError(error, response)) {
       throw error;
@@ -193,7 +193,7 @@ harnessRouter.put(`/loop/:loopId/harness-assignment/:harnessDefinitionId/admin`,
   }
 });
 
-harnessRouter.delete(`/loop/:loopId/harness-assignment/:harnessDefinitionId/admin`, async (request: Request, response: Response) => {
+harnessRouter.delete(`/loop/:loopId/harness/:harnessId/admin`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -201,13 +201,13 @@ harnessRouter.delete(`/loop/:loopId/harness-assignment/:harnessDefinitionId/admi
       return;
     }
 
-    const harnessDefinitionId = getHarnessDefinitionId(request, response);
+    const harnessId = getHarnessId(request, response);
 
-    if (!harnessDefinitionId) {
+    if (!harnessId) {
       return;
     }
 
-    await loopHarnessAssignmentDelete(loopId, harnessDefinitionId, getUserId(response));
+    await loopHarnessDelete(loopId, harnessId, getUserId(response));
     response.sendStatus(204);
   } catch (error) {
     if (!sendHarnessError(error, response)) {

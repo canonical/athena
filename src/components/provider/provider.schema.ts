@@ -7,7 +7,7 @@ const requiredString = (message: string) => z.preprocess((value) => (typeof valu
 
 const httpsUrlSchema = z.url(`baseUrl must be a valid URL.`).refine((value) => value.startsWith(`https://`), { message: `baseUrl must use HTTPS.` });
 
-export const providerDefinitionInsertSchema = z.object({
+export const providerInsertSchema = z.object({
   displayName: requiredString(`displayName is required.`),
   providerType: z.enum(providerTypes).default(`openrouter`),
   baseUrl: requiredString(`baseUrl is required.`).pipe(httpsUrlSchema),
@@ -16,15 +16,15 @@ export const providerDefinitionInsertSchema = z.object({
   lifecycleStatus: z.enum(providerLifecycleStatuses).default(`active`),
 });
 
-export const providerDefinitionUpdateSchema = providerDefinitionInsertSchema.pick({ displayName: true, providerType: true, baseUrl: true, model: true, lifecycleStatus: true }).extend({
+export const providerUpdateSchema = providerInsertSchema.pick({ displayName: true, providerType: true, baseUrl: true, model: true, lifecycleStatus: true }).extend({
   apiKey: requiredString(`apiKey is required.`).optional(),
 });
 
-export const loopProviderAssignmentInsertSchema = z.object({
-  providerDefinition: z.uuid(`providerDefinition must be a valid UUID.`),
+export const loopProviderInsertSchema = z.object({
+  provider: z.uuid(`provider must be a valid UUID.`),
 });
 
-export const loopProviderAssignmentAdminUpdateSchema = z.object({
+export const loopProviderAdminUpdateSchema = z.object({
   priority: z.int().min(1).optional(),
   priorityOverride: z.int().min(1).nullable().optional(),
   enabled: z.boolean().optional(),
@@ -38,12 +38,12 @@ export const loopProviderAssignmentAdminUpdateSchema = z.object({
   healthStatus: z.enum([`unknown`, `healthy`, `failing`]).optional(),
 });
 
-export type ProviderDefinitionInsert = z.infer<typeof providerDefinitionInsertSchema>;
-export type ProviderDefinitionUpdate = z.infer<typeof providerDefinitionUpdateSchema>;
-export type LoopProviderAssignmentInsert = z.infer<typeof loopProviderAssignmentInsertSchema>;
-export type LoopProviderAssignmentAdminUpdate = z.infer<typeof loopProviderAssignmentAdminUpdateSchema>;
+export type ProviderInsert = z.infer<typeof providerInsertSchema>;
+export type ProviderUpdate = z.infer<typeof providerUpdateSchema>;
+export type LoopProviderInsert = z.infer<typeof loopProviderInsertSchema>;
+export type LoopProviderAdminUpdate = z.infer<typeof loopProviderAdminUpdateSchema>;
 
-export type ProviderDefinition = {
+export type Provider = {
   id: string;
   owner: string;
   displayName: string;
@@ -56,9 +56,9 @@ export type ProviderDefinition = {
   updatedAt: Date | string;
 };
 
-export type LoopProviderAssignment = {
+export type LoopProvider = {
   loop: string;
-  providerDefinition: string;
+  provider: string;
   priority: number;
   priorityOverride: number | null;
   enabled: boolean;

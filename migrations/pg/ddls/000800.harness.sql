@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS "harnessDefinition" (
+CREATE TABLE IF NOT EXISTS "harness" (
   "id" UUID PRIMARY KEY DEFAULT uuidv7(),
   "owner" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "displayName" TEXT NOT NULL,
@@ -13,10 +13,10 @@ CREATE TABLE IF NOT EXISTS "harnessDefinition" (
   UNIQUE ("owner", "displayName")
 );
 
-CREATE INDEX IF NOT EXISTS "idxHarnessDefinitionOwner" ON "harnessDefinition"("owner");
-CREATE INDEX IF NOT EXISTS "idxHarnessDefinitionRunnerType" ON "harnessDefinition"("runnerType");
+CREATE INDEX IF NOT EXISTS "idxHarnessOwner" ON "harness"("owner");
+CREATE INDEX IF NOT EXISTS "idxHarnessRunnerType" ON "harness"("runnerType");
 
-SELECT ensureUpdatedAtTrigger('harnessDefinition');
+SELECT ensureUpdatedAtTrigger('harness');
 
-SELECT format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO %I', 'harnessDefinition', :'APP_ROLE_NAME')
+SELECT format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO %I', 'harness', :'APP_ROLE_NAME')
 \gexec

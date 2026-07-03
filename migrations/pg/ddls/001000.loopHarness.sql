@@ -1,6 +1,6 @@
-CREATE TABLE IF NOT EXISTS "loopProviderDefinition" (
+CREATE TABLE IF NOT EXISTS "loopHarness" (
   "loop" UUID NOT NULL REFERENCES "loop"("id") ON DELETE CASCADE,
-  "providerDefinition" UUID NOT NULL REFERENCES "providerDefinition"("id") ON DELETE CASCADE,
+  "harness" UUID NOT NULL REFERENCES "harness"("id") ON DELETE CASCADE,
   "priority" INTEGER NOT NULL CHECK ("priority" >= 1),
   "enabled" BOOLEAN NOT NULL DEFAULT TRUE,
   "timeoutMs" INTEGER NOT NULL DEFAULT 120000 CHECK ("timeoutMs" BETWEEN 1000 AND 600000),
@@ -17,14 +17,14 @@ CREATE TABLE IF NOT EXISTS "loopProviderDefinition" (
   "failureCount" INTEGER NOT NULL DEFAULT 0 CHECK ("failureCount" >= 0),
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY ("loop", "providerDefinition")
+  PRIMARY KEY ("loop", "harness")
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS "idxLoopProviderDefinitionLoopPriority" ON "loopProviderDefinition"("loop", "priority");
-CREATE UNIQUE INDEX IF NOT EXISTS "idxLoopProviderDefinitionLoopPriorityOverride" ON "loopProviderDefinition"("loop", "priorityOverride") WHERE "priorityOverride" IS NOT NULL;
-CREATE INDEX IF NOT EXISTS "idxLoopProviderDefinitionProviderDefinition" ON "loopProviderDefinition"("providerDefinition");
+CREATE UNIQUE INDEX IF NOT EXISTS "idxLoopHarnessLoopPriority" ON "loopHarness"("loop", "priority");
+CREATE UNIQUE INDEX IF NOT EXISTS "idxLoopHarnessLoopPriorityOverride" ON "loopHarness"("loop", "priorityOverride") WHERE "priorityOverride" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS "idxLoopHarnessHarness" ON "loopHarness"("harness");
 
-SELECT ensureUpdatedAtTrigger('loopProviderDefinition');
+SELECT ensureUpdatedAtTrigger('loopHarness');
 
-SELECT format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO %I', 'loopProviderDefinition', :'APP_ROLE_NAME')
+SELECT format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO %I', 'loopHarness', :'APP_ROLE_NAME')
 \gexec

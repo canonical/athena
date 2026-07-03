@@ -5,22 +5,22 @@ export const lifecycleStatuses = [`active`, `deprecated`, `archived`] as const;
 
 const requiredString = (message: string) => z.preprocess((value) => (typeof value === `string` ? value.trim() || undefined : undefined), z.string(message));
 
-export const harnessDefinitionInsertSchema = z.object({
+export const harnessInsertSchema = z.object({
   displayName: requiredString(`displayName is required.`),
   runnerType: z.enum(runnerTypes, `runnerType is required.`),
   apiKey: requiredString(`apiKey is required.`),
   lifecycleStatus: z.enum(lifecycleStatuses).default(`active`),
 });
 
-export const harnessDefinitionUpdateSchema = harnessDefinitionInsertSchema.pick({ displayName: true, lifecycleStatus: true }).extend({
+export const harnessUpdateSchema = harnessInsertSchema.pick({ displayName: true, lifecycleStatus: true }).extend({
   apiKey: requiredString(`apiKey is required.`).optional(),
 });
 
-export const loopHarnessAssignmentInsertSchema = z.object({
-  harnessDefinition: z.uuid(`harnessDefinition must be a valid UUID.`),
+export const loopHarnessInsertSchema = z.object({
+  harness: z.uuid(`harness must be a valid UUID.`),
 });
 
-export const loopHarnessAssignmentAdminUpdateSchema = z.object({
+export const loopHarnessAdminUpdateSchema = z.object({
   priority: z.int().min(1).optional(),
   priorityOverride: z.int().min(1).nullable().optional(),
   enabled: z.boolean().optional(),
@@ -34,12 +34,12 @@ export const loopHarnessAssignmentAdminUpdateSchema = z.object({
   healthStatus: z.enum([`unknown`, `healthy`, `failing`]).optional(),
 });
 
-export type HarnessDefinitionInsert = z.infer<typeof harnessDefinitionInsertSchema>;
-export type HarnessDefinitionUpdate = z.infer<typeof harnessDefinitionUpdateSchema>;
-export type LoopHarnessAssignmentInsert = z.infer<typeof loopHarnessAssignmentInsertSchema>;
-export type LoopHarnessAssignmentAdminUpdate = z.infer<typeof loopHarnessAssignmentAdminUpdateSchema>;
+export type HarnessInsert = z.infer<typeof harnessInsertSchema>;
+export type HarnessUpdate = z.infer<typeof harnessUpdateSchema>;
+export type LoopHarnessInsert = z.infer<typeof loopHarnessInsertSchema>;
+export type LoopHarnessAdminUpdate = z.infer<typeof loopHarnessAdminUpdateSchema>;
 
-export type HarnessDefinition = {
+export type Harness = {
   id: string;
   owner: string;
   displayName: string;
@@ -50,9 +50,9 @@ export type HarnessDefinition = {
   updatedAt: Date | string;
 };
 
-export type LoopHarnessAssignment = {
+export type LoopHarness = {
   loop: string;
-  harnessDefinition: string;
+  harness: string;
   priority: number;
   priorityOverride: number | null;
   enabled: boolean;

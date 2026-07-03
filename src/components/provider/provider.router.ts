@@ -2,22 +2,22 @@ import type { AuthenticatedUser } from "@components/authentication/session.schem
 import { isValidUuid } from "@components/utilities/validation.js";
 import { type Request, type Response, Router } from "express";
 import {
-  loopProviderAssignmentCreate,
-  loopProviderAssignmentDelete,
-  loopProviderAssignmentList,
-  loopProviderAssignmentUpdateByAdmin,
+  loopProviderCreate,
+  loopProviderDelete,
+  loopProviderList,
+  loopProviderUpdateByAdmin,
   ProviderForbiddenError,
   ProviderNotFoundError,
   ProviderValidationError,
-  providerDefinitionCreate,
-  providerDefinitionDelete,
-  providerDefinitionGet,
-  providerDefinitionList,
-  providerDefinitionUpdate,
-  validateLoopProviderAssignmentAdminUpdateRequest,
-  validateLoopProviderAssignmentInsertRequest,
-  validateProviderDefinitionInsertRequest,
-  validateProviderDefinitionUpdateRequest,
+  providerCreate,
+  providerDelete,
+  providerGet,
+  providerList,
+  providerUpdate,
+  validateLoopProviderAdminUpdateRequest,
+  validateLoopProviderInsertRequest,
+  validateProviderInsertRequest,
+  validateProviderUpdateRequest,
 } from "./provider.controller.js";
 
 export const providerRouter = Router();
@@ -51,16 +51,16 @@ const getUserId = (response: Response): string => {
   return user.id;
 };
 
-const getProviderDefinitionId = (request: Request, response: Response): string | undefined => {
-  const raw = request.params.providerDefinitionId;
-  const providerDefinitionId = Array.isArray(raw) ? (raw[0] ?? ``) : (raw ?? ``);
+const getProviderId = (request: Request, response: Response): string | undefined => {
+  const raw = request.params.providerId;
+  const providerId = Array.isArray(raw) ? (raw[0] ?? ``) : (raw ?? ``);
 
-  if (!isValidUuid(providerDefinitionId)) {
-    response.status(400).json({ error: `providerDefinitionId must be a valid UUID.` });
+  if (!isValidUuid(providerId)) {
+    response.status(400).json({ error: `providerId must be a valid UUID.` });
     return undefined;
   }
 
-  return providerDefinitionId;
+  return providerId;
 };
 
 const getLoopId = (request: Request, response: Response): string | undefined => {
@@ -75,13 +75,13 @@ const getLoopId = (request: Request, response: Response): string | undefined => 
   return loopId;
 };
 
-providerRouter.get(`/provider-definition-list`, async (_request: Request, response: Response) => {
-  response.status(200).json(await providerDefinitionList(getUserId(response)));
+providerRouter.get(`/provider-list`, async (_request: Request, response: Response) => {
+  response.status(200).json(await providerList(getUserId(response)));
 });
 
-providerRouter.post(`/provider-definition-list`, async (request: Request, response: Response) => {
+providerRouter.post(`/provider-list`, async (request: Request, response: Response) => {
   try {
-    response.status(201).json(await providerDefinitionCreate(validateProviderDefinitionInsertRequest(request.body), getUserId(response)));
+    response.status(201).json(await providerCreate(validateProviderInsertRequest(request.body), getUserId(response)));
   } catch (error) {
     if (!sendProviderError(error, response)) {
       throw error;
@@ -89,15 +89,15 @@ providerRouter.post(`/provider-definition-list`, async (request: Request, respon
   }
 });
 
-providerRouter.get(`/provider-definition/:providerDefinitionId`, async (request: Request, response: Response) => {
+providerRouter.get(`/provider/:providerId`, async (request: Request, response: Response) => {
   try {
-    const providerDefinitionId = getProviderDefinitionId(request, response);
+    const providerId = getProviderId(request, response);
 
-    if (!providerDefinitionId) {
+    if (!providerId) {
       return;
     }
 
-    response.status(200).json(await providerDefinitionGet(providerDefinitionId, getUserId(response)));
+    response.status(200).json(await providerGet(providerId, getUserId(response)));
   } catch (error) {
     if (!sendProviderError(error, response)) {
       throw error;
@@ -105,15 +105,15 @@ providerRouter.get(`/provider-definition/:providerDefinitionId`, async (request:
   }
 });
 
-providerRouter.put(`/provider-definition/:providerDefinitionId`, async (request: Request, response: Response) => {
+providerRouter.put(`/provider/:providerId`, async (request: Request, response: Response) => {
   try {
-    const providerDefinitionId = getProviderDefinitionId(request, response);
+    const providerId = getProviderId(request, response);
 
-    if (!providerDefinitionId) {
+    if (!providerId) {
       return;
     }
 
-    response.status(200).json(await providerDefinitionUpdate(providerDefinitionId, getUserId(response), validateProviderDefinitionUpdateRequest(request.body)));
+    response.status(200).json(await providerUpdate(providerId, getUserId(response), validateProviderUpdateRequest(request.body)));
   } catch (error) {
     if (!sendProviderError(error, response)) {
       throw error;
@@ -121,15 +121,15 @@ providerRouter.put(`/provider-definition/:providerDefinitionId`, async (request:
   }
 });
 
-providerRouter.delete(`/provider-definition/:providerDefinitionId`, async (request: Request, response: Response) => {
+providerRouter.delete(`/provider/:providerId`, async (request: Request, response: Response) => {
   try {
-    const providerDefinitionId = getProviderDefinitionId(request, response);
+    const providerId = getProviderId(request, response);
 
-    if (!providerDefinitionId) {
+    if (!providerId) {
       return;
     }
 
-    await providerDefinitionDelete(providerDefinitionId, getUserId(response));
+    await providerDelete(providerId, getUserId(response));
     response.sendStatus(204);
   } catch (error) {
     if (!sendProviderError(error, response)) {
@@ -138,7 +138,7 @@ providerRouter.delete(`/provider-definition/:providerDefinitionId`, async (reque
   }
 });
 
-providerRouter.get(`/loop/:loopId/provider-assignment-list`, async (request: Request, response: Response) => {
+providerRouter.get(`/loop/:loopId/provider-list`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -146,7 +146,7 @@ providerRouter.get(`/loop/:loopId/provider-assignment-list`, async (request: Req
       return;
     }
 
-    response.status(200).json(await loopProviderAssignmentList(loopId, getUserId(response)));
+    response.status(200).json(await loopProviderList(loopId, getUserId(response)));
   } catch (error) {
     if (!sendProviderError(error, response)) {
       throw error;
@@ -154,7 +154,7 @@ providerRouter.get(`/loop/:loopId/provider-assignment-list`, async (request: Req
   }
 });
 
-providerRouter.post(`/loop/:loopId/provider-assignment-list`, async (request: Request, response: Response) => {
+providerRouter.post(`/loop/:loopId/provider-list`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -162,7 +162,7 @@ providerRouter.post(`/loop/:loopId/provider-assignment-list`, async (request: Re
       return;
     }
 
-    await loopProviderAssignmentCreate(loopId, getUserId(response), validateLoopProviderAssignmentInsertRequest(request.body));
+    await loopProviderCreate(loopId, getUserId(response), validateLoopProviderInsertRequest(request.body));
     response.sendStatus(204);
   } catch (error) {
     if (!sendProviderError(error, response)) {
@@ -171,7 +171,7 @@ providerRouter.post(`/loop/:loopId/provider-assignment-list`, async (request: Re
   }
 });
 
-providerRouter.put(`/loop/:loopId/provider-assignment/:providerDefinitionId/admin`, async (request: Request, response: Response) => {
+providerRouter.put(`/loop/:loopId/provider/:providerId/admin`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -179,13 +179,13 @@ providerRouter.put(`/loop/:loopId/provider-assignment/:providerDefinitionId/admi
       return;
     }
 
-    const providerDefinitionId = getProviderDefinitionId(request, response);
+    const providerId = getProviderId(request, response);
 
-    if (!providerDefinitionId) {
+    if (!providerId) {
       return;
     }
 
-    response.status(200).json(await loopProviderAssignmentUpdateByAdmin(loopId, providerDefinitionId, getUserId(response), validateLoopProviderAssignmentAdminUpdateRequest(request.body)));
+    response.status(200).json(await loopProviderUpdateByAdmin(loopId, providerId, getUserId(response), validateLoopProviderAdminUpdateRequest(request.body)));
   } catch (error) {
     if (!sendProviderError(error, response)) {
       throw error;
@@ -193,7 +193,7 @@ providerRouter.put(`/loop/:loopId/provider-assignment/:providerDefinitionId/admi
   }
 });
 
-providerRouter.delete(`/loop/:loopId/provider-assignment/:providerDefinitionId/admin`, async (request: Request, response: Response) => {
+providerRouter.delete(`/loop/:loopId/provider/:providerId/admin`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -201,13 +201,13 @@ providerRouter.delete(`/loop/:loopId/provider-assignment/:providerDefinitionId/a
       return;
     }
 
-    const providerDefinitionId = getProviderDefinitionId(request, response);
+    const providerId = getProviderId(request, response);
 
-    if (!providerDefinitionId) {
+    if (!providerId) {
       return;
     }
 
-    await loopProviderAssignmentDelete(loopId, providerDefinitionId, getUserId(response));
+    await loopProviderDelete(loopId, providerId, getUserId(response));
     response.sendStatus(204);
   } catch (error) {
     if (!sendProviderError(error, response)) {

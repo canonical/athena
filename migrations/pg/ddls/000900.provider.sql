@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS "providerDefinition" (
+CREATE TABLE IF NOT EXISTS "provider" (
   "id" UUID PRIMARY KEY DEFAULT uuidv7(),
   "owner" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "displayName" TEXT NOT NULL,
@@ -15,10 +15,10 @@ CREATE TABLE IF NOT EXISTS "providerDefinition" (
   UNIQUE ("owner", "displayName")
 );
 
-CREATE INDEX IF NOT EXISTS "idxProviderDefinitionOwner" ON "providerDefinition"("owner");
-CREATE INDEX IF NOT EXISTS "idxProviderDefinitionProviderType" ON "providerDefinition"("providerType");
+CREATE INDEX IF NOT EXISTS "idxProviderOwner" ON "provider"("owner");
+CREATE INDEX IF NOT EXISTS "idxProviderProviderType" ON "provider"("providerType");
 
-SELECT ensureUpdatedAtTrigger('providerDefinition');
+SELECT ensureUpdatedAtTrigger('provider');
 
-SELECT format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO %I', 'providerDefinition', :'APP_ROLE_NAME')
+SELECT format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO %I', 'provider', :'APP_ROLE_NAME')
 \gexec

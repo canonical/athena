@@ -1,17 +1,17 @@
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/validation.js";
-import type { HarnessDefinition, HarnessDefinitionInsert, HarnessDefinitionUpdate, LoopHarnessAssignment, LoopHarnessAssignmentAdminUpdate, LoopHarnessAssignmentInsert } from "./harness.schema.js";
-import { harnessDefinitionInsertSchema, harnessDefinitionUpdateSchema, loopHarnessAssignmentAdminUpdateSchema, loopHarnessAssignmentInsertSchema } from "./harness.schema.js";
+import type { Harness, HarnessInsert, HarnessUpdate, LoopHarness, LoopHarnessAdminUpdate, LoopHarnessInsert } from "./harness.schema.js";
+import { harnessInsertSchema, harnessUpdateSchema, loopHarnessAdminUpdateSchema, loopHarnessInsertSchema } from "./harness.schema.js";
 import {
-  queryHarnessDefinitionByIdForOwner,
-  queryHarnessDefinitionCreate,
-  queryHarnessDefinitionDelete,
-  queryHarnessDefinitionListByOwner,
-  queryHarnessDefinitionUpdate,
-  queryLoopHarnessAssignmentCreate,
-  queryLoopHarnessAssignmentDelete,
-  queryLoopHarnessAssignmentList,
-  queryLoopHarnessAssignmentUpdateByAdmin,
+  queryHarnessByIdForOwner,
+  queryHarnessCreate,
+  queryHarnessDelete,
+  queryHarnessListByOwner,
+  queryHarnessUpdate,
+  queryLoopHarnessCreate,
+  queryLoopHarnessDelete,
+  queryLoopHarnessList,
+  queryLoopHarnessUpdateByAdmin,
 } from "./harness.service.js";
 
 export class HarnessValidationError extends Error {}
@@ -30,17 +30,17 @@ const validateLoopId = (loopId: string): void => {
   }
 };
 
-const validateHarnessDefinitionId = (harnessDefinitionId: string): void => {
-  if (!isValidUuid(harnessDefinitionId)) {
-    throw new HarnessValidationError(`harnessDefinitionId must be a valid UUID.`);
+const validateHarnessId = (harnessId: string): void => {
+  if (!isValidUuid(harnessId)) {
+    throw new HarnessValidationError(`harnessId must be a valid UUID.`);
   }
 };
 
-export const validateHarnessDefinitionInsertRequest = (value: unknown): HarnessDefinitionInsert => {
-  const result = harnessDefinitionInsertSchema.safeParse(value);
+export const validateHarnessInsertRequest = (value: unknown): HarnessInsert => {
+  const result = harnessInsertSchema.safeParse(value);
 
   if (!result.success) {
-    throw new HarnessValidationError(result.error.issues[0]?.message ?? `Invalid harness definition request.`);
+    throw new HarnessValidationError(result.error.issues[0]?.message ?? `Invalid harness request.`);
   }
 
   enforceMvpRunnerType(result.data.runnerType);
@@ -48,104 +48,104 @@ export const validateHarnessDefinitionInsertRequest = (value: unknown): HarnessD
   return result.data;
 };
 
-export const validateHarnessDefinitionUpdateRequest = (value: unknown): HarnessDefinitionUpdate => {
-  const result = harnessDefinitionUpdateSchema.safeParse(value);
+export const validateHarnessUpdateRequest = (value: unknown): HarnessUpdate => {
+  const result = harnessUpdateSchema.safeParse(value);
 
   if (!result.success) {
-    throw new HarnessValidationError(result.error.issues[0]?.message ?? `Invalid harness definition request.`);
+    throw new HarnessValidationError(result.error.issues[0]?.message ?? `Invalid harness request.`);
   }
 
   return result.data;
 };
 
-export const validateLoopHarnessAssignmentInsertRequest = (value: unknown): LoopHarnessAssignmentInsert => {
-  const result = loopHarnessAssignmentInsertSchema.safeParse(value);
+export const validateLoopHarnessInsertRequest = (value: unknown): LoopHarnessInsert => {
+  const result = loopHarnessInsertSchema.safeParse(value);
 
   if (!result.success) {
-    throw new HarnessValidationError(result.error.issues[0]?.message ?? `Invalid loop harness assignment request.`);
+    throw new HarnessValidationError(result.error.issues[0]?.message ?? `Invalid loop harness request.`);
   }
 
   return result.data;
 };
 
-export const validateLoopHarnessAssignmentAdminUpdateRequest = (value: unknown): LoopHarnessAssignmentAdminUpdate => {
-  const result = loopHarnessAssignmentAdminUpdateSchema.safeParse(value);
+export const validateLoopHarnessAdminUpdateRequest = (value: unknown): LoopHarnessAdminUpdate => {
+  const result = loopHarnessAdminUpdateSchema.safeParse(value);
 
   if (!result.success) {
-    throw new HarnessValidationError(result.error.issues[0]?.message ?? `Invalid loop harness assignment update request.`);
+    throw new HarnessValidationError(result.error.issues[0]?.message ?? `Invalid loop harness update request.`);
   }
 
   return result.data;
 };
 
-export const harnessDefinitionList = async (ownerId: string): Promise<HarnessDefinition[]> => queryHarnessDefinitionListByOwner(ownerId);
+export const harnessList = async (ownerId: string): Promise<Harness[]> => queryHarnessListByOwner(ownerId);
 
-export const harnessDefinitionGet = async (harnessDefinitionId: string, ownerId: string): Promise<HarnessDefinition> => {
-  validateHarnessDefinitionId(harnessDefinitionId);
+export const harnessGet = async (harnessId: string, ownerId: string): Promise<Harness> => {
+  validateHarnessId(harnessId);
 
-  const definition = await queryHarnessDefinitionByIdForOwner(harnessDefinitionId, ownerId);
+  const harness = await queryHarnessByIdForOwner(harnessId, ownerId);
 
-  if (!definition) {
-    throw new HarnessNotFoundError(`Harness definition not found.`);
+  if (!harness) {
+    throw new HarnessNotFoundError(`Harness not found.`);
   }
 
-  return definition;
+  return harness;
 };
 
-export const harnessDefinitionCreate = async (input: HarnessDefinitionInsert, ownerId: string): Promise<HarnessDefinition> => queryHarnessDefinitionCreate(input, ownerId);
+export const harnessCreate = async (input: HarnessInsert, ownerId: string): Promise<Harness> => queryHarnessCreate(input, ownerId);
 
-export const harnessDefinitionUpdate = async (harnessDefinitionId: string, ownerId: string, input: HarnessDefinitionUpdate): Promise<HarnessDefinition> => {
-  validateHarnessDefinitionId(harnessDefinitionId);
+export const harnessUpdate = async (harnessId: string, ownerId: string, input: HarnessUpdate): Promise<Harness> => {
+  validateHarnessId(harnessId);
 
-  const updated = await queryHarnessDefinitionUpdate(harnessDefinitionId, ownerId, input);
+  const updated = await queryHarnessUpdate(harnessId, ownerId, input);
 
   if (!updated) {
-    throw new HarnessNotFoundError(`Harness definition not found.`);
+    throw new HarnessNotFoundError(`Harness not found.`);
   }
 
   return updated;
 };
 
-export const harnessDefinitionDelete = async (harnessDefinitionId: string, ownerId: string): Promise<void> => {
-  validateHarnessDefinitionId(harnessDefinitionId);
+export const harnessDelete = async (harnessId: string, ownerId: string): Promise<void> => {
+  validateHarnessId(harnessId);
 
-  if (!(await queryHarnessDefinitionDelete(harnessDefinitionId, ownerId))) {
-    throw new HarnessNotFoundError(`Harness definition not found.`);
+  if (!(await queryHarnessDelete(harnessId, ownerId))) {
+    throw new HarnessNotFoundError(`Harness not found.`);
   }
 };
 
-export const loopHarnessAssignmentList = async (loopId: string, userId: string): Promise<LoopHarnessAssignment[]> => {
+export const loopHarnessList = async (loopId: string, userId: string): Promise<LoopHarness[]> => {
   validateLoopId(loopId);
 
   if (!(await queryLoopMembership(loopId, userId))) {
     throw new HarnessNotFoundError(`Loop not found.`);
   }
 
-  return queryLoopHarnessAssignmentList(loopId);
+  return queryLoopHarnessList(loopId);
 };
 
-export const loopHarnessAssignmentCreate = async (loopId: string, userId: string, input: LoopHarnessAssignmentInsert): Promise<void> => {
+export const loopHarnessCreate = async (loopId: string, userId: string, input: LoopHarnessInsert): Promise<void> => {
   validateLoopId(loopId);
-  validateHarnessDefinitionId(input.harnessDefinition);
+  validateHarnessId(input.harness);
 
   if (!(await queryLoopMembership(loopId, userId))) {
     throw new HarnessNotFoundError(`Loop not found.`);
   }
 
-  const definition = await queryHarnessDefinitionByIdForOwner(input.harnessDefinition, userId);
+  const harness = await queryHarnessByIdForOwner(input.harness, userId);
 
-  if (!definition) {
-    throw new HarnessNotFoundError(`Harness definition not found.`);
+  if (!harness) {
+    throw new HarnessNotFoundError(`Harness not found.`);
   }
 
-  enforceMvpRunnerType(definition.runnerType);
+  enforceMvpRunnerType(harness.runnerType);
 
-  await queryLoopHarnessAssignmentCreate(loopId, input.harnessDefinition);
+  await queryLoopHarnessCreate(loopId, input.harness);
 };
 
-export const loopHarnessAssignmentUpdateByAdmin = async (loopId: string, harnessDefinitionId: string, userId: string, input: LoopHarnessAssignmentAdminUpdate): Promise<LoopHarnessAssignment> => {
+export const loopHarnessUpdateByAdmin = async (loopId: string, harnessId: string, userId: string, input: LoopHarnessAdminUpdate): Promise<LoopHarness> => {
   validateLoopId(loopId);
-  validateHarnessDefinitionId(harnessDefinitionId);
+  validateHarnessId(harnessId);
 
   const loop = await queryLoopForUser(loopId, userId);
 
@@ -157,18 +157,18 @@ export const loopHarnessAssignmentUpdateByAdmin = async (loopId: string, harness
     throw new HarnessForbiddenError(`Only loop admins may edit priority and overrides.`);
   }
 
-  const updated = await queryLoopHarnessAssignmentUpdateByAdmin(loopId, harnessDefinitionId, input);
+  const updated = await queryLoopHarnessUpdateByAdmin(loopId, harnessId, input);
 
   if (!updated) {
-    throw new HarnessNotFoundError(`Loop harness assignment not found.`);
+    throw new HarnessNotFoundError(`Loop harness not found.`);
   }
 
   return updated;
 };
 
-export const loopHarnessAssignmentDelete = async (loopId: string, harnessDefinitionId: string, userId: string): Promise<void> => {
+export const loopHarnessDelete = async (loopId: string, harnessId: string, userId: string): Promise<void> => {
   validateLoopId(loopId);
-  validateHarnessDefinitionId(harnessDefinitionId);
+  validateHarnessId(harnessId);
 
   const loop = await queryLoopForUser(loopId, userId);
 
@@ -180,7 +180,7 @@ export const loopHarnessAssignmentDelete = async (loopId: string, harnessDefinit
     throw new HarnessForbiddenError(`Only loop admins may remove assignments.`);
   }
 
-  if (!(await queryLoopHarnessAssignmentDelete(loopId, harnessDefinitionId))) {
-    throw new HarnessNotFoundError(`Loop harness assignment not found.`);
+  if (!(await queryLoopHarnessDelete(loopId, harnessId))) {
+    throw new HarnessNotFoundError(`Loop harness not found.`);
   }
 };

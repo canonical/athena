@@ -1,14 +1,14 @@
 import { getPool } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
-import type { LoopProviderAssignment, LoopProviderAssignmentAdminUpdate, ProviderDefinition, ProviderDefinitionInsert, ProviderDefinitionUpdate } from "./provider.schema.js";
+import type { LoopProvider, LoopProviderAdminUpdate, Provider, ProviderInsert, ProviderUpdate } from "./provider.schema.js";
 
 const providerColumns = `"id", "owner", "displayName", "providerType", "baseUrl", "model", "lifecycleStatus", "createdAt", "updatedAt"`;
 
-export const queryProviderDefinitionListByOwner = async (ownerId: string): Promise<ProviderDefinition[]> => {
-  const result = await getPool().query<ProviderDefinition>(
+export const queryProviderListByOwner = async (ownerId: string): Promise<Provider[]> => {
+  const result = await getPool().query<Provider>(
     `
       SELECT ${providerColumns}, TRUE AS "hasCredential"
-      FROM "providerDefinition"
+      FROM "provider"
       WHERE "owner" = $1
       ORDER BY "createdAt" ASC, "id" ASC
     `,
@@ -18,26 +18,26 @@ export const queryProviderDefinitionListByOwner = async (ownerId: string): Promi
   return result.rows;
 };
 
-export const queryProviderDefinitionByIdForOwner = async (providerDefinitionId: string, ownerId: string): Promise<ProviderDefinition | undefined> => {
-  const result = await getPool().query<ProviderDefinition>(
+export const queryProviderByIdForOwner = async (providerId: string, ownerId: string): Promise<Provider | undefined> => {
+  const result = await getPool().query<Provider>(
     `
       SELECT ${providerColumns}, TRUE AS "hasCredential"
-      FROM "providerDefinition"
+      FROM "provider"
       WHERE "id" = $1
         AND "owner" = $2
     `,
-    [providerDefinitionId, ownerId],
+    [providerId, ownerId],
   );
 
   return result.rows[0];
 };
 
-export const queryProviderDefinitionCreate = async (input: ProviderDefinitionInsert, ownerId: string): Promise<ProviderDefinition> => {
+export const queryProviderCreate = async (input: ProviderInsert, ownerId: string): Promise<Provider> => {
   const envelope = encryptSecret(input.apiKey);
 
-  const result = await getPool().query<ProviderDefinition>(
+  const result = await getPool().query<Provider>(
     `
-      INSERT INTO "providerDefinition" (
+      INSERT INTO "provider" (
         "owner",
         "displayName",
         "providerType",
@@ -55,21 +55,21 @@ export const queryProviderDefinitionCreate = async (input: ProviderDefinitionIns
     [ownerId, input.displayName, input.providerType, input.baseUrl, input.model ?? null, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, input.lifecycleStatus],
   );
 
-  const providerDefinition = result.rows[0];
+  const provider = result.rows[0];
 
-  if (!providerDefinition) {
-    throw new Error(`Provider definition was not created.`);
+  if (!provider) {
+    throw new Error(`Provider was not created.`);
   }
 
-  return providerDefinition;
+  return provider;
 };
 
-export const queryProviderDefinitionUpdate = async (providerDefinitionId: string, ownerId: string, input: ProviderDefinitionUpdate): Promise<ProviderDefinition | undefined> => {
+export const queryProviderUpdate = async (providerId: string, ownerId: string, input: ProviderUpdate): Promise<Provider | undefined> => {
   if (input.apiKey) {
     const envelope = encryptSecret(input.apiKey);
-    const result = await getPool().query<ProviderDefinition>(
+    const result = await getPool().query<Provider>(
       `
-        UPDATE "providerDefinition"
+        UPDATE "provider"
         SET
           "displayName" = $1,
           "providerType" = $2,
@@ -84,15 +84,15 @@ export const queryProviderDefinitionUpdate = async (providerDefinitionId: string
           AND "owner" = $11
         RETURNING ${providerColumns}, TRUE AS "hasCredential"
       `,
-      [input.displayName, input.providerType, input.baseUrl, input.model ?? null, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, providerDefinitionId, ownerId],
+      [input.displayName, input.providerType, input.baseUrl, input.model ?? null, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, providerId, ownerId],
     );
 
     return result.rows[0];
   }
 
-  const result = await getPool().query<ProviderDefinition>(
+  const result = await getPool().query<Provider>(
     `
-      UPDATE "providerDefinition"
+      UPDATE "provider"
       SET
         "displayName" = $1,
         "providerType" = $2,
@@ -103,48 +103,48 @@ export const queryProviderDefinitionUpdate = async (providerDefinitionId: string
         AND "owner" = $7
       RETURNING ${providerColumns}, TRUE AS "hasCredential"
     `,
-    [input.displayName, input.providerType, input.baseUrl, input.model ?? null, input.lifecycleStatus, providerDefinitionId, ownerId],
+    [input.displayName, input.providerType, input.baseUrl, input.model ?? null, input.lifecycleStatus, providerId, ownerId],
   );
 
   return result.rows[0];
 };
 
-export const queryProviderDefinitionDelete = async (providerDefinitionId: string, ownerId: string): Promise<boolean> => {
-  const result = await getPool().query(`DELETE FROM "providerDefinition" WHERE "id" = $1 AND "owner" = $2`, [providerDefinitionId, ownerId]);
+export const queryProviderDelete = async (providerId: string, ownerId: string): Promise<boolean> => {
+  const result = await getPool().query(`DELETE FROM "provider" WHERE "id" = $1 AND "owner" = $2`, [providerId, ownerId]);
 
   return Boolean(result.rowCount);
 };
 
-export const queryLoopProviderAssignmentList = async (loopId: string): Promise<LoopProviderAssignment[]> => {
-  const result = await getPool().query<LoopProviderAssignment>(
+export const queryLoopProviderList = async (loopId: string): Promise<LoopProvider[]> => {
+  const result = await getPool().query<LoopProvider>(
     `
       SELECT
-        lpd."loop",
-        lpd."providerDefinition",
-        lpd."priority",
-        lpd."priorityOverride",
-        lpd."enabled",
-        lpd."timeoutMs",
-        lpd."maxRetries",
-        lpd."selectionWeight",
-        lpd."assignmentOverrides",
-        lpd."remainingCreditPercentage",
-        lpd."remainingCreditValue",
-        lpd."cooldownUntil",
-        lpd."healthStatus",
-        lpd."lastUsedAt",
-        lpd."lastFailedAt",
-        lpd."failureCount",
-        lpd."createdAt",
-        lpd."updatedAt",
-        pd."displayName",
-        pd."providerType",
-        pd."baseUrl",
-        pd."model"
-      FROM "loopProviderDefinition" lpd
-      JOIN "providerDefinition" pd ON pd."id" = lpd."providerDefinition"
-      WHERE lpd."loop" = $1
-      ORDER BY COALESCE(lpd."priorityOverride", lpd."priority") ASC, lpd."createdAt" ASC, lpd."providerDefinition" ASC
+        lp."loop",
+        lp."provider",
+        lp."priority",
+        lp."priorityOverride",
+        lp."enabled",
+        lp."timeoutMs",
+        lp."maxRetries",
+        lp."selectionWeight",
+        lp."assignmentOverrides",
+        lp."remainingCreditPercentage",
+        lp."remainingCreditValue",
+        lp."cooldownUntil",
+        lp."healthStatus",
+        lp."lastUsedAt",
+        lp."lastFailedAt",
+        lp."failureCount",
+        lp."createdAt",
+        lp."updatedAt",
+        p."displayName",
+        p."providerType",
+        p."baseUrl",
+        p."model"
+      FROM "loopProvider" lp
+      JOIN "provider" p ON p."id" = lp."provider"
+      WHERE lp."loop" = $1
+      ORDER BY COALESCE(lp."priorityOverride", lp."priority") ASC, lp."createdAt" ASC, lp."provider" ASC
     `,
     [loopId],
   );
@@ -152,11 +152,11 @@ export const queryLoopProviderAssignmentList = async (loopId: string): Promise<L
   return result.rows;
 };
 
-export const queryLoopProviderAssignmentCreate = async (loopId: string, providerDefinitionId: string): Promise<void> => {
+export const queryLoopProviderCreate = async (loopId: string, providerId: string): Promise<void> => {
   const result = await getPool().query<{ nextPriority: number }>(
     `
       SELECT COALESCE(MAX("priority"), 0) + 1 AS "nextPriority"
-      FROM "loopProviderDefinition"
+      FROM "loopProvider"
       WHERE "loop" = $1
     `,
     [loopId],
@@ -166,18 +166,18 @@ export const queryLoopProviderAssignmentCreate = async (loopId: string, provider
 
   await getPool().query(
     `
-      INSERT INTO "loopProviderDefinition" ("loop", "providerDefinition", "priority")
+      INSERT INTO "loopProvider" ("loop", "provider", "priority")
       VALUES ($1, $2, $3)
-      ON CONFLICT ("loop", "providerDefinition") DO NOTHING
+      ON CONFLICT ("loop", "provider") DO NOTHING
     `,
-    [loopId, providerDefinitionId, nextPriority],
+    [loopId, providerId, nextPriority],
   );
 };
 
-export const queryLoopProviderAssignmentUpdateByAdmin = async (loopId: string, providerDefinitionId: string, input: LoopProviderAssignmentAdminUpdate): Promise<LoopProviderAssignment | undefined> => {
+export const queryLoopProviderUpdateByAdmin = async (loopId: string, providerId: string, input: LoopProviderAdminUpdate): Promise<LoopProvider | undefined> => {
   const result = await getPool().query(
     `
-      UPDATE "loopProviderDefinition"
+      UPDATE "loopProvider"
       SET
         "priority" = COALESCE($1, "priority"),
         "priorityOverride" = COALESCE($2, "priorityOverride"),
@@ -191,7 +191,7 @@ export const queryLoopProviderAssignmentUpdateByAdmin = async (loopId: string, p
         "cooldownUntil" = COALESCE($10, "cooldownUntil"),
         "healthStatus" = COALESCE($11, "healthStatus")
       WHERE "loop" = $12
-        AND "providerDefinition" = $13
+        AND "provider" = $13
       RETURNING 1
     `,
     [
@@ -207,7 +207,7 @@ export const queryLoopProviderAssignmentUpdateByAdmin = async (loopId: string, p
       input.cooldownUntil ? new Date(input.cooldownUntil) : null,
       input.healthStatus ?? null,
       loopId,
-      providerDefinitionId,
+      providerId,
     ],
   );
 
@@ -215,19 +215,19 @@ export const queryLoopProviderAssignmentUpdateByAdmin = async (loopId: string, p
     return undefined;
   }
 
-  const assignments = await queryLoopProviderAssignmentList(loopId);
-  return assignments.find((assignment) => assignment.providerDefinition === providerDefinitionId);
+  const assignments = await queryLoopProviderList(loopId);
+  return assignments.find((assignment) => assignment.provider === providerId);
 };
 
-export const queryLoopProviderAssignmentDelete = async (loopId: string, providerDefinitionId: string): Promise<boolean> => {
-  const result = await getPool().query(`DELETE FROM "loopProviderDefinition" WHERE "loop" = $1 AND "providerDefinition" = $2`, [loopId, providerDefinitionId]);
+export const queryLoopProviderDelete = async (loopId: string, providerId: string): Promise<boolean> => {
+  const result = await getPool().query(`DELETE FROM "loopProvider" WHERE "loop" = $1 AND "provider" = $2`, [loopId, providerId]);
 
   return Boolean(result.rowCount);
 };
 
 export type LoopOpenRouterCandidateRow = {
   loop: string;
-  providerDefinition: string;
+  provider: string;
   priority: number;
   priorityOverride: number | null;
   enabled: boolean;
@@ -256,35 +256,35 @@ export const queryLoopOpenRouterCandidates = async (loopId: string): Promise<Loo
   const result = await getPool().query<LoopOpenRouterCandidateRow>(
     `
       SELECT
-        lpd."loop",
-        lpd."providerDefinition",
-        lpd."priority",
-        lpd."priorityOverride",
-        lpd."enabled",
-        lpd."timeoutMs",
-        lpd."maxRetries",
-        lpd."selectionWeight",
-        lpd."remainingCreditPercentage",
-        lpd."remainingCreditValue",
-        lpd."lastUsedAt",
-        lpd."lastFailedAt",
-        lpd."cooldownUntil",
-        lpd."healthStatus",
-        lpd."createdAt",
-        pd."createdAt" AS "definitionCreatedAt",
-        pd."credentialCiphertext",
-        pd."credentialIv",
-        pd."credentialAuthTag",
-        pd."credentialKeyVersion",
-        pd."providerType",
-        pd."displayName",
-        pd."baseUrl",
-        pd."model"
-      FROM "loopProviderDefinition" lpd
-      JOIN "providerDefinition" pd ON pd."id" = lpd."providerDefinition"
-      WHERE lpd."loop" = $1
-        AND pd."lifecycleStatus" = 'active'
-        AND pd."providerType" = 'openrouter'
+        lp."loop",
+        lp."provider",
+        lp."priority",
+        lp."priorityOverride",
+        lp."enabled",
+        lp."timeoutMs",
+        lp."maxRetries",
+        lp."selectionWeight",
+        lp."remainingCreditPercentage",
+        lp."remainingCreditValue",
+        lp."lastUsedAt",
+        lp."lastFailedAt",
+        lp."cooldownUntil",
+        lp."healthStatus",
+        lp."createdAt",
+        p."createdAt" AS "definitionCreatedAt",
+        p."credentialCiphertext",
+        p."credentialIv",
+        p."credentialAuthTag",
+        p."credentialKeyVersion",
+        p."providerType",
+        p."displayName",
+        p."baseUrl",
+        p."model"
+      FROM "loopProvider" lp
+      JOIN "provider" p ON p."id" = lp."provider"
+      WHERE lp."loop" = $1
+        AND p."lifecycleStatus" = 'active'
+        AND p."providerType" = 'openrouter'
     `,
     [loopId],
   );
@@ -292,14 +292,14 @@ export const queryLoopOpenRouterCandidates = async (loopId: string): Promise<Loo
   return result.rows;
 };
 
-export const queryProviderCredential = async (providerDefinitionId: string): Promise<string | undefined> => {
+export const queryProviderCredential = async (providerId: string): Promise<string | undefined> => {
   const result = await getPool().query<{ credentialCiphertext: string; credentialIv: string; credentialAuthTag: string; credentialKeyVersion: string }>(
     `
       SELECT "credentialCiphertext", "credentialIv", "credentialAuthTag", "credentialKeyVersion"
-      FROM "providerDefinition"
+      FROM "provider"
       WHERE "id" = $1
     `,
-    [providerDefinitionId],
+    [providerId],
   );
 
   const row = result.rows[0];

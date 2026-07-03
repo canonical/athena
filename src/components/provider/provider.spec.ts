@@ -17,7 +17,7 @@ const withDb = async <T>(operation: (client: Client) => Promise<T>): Promise<T> 
 };
 
 test(`provider and harness routes require authentication`, async ({ request }) => {
-  const [providerList, harnessList] = await Promise.all([request.get(`/api/provider-definition-list`), request.get(`/api/harness-definition-list`)]);
+  const [providerList, harnessList] = await Promise.all([request.get(`/api/provider-list`), request.get(`/api/harness-list`)]);
 
   expect(providerList.status()).toBe(401);
   expect(harnessList.status()).toBe(401);
@@ -26,7 +26,7 @@ test(`provider and harness routes require authentication`, async ({ request }) =
 test(`provider definitions enforce OpenRouter-only and HTTPS-only`, async ({ page }) => {
   await authenticate(page);
 
-  const invalidTypeResponse = await page.request.post(`http://athena.localhost/api/provider-definition-list`, {
+  const invalidTypeResponse = await page.request.post(`http://athena.localhost/api/provider-list`, {
     data: {
       displayName: `Invalid type provider`,
       providerType: `other`,
@@ -37,7 +37,7 @@ test(`provider definitions enforce OpenRouter-only and HTTPS-only`, async ({ pag
   });
   expect(invalidTypeResponse.status()).toBe(400);
 
-  const invalidHttpsResponse = await page.request.post(`http://athena.localhost/api/provider-definition-list`, {
+  const invalidHttpsResponse = await page.request.post(`http://athena.localhost/api/provider-list`, {
     data: {
       displayName: `Invalid https provider`,
       providerType: `openrouter`,
@@ -53,7 +53,7 @@ test(`provider definitions enforce OpenRouter-only and HTTPS-only`, async ({ pag
 test(`definition responses redact credential material`, async ({ page }) => {
   await authenticate(page);
 
-  const response = await page.request.post(`http://athena.localhost/api/provider-definition-list`, {
+  const response = await page.request.post(`http://athena.localhost/api/provider-list`, {
     data: {
       displayName: `OpenRouter Secret Provider ${Date.now()}`,
       providerType: `openrouter`,
@@ -75,7 +75,7 @@ test(`definition responses redact credential material`, async ({ page }) => {
 test(`harness definitions enforce MVP harness policy at save time`, async ({ page }) => {
   await authenticate(page);
 
-  const response = await page.request.post(`http://athena.localhost/api/harness-definition-list`, {
+  const response = await page.request.post(`http://athena.localhost/api/harness-list`, {
     data: {
       displayName: `Non-mvp harness`,
       runnerType: `juju-vm`,
@@ -102,7 +102,7 @@ test(`owner-scoped definition mutation blocks non-owners`, async ({ page }) => {
 
     const result = await client.query<{ id: string }>(
       `
-        INSERT INTO "harnessDefinition" (
+        INSERT INTO "harness" (
           "owner",
           "displayName",
           "runnerType",
@@ -123,7 +123,7 @@ test(`owner-scoped definition mutation blocks non-owners`, async ({ page }) => {
 
   expect(otherHarness).toBeDefined();
 
-  const response = await page.request.put(`http://athena.localhost/api/harness-definition/${otherHarness}`, {
+  const response = await page.request.put(`http://athena.localhost/api/harness/${otherHarness}`, {
     data: {
       displayName: `Attempted update`,
       lifecycleStatus: `active`,
@@ -131,13 +131,13 @@ test(`owner-scoped definition mutation blocks non-owners`, async ({ page }) => {
   });
 
   expect(response.status()).toBe(404);
-  await expect(response.json()).resolves.toEqual({ error: `Harness definition not found.` });
+  await expect(response.json()).resolves.toEqual({ error: `Harness not found.` });
 });
 
 test(`loop members can assign definitions but non-admins cannot mutate priority overrides`, async ({ page }) => {
   await authenticate(page);
 
-  const providerCreate = await page.request.post(`http://athena.localhost/api/provider-definition-list`, {
+  const providerCreate = await page.request.post(`http://athena.localhost/api/provider-list`, {
     data: {
       displayName: `Assignment provider ${Date.now()}`,
       providerType: `openrouter`,
@@ -162,12 +162,12 @@ test(`loop members can assign definitions but non-admins cannot mutate priority 
     return loopId;
   });
 
-  const assignResponse = await page.request.post(`http://athena.localhost/api/loop/${nonAdminLoopId}/provider-assignment-list`, {
-    data: { providerDefinition: providerDefinition.id },
+  const assignResponse = await page.request.post(`http://athena.localhost/api/loop/${nonAdminLoopId}/provider-list`, {
+    data: { provider: providerDefinition.id },
   });
   expect(assignResponse.status()).toBe(204);
 
-  const adminUpdateResponse = await page.request.put(`http://athena.localhost/api/loop/${nonAdminLoopId}/provider-assignment/${providerDefinition.id}/admin`, {
+  const adminUpdateResponse = await page.request.put(`http://athena.localhost/api/loop/${nonAdminLoopId}/provider/${providerDefinition.id}/admin`, {
     data: { priorityOverride: 1 },
   });
   expect(adminUpdateResponse.status()).toBe(403);
@@ -180,7 +180,7 @@ test(`selection algorithms are deterministic and rotate under round robin`, asyn
   const loop = await createLoop(page, `Selection algorithm loop`);
 
   const [providerAResponse, providerBResponse] = await Promise.all([
-    page.request.post(`http://athena.localhost/api/provider-definition-list`, {
+    page.request.post(`http://athena.localhost/api/provider-list`, {
       data: {
         displayName: `OpenRouter Round Robin A ${loop.id}`,
         providerType: `openrouter`,
@@ -189,7 +189,7 @@ test(`selection algorithms are deterministic and rotate under round robin`, asyn
         apiKey: `openrouter-a-key`,
       },
     }),
-    page.request.post(`http://athena.localhost/api/provider-definition-list`, {
+    page.request.post(`http://athena.localhost/api/provider-list`, {
       data: {
         displayName: `OpenRouter Round Robin B ${loop.id}`,
         providerType: `openrouter`,
@@ -205,8 +205,8 @@ test(`selection algorithms are deterministic and rotate under round robin`, asyn
   const providerA = (await providerAResponse.json()) as { id: string };
   const providerB = (await providerBResponse.json()) as { id: string };
 
-  await page.request.post(`http://athena.localhost/api/loop/${loop.id}/provider-assignment-list`, { data: { providerDefinition: providerA.id } });
-  await page.request.post(`http://athena.localhost/api/loop/${loop.id}/provider-assignment-list`, { data: { providerDefinition: providerB.id } });
+  await page.request.post(`http://athena.localhost/api/loop/${loop.id}/provider-list`, { data: { provider: providerA.id } });
+  await page.request.post(`http://athena.localhost/api/loop/${loop.id}/provider-list`, { data: { provider: providerB.id } });
 
   const policyResponse = await page.request.put(`http://athena.localhost/api/loop/${loop.id}/selection-policy`, {
     data: {
@@ -265,7 +265,7 @@ test(`execution hook audits skipped non-mvp harness assignments without leaking 
   const created = await withDb(async (client) => {
     const harnessResult = await client.query<{ id: string }>(
       `
-        INSERT INTO "harnessDefinition" (
+        INSERT INTO "harness" (
           "owner",
           "displayName",
           "runnerType",
@@ -286,7 +286,7 @@ test(`execution hook audits skipped non-mvp harness assignments without leaking 
       throw new Error(`Expected harness id.`);
     }
 
-    await client.query(`INSERT INTO "loopHarnessDefinition" ("loop", "harnessDefinition", "priority", "enabled") VALUES ($1, $2, 1, TRUE)`, [loop.id, harnessId]);
+    await client.query(`INSERT INTO "loopHarness" ("loop", "harness", "priority", "enabled") VALUES ($1, $2, 1, TRUE)`, [loop.id, harnessId]);
 
     return { harnessId };
   });
