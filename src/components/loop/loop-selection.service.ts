@@ -220,7 +220,7 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
           hd."credentialIv",
           hd."credentialAuthTag",
           hd."credentialKeyVersion",
-          hd."workerType" AS "definitionType"
+          hd."runnerType" AS "definitionType"
         FROM "loopHarnessDefinition" lhd
         JOIN "harnessDefinition" hd ON hd."id" = lhd."harnessDefinition"
         WHERE lhd."loop" = $1
@@ -374,8 +374,8 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
         return false;
       }
 
-      if (pool === `copilot` && candidate.definitionType !== `github-copilot-cloud-agent`) {
-        skipped.push({ assignmentId: candidate.assignmentId, reason: `non-mvp-harness` });
+      if (pool === `copilot` && candidate.definitionType !== `github-copilot-cloud`) {
+        skipped.push({ assignmentId: candidate.assignmentId, reason: `non-mvp-runner` });
         return false;
       }
 

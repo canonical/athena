@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS "harnessDefinition" (
   "id" UUID PRIMARY KEY DEFAULT uuidv7(),
   "owner" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "displayName" TEXT NOT NULL,
-  "workerType" TEXT NOT NULL CHECK ("workerType" IN ('github-copilot-cloud-agent', 'openai-codex', 'claude-code', 'devin', 'juju-machine-charm')),
+  "runnerType" TEXT NOT NULL CHECK ("runnerType" IN ('github-copilot-cloud', 'juju-vm')),
   "credentialCiphertext" TEXT NOT NULL,
   "credentialIv" TEXT NOT NULL,
   "credentialAuthTag" TEXT NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS "harnessDefinition" (
 );
 
 CREATE INDEX IF NOT EXISTS "idxHarnessDefinitionOwner" ON "harnessDefinition"("owner");
-CREATE INDEX IF NOT EXISTS "idxHarnessDefinitionWorkerType" ON "harnessDefinition"("workerType");
+CREATE INDEX IF NOT EXISTS "idxHarnessDefinitionRunnerType" ON "harnessDefinition"("runnerType");
 
 SELECT ensureUpdatedAtTrigger('harnessDefinition');
 

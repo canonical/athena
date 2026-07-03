@@ -78,14 +78,14 @@ test(`harness definitions enforce MVP harness policy at save time`, async ({ pag
   const response = await page.request.post(`http://athena.localhost/api/harness-definition-list`, {
     data: {
       displayName: `Non-mvp harness`,
-      workerType: `openai-codex`,
+      runnerType: `juju-vm`,
       apiKey: `copilot-key`,
       lifecycleStatus: `active`,
     },
   });
 
   expect(response.status()).toBe(400);
-  await expect(response.json()).resolves.toEqual({ error: `Only github-copilot-cloud-agent is executable in MVP.` });
+  await expect(response.json()).resolves.toEqual({ error: `Only github-copilot-cloud is executable in MVP.` });
 });
 
 test(`owner-scoped definition mutation blocks non-owners`, async ({ page }) => {
@@ -105,14 +105,14 @@ test(`owner-scoped definition mutation blocks non-owners`, async ({ page }) => {
         INSERT INTO "harnessDefinition" (
           "owner",
           "displayName",
-          "workerType",
+          "runnerType",
           "credentialCiphertext",
           "credentialIv",
           "credentialAuthTag",
           "credentialKeyVersion",
           "lifecycleStatus"
         )
-        VALUES ($1, $2, 'github-copilot-cloud-agent', 'x', 'y', 'z', 'v1', 'active')
+        VALUES ($1, $2, 'github-copilot-cloud', 'x', 'y', 'z', 'v1', 'active')
         RETURNING "id"
       `,
       [`other.user@canonical.com`, `Other owner harness ${Date.now()}`],
@@ -268,14 +268,14 @@ test(`execution hook audits skipped non-mvp harness assignments without leaking 
         INSERT INTO "harnessDefinition" (
           "owner",
           "displayName",
-          "workerType",
+          "runnerType",
           "credentialCiphertext",
           "credentialIv",
           "credentialAuthTag",
           "credentialKeyVersion",
           "lifecycleStatus"
         )
-        VALUES ($1, $2, 'openai-codex', 'plain-text-should-not-leak', 'iv', 'tag', 'v1', 'active')
+        VALUES ($1, $2, 'juju-vm', 'plain-text-should-not-leak', 'iv', 'tag', 'v1', 'active')
         RETURNING "id"
       `,
       [currentUserId, `Inserted non-mvp harness ${Date.now()}`],

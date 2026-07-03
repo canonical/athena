@@ -37,31 +37,38 @@ Athena routing authority remains unchanged. Execution-environment selection does
 
 ## Coding harness catalog
 
-A **worker** is an external AI coding agent that executes work on behalf of Athena personas (e.g., GitHub Copilot Cloud Agent). A **harness** is the owner-scoped connection profile Athena uses to invoke a worker: it holds credentials, timeout/retry configuration, and the `workerType` field that identifies which external agent system the harness connects to.
+A **runner** is the execution environment that hosts a harness; a **harness** is the AI coding agent tool that runs within a runner. Together they form a **worker** — the unit of agentic execution Athena dispatches to. See [worker.md](./worker.md) for normative definitions of all three concepts.
 
-Athena should maintain a registered worker type catalog with per-entry lifecycle state.
+Athena should maintain a registered runner type catalog with per-entry lifecycle state. A harness definition record stores `runnerType` to identify which execution environment it connects to.
 
 MVP catalog policy:
 
 - The loop admin must explicitly configure a harness profile priority list.
-- The only harness that is allowed for execution in MVP is GitHub Copilot Cloud Agent.
-- If a different harness is configured in MVP, Athena must reject activation and return a clear unsupported-in-MVP validation error.
+- The only runner that is allowed for execution in MVP is GitHub Copilot Cloud (`github-copilot-cloud`).
+- If a harness definition targets a different runner type in MVP, Athena must reject activation and return a clear unsupported-in-MVP validation error.
 
-Validated harness candidates for current and future use:
+### Runner catalog
 
-1. GitHub Copilot Cloud Agent
-   - Status: MVP execution harness (required allowed option).
-2. OpenAI Codex agent surfaces (Codex app and related Codex agent workflows)
-   - Status: candidate harness for post-MVP enablement.
-3. Claude Code agent surfaces
-   - Status: candidate harness for post-MVP enablement.
-   - Validation note: public Claude Code documentation confirms terminal, IDE, desktop, and web agent surfaces; naming is "Claude Code" rather than a distinct product named "Claude Code Cloud Agent".
-4. Devin (Cognition) cloud agent
-   - Status: candidate harness for post-MVP enablement.
-5. Juju machine charm based harness
-   - Status: MVP+1 Athena-owned implementation target.
+| Runner | Identifier | Status |
+|---|---|---|
+| GitHub Copilot Cloud | `github-copilot-cloud` | MVP — only executable runner |
+| Juju VM | `juju-vm` | MVP+1 — Athena-owned implementation target |
 
-Additional harnesses may be added to the catalog after capability and security validation.
+Juju VM is a runner; it hosts harness processes. It is not itself a harness.
+
+### Harness catalog
+
+The harness (agent tool) running within a runner:
+
+| Harness | Typical runner | Status |
+|---|---|---|
+| GitHub Copilot | `github-copilot-cloud` (bundled) | MVP |
+| OpenCode | `juju-vm` | Post-MVP candidate |
+| Claude Code | `juju-vm` | Post-MVP candidate |
+| OpenAI Codex | `juju-vm` and cloud | Post-MVP candidate |
+| Devin (Cognition) | Managed (vendor) | Post-MVP candidate |
+
+Additional runners and harnesses may be added to the catalog after capability and security validation.
 
 ## Deterministic provider runtime policy (current phase)
 

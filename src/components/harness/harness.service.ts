@@ -2,7 +2,7 @@ import { getPool } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
 import type { HarnessDefinition, HarnessDefinitionInsert, HarnessDefinitionUpdate, LoopHarnessAssignment, LoopHarnessAssignmentAdminUpdate } from "./harness.schema.js";
 
-const harnessColumns = `"id", "owner", "displayName", "workerType", "lifecycleStatus", "createdAt", "updatedAt"`;
+const harnessColumns = `"id", "owner", "displayName", "runnerType", "lifecycleStatus", "createdAt", "updatedAt"`;
 
 export const queryHarnessDefinitionListByOwner = async (ownerId: string): Promise<HarnessDefinition[]> => {
   const result = await getPool().query<HarnessDefinition>(
@@ -40,7 +40,7 @@ export const queryHarnessDefinitionCreate = async (input: HarnessDefinitionInser
       INSERT INTO "harnessDefinition" (
         "owner",
         "displayName",
-        "workerType",
+        "runnerType",
         "credentialCiphertext",
         "credentialIv",
         "credentialAuthTag",
@@ -50,7 +50,7 @@ export const queryHarnessDefinitionCreate = async (input: HarnessDefinitionInser
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING ${harnessColumns}, TRUE AS "hasCredential"
     `,
-    [ownerId, input.displayName, input.workerType, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, input.lifecycleStatus],
+    [ownerId, input.displayName, input.runnerType, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, input.lifecycleStatus],
   );
 
   const harnessDefinition = result.rows[0];
@@ -130,7 +130,7 @@ export const queryLoopHarnessAssignmentList = async (loopId: string): Promise<Lo
         lhd."createdAt",
         lhd."updatedAt",
         hd."displayName",
-        hd."workerType"
+        hd."runnerType"
       FROM "loopHarnessDefinition" lhd
       JOIN "harnessDefinition" hd ON hd."id" = lhd."harnessDefinition"
       WHERE lhd."loop" = $1
@@ -236,7 +236,7 @@ export type LoopCopilotCandidateRow = {
   credentialIv: string;
   credentialAuthTag: string;
   credentialKeyVersion: string;
-  workerType: string;
+  runnerType: string;
   displayName: string;
 };
 
@@ -264,7 +264,7 @@ export const queryLoopCopilotCandidates = async (loopId: string): Promise<LoopCo
         hd."credentialIv",
         hd."credentialAuthTag",
         hd."credentialKeyVersion",
-        hd."workerType",
+        hd."runnerType",
         hd."displayName"
       FROM "loopHarnessDefinition" lhd
       JOIN "harnessDefinition" hd ON hd."id" = lhd."harnessDefinition"

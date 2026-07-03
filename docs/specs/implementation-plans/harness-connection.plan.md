@@ -14,13 +14,15 @@ Define owner-scoped harness definitions, loop assignments, and deterministic har
 - Fallback and unavailability behavior
 - Audit trail for assignment and selection outcomes
 
-## Harness catalog (predefined set)
+## Runner and harness catalog
 
-1. **GitHub Copilot Cloud Agent** — MVP executable; required for harness-backed execution in Phase 1.
-2. **OpenAI Codex** — Post-MVP candidate.
-3. **Claude Code** — Post-MVP candidate.
-4. **Juju machine charm based harness** — MVP+1 Athena-owned target.
-5. **Devin** — Post-MVP candidate.
+Runners are execution environments that host harnesses. Harnesses are the AI coding agent tools that run within runners. See [worker.md](../definitions/worker.md) for normative definitions.
+
+1. **GitHub Copilot Cloud** (`github-copilot-cloud`) — MVP executable runner; required for harness-backed execution in Phase 1. Hosts the GitHub Copilot coding agent.
+2. **Juju VM** (`juju-vm`) — MVP+1 Athena-owned runner target; can host multiple harness types (OpenCode, Claude Code, Codex, etc.).
+3. **OpenAI Codex** — Post-MVP harness candidate (requires a compatible runner).
+4. **Claude Code** — Post-MVP harness candidate (requires a compatible runner).
+5. **Devin** — Post-MVP candidate; fully managed vendor platform (runner + harness combined).
 
 ## Harness definition and assignment contract
 
@@ -48,8 +50,8 @@ When a harness-backed persona executes:
 
 ### MVP execution constraint
 
-1. In MVP, the only executable harness is `GitHub Copilot Cloud Agent`.
-2. Non-Copilot harness assignments are rejected at save time.
+1. In MVP, the only executable runner is `github-copilot-cloud`.
+2. Harness definitions targeting other runner types are rejected at save time.
 3. Execution-time selection re-enforces the MVP rule and skips non-compliant entries with audit reason.
 
 ## Validation and safety gates
