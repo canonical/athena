@@ -33,7 +33,7 @@ Define owner-scoped harness definitions, loop assignments, and deterministic har
 
 ### Loop assignment permissions
 
-1. Loops assign one or more harness definitions through many-to-many assignment records.
+1. Users assign one or more harness definitions to loops through many-to-many assignment records.
 2. Loop members can assign definitions.
 3. Priority ordering and assignment overrides are editable by loop admins only.
 

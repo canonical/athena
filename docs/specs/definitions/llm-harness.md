@@ -30,7 +30,7 @@ Athena routing authority remains unchanged. Execution-environment selection does
 
 ## Loop assignment authority and permissions
 
-- Loops assign one or more harness definitions and provider definitions through many-to-many assignment records.
+- Users assign one or more of their harness definitions and provider definitions to loops through many-to-many assignment records.
 - Any loop member can assign existing owner-scoped definitions to the loop.
 - Only loop administrators can edit assignment ordering, assignment overrides, and runtime tuning fields (priority, timeout, retries, and metrics).
 - Order is priority-based (`1..N`) and must be deterministic and unique per loop.
