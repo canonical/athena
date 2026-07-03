@@ -1,6 +1,5 @@
 import { queryLoopForUser } from "@components/loop/loop.service.js";
 import { resolveLoopSelection } from "@components/loop/loop-selection.service.js";
-import { queryPersonaById } from "@components/persona/persona.service.js";
 import type {
   BlockedEventCreation,
   ConcludedEventCreation,
@@ -60,10 +59,10 @@ const buildSourceContext = (request: ValidatedCreateEventRequest, sourceRef: str
   ...(sourceRef && { sourceRef }),
 });
 
+const codingHarnessPersonas = new Set<PersonaId>([`ic.clara`, `cr.elena`]);
+
 const resolveExecutionSelectionMetadata = async (loopId: string, assignee: PersonaId): Promise<EventPayload> => {
-  const persona = await queryPersonaById(assignee);
-  const inferredUsesHarness = assignee.startsWith(`ic.`) || assignee.startsWith(`cr.`);
-  const pool = persona?.usesCodingHarness || inferredUsesHarness ? `copilot` : `openrouter`;
+  const pool = codingHarnessPersonas.has(assignee) ? `copilot` : `openrouter`;
   const resolution = await resolveLoopSelection(loopId, pool);
 
   return {

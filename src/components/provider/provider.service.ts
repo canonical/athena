@@ -175,7 +175,7 @@ export const queryLoopProviderAssignmentCreate = async (loopId: string, provider
 };
 
 export const queryLoopProviderAssignmentUpdateByAdmin = async (loopId: string, providerDefinitionId: string, input: LoopProviderAssignmentAdminUpdate): Promise<LoopProviderAssignment | undefined> => {
-  const result = await getPool().query<LoopProviderAssignment>(
+  const result = await getPool().query(
     `
       UPDATE "loopProviderDefinition"
       SET
@@ -192,29 +192,7 @@ export const queryLoopProviderAssignmentUpdateByAdmin = async (loopId: string, p
         "healthStatus" = COALESCE($11, "healthStatus")
       WHERE "loop" = $12
         AND "providerDefinition" = $13
-      RETURNING
-        "loop",
-        "providerDefinition",
-        "priority",
-        "priorityOverride",
-        "enabled",
-        "timeoutMs",
-        "maxRetries",
-        "selectionWeight",
-        "assignmentOverrides",
-        "remainingCreditPercentage",
-        "remainingCreditValue",
-        "cooldownUntil",
-        "healthStatus",
-        "lastUsedAt",
-        "lastFailedAt",
-        "failureCount",
-        "createdAt",
-        "updatedAt",
-        '' AS "displayName",
-        '' AS "providerType",
-        '' AS "baseUrl",
-        NULL::text AS "model"
+      RETURNING 1
     `,
     [
       input.priority ?? null,
@@ -233,7 +211,12 @@ export const queryLoopProviderAssignmentUpdateByAdmin = async (loopId: string, p
     ],
   );
 
-  return result.rows[0];
+  if (!result.rowCount) {
+    return undefined;
+  }
+
+  const assignments = await queryLoopProviderAssignmentList(loopId);
+  return assignments.find((assignment) => assignment.providerDefinition === providerDefinitionId);
 };
 
 export const queryLoopProviderAssignmentDelete = async (loopId: string, providerDefinitionId: string): Promise<boolean> => {

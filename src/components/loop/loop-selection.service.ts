@@ -32,6 +32,7 @@ type SelectionAudit = {
   skipped: Array<{ assignmentId: string; reason: string }>;
 };
 
+// Normalize remaining credit percentage (0..100) to a 0..10 scale for weight multiplication.
 const creditWeightDivisor = 10;
 
 export type SelectionResolution = {
@@ -123,7 +124,10 @@ const selectWeightedRoundRobin = (candidates: SelectionCandidate[], cursor: numb
   }
 
   const weighted = [...candidates].sort(deterministicOrder).flatMap((candidate) => {
-    const weight = Math.max(1, Math.round((candidate.selectionWeight || 1) * ((candidate.remainingCreditPercentage ?? 0) / creditWeightDivisor || 1)));
+    const normalizedCredit = (candidate.remainingCreditPercentage ?? 0) / creditWeightDivisor;
+    const effectiveCreditWeight = normalizedCredit || 1;
+    const baseWeight = candidate.selectionWeight || 1;
+    const weight = Math.max(1, Math.round(baseWeight * effectiveCreditWeight));
     return Array.from({ length: weight }).map(() => candidate);
   });
 

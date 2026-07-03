@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS "providerDefinition" (
   "owner" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "displayName" TEXT NOT NULL,
   "providerType" TEXT NOT NULL CHECK ("providerType" IN ('openrouter')),
-  "baseUrl" TEXT NOT NULL CHECK (LOWER("baseUrl") LIKE 'https://%'),
+  "baseUrl" TEXT NOT NULL CHECK ("baseUrl" ~* '^https://'),
   "model" TEXT,
   "credentialCiphertext" TEXT NOT NULL,
   "credentialIv" TEXT NOT NULL,

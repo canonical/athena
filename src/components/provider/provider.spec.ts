@@ -2,7 +2,7 @@ import { Client } from "pg";
 import { authenticate, createLoop, expect, test } from "../../../testing/playwright/index.js";
 
 const defaultDbConnectionString = `postgresql://athena:${process.env.POSTGRES_PASSWORD || `athena`}@localhost:5432/athena`;
-const dbConnectionString = process.env.APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING || defaultDbConnectionString;
+const dbConnectionString = defaultDbConnectionString;
 const currentUserId = `dev.user@canonical.com`;
 
 const withDb = async <T>(operation: (client: Client) => Promise<T>): Promise<T> => {
@@ -55,7 +55,7 @@ test(`definition responses redact credential material`, async ({ page }) => {
 
   const response = await page.request.post(`http://athena.localhost/api/provider-definition-list`, {
     data: {
-      displayName: `OpenRouter Secret Provider`,
+      displayName: `OpenRouter Secret Provider ${Date.now()}`,
       providerType: `openrouter`,
       baseUrl: `https://openrouter.ai/api/v1`,
       model: `openai/gpt-4.1-mini`,
@@ -139,7 +139,7 @@ test(`loop members can assign definitions but non-admins cannot mutate priority 
 
   const providerCreate = await page.request.post(`http://athena.localhost/api/provider-definition-list`, {
     data: {
-      displayName: `Assignment provider`,
+      displayName: `Assignment provider ${Date.now()}`,
       providerType: `openrouter`,
       baseUrl: `https://openrouter.ai/api/v1`,
       model: `openai/gpt-4.1-mini`,
@@ -182,7 +182,7 @@ test(`selection algorithms are deterministic and rotate under round robin`, asyn
   const [providerAResponse, providerBResponse] = await Promise.all([
     page.request.post(`http://athena.localhost/api/provider-definition-list`, {
       data: {
-        displayName: `OpenRouter A ${Date.now()}`,
+        displayName: `OpenRouter Round Robin A ${loop.id}`,
         providerType: `openrouter`,
         baseUrl: `https://openrouter.ai/api/v1`,
         model: `openai/gpt-4.1-mini`,
@@ -191,7 +191,7 @@ test(`selection algorithms are deterministic and rotate under round robin`, asyn
     }),
     page.request.post(`http://athena.localhost/api/provider-definition-list`, {
       data: {
-        displayName: `OpenRouter B ${Date.now()}`,
+        displayName: `OpenRouter Round Robin B ${loop.id}`,
         providerType: `openrouter`,
         baseUrl: `https://openrouter.ai/api/v1`,
         model: `openai/gpt-4.1-mini`,
@@ -245,13 +245,16 @@ test(`selection algorithms are deterministic and rotate under round robin`, asyn
   };
 
   const firstSelection = firstBody.events[1]?.payload?.source?.executionSelection;
+  const firstCompletionSelection = firstBody.events[2]?.payload?.source?.executionSelection;
   const secondSelection = secondBody.events[1]?.payload?.source?.executionSelection;
 
   expect(firstSelection?.algorithmUsed).toBe(`round-robin`);
+  expect(firstCompletionSelection?.algorithmUsed).toBe(`round-robin`);
   expect(secondSelection?.algorithmUsed).toBe(`round-robin`);
   expect(firstSelection?.selectedAssignment).not.toBeNull();
+  expect(firstCompletionSelection?.selectedAssignment).not.toBeNull();
   expect(secondSelection?.selectedAssignment).not.toBeNull();
-  expect(firstSelection?.selectedAssignment).not.toBe(secondSelection?.selectedAssignment);
+  expect(firstSelection?.selectedAssignment).not.toBe(firstCompletionSelection?.selectedAssignment);
 });
 
 test(`execution hook audits skipped non-mvp harness assignments without leaking keys`, async ({ page }) => {

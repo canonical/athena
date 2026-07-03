@@ -9,7 +9,9 @@ export type SecretEnvelope = {
 };
 
 const algorithm = `aes-256-gcm`;
+// 96-bit IV is the recommended nonce size for AES-GCM.
 const ivLength = 12;
+// Key version enables forward rotation without changing row shape.
 const keyVersion = `v1`;
 
 const getEncryptionKey = (): Buffer => createHash(`sha256`).update(config.authentication.credentials.encryptionKey).digest();
