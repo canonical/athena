@@ -17,7 +17,7 @@ An Event is the first-class unit of work within Athena orchestration. Events pro
 Each event must include:
 
 - context information (goals, constraints, and scope for the work to be performed)
-- assigned persona (set only when the engineering manager persona pushes an assigned event to the loop)
+- assigned persona (set only when the active routing persona with `isRouting = true` pushes an assigned event to the loop)
 - event type
 - current status
 - relevant blockers and approvals
@@ -33,7 +33,7 @@ In horizontally scaled execution, event lifecycle operations must be determinist
 When a persona finishes processing an event, the event reaches one of two outcomes:
 
 - `completed`: The persona has finished the work and no further action is needed for that event.
-- `blocked`: The persona encountered a blocker and the event is handed back to the loop, then routed by Athena to the engineering manager persona for resolution.
+- `blocked`: The persona encountered a blocker and the event is handed back to the loop, then routed by Athena to the active routing persona (`isRouting = true`) for resolution.
 
 Event outcomes do not create new events. A completed or blocked event ends the persona's responsibility for that event but does not close the loop. Loops do not have outcomes; events do.
 
@@ -55,4 +55,24 @@ When tool usage is represented as an event source, the source payload must ident
 
 - Tool execution events are evidence-bearing context updates.
 - Tool execution events do not transfer ownership on their own.
-- If tool execution creates ambiguity or blockers, Athena routes through the engineering manager persona according to [theloop.md](./theloop.md).
+- If tool execution creates ambiguity or blockers, Athena routes through the active routing persona (`isRouting = true`) according to [theloop.md](./theloop.md).
+
+## Event Lifecycle Diagram
+
+```mermaid
+stateDiagram-v2
+	[*] --> Created
+	Created --> AwaitingAssignment: assigned persona is null
+	AwaitingAssignment --> Assigned: routing persona assigns persona
+	Assigned --> InProgress: persona starts processing
+
+	InProgress --> Completed: outcome = completed
+	InProgress --> Blocked: outcome = blocked
+	Blocked --> AwaitingAssignment: blocked handoff then routing persona assignment
+
+	InProgress --> InProgress: retry and fallback attempts
+	InProgress --> PausedForProvider: all configured providers unavailable
+	PausedForProvider --> InProgress: deterministic availability checks pass
+
+	Completed --> [*]
+```
