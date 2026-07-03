@@ -4,12 +4,20 @@ import type { PersonaListState } from "../persona/persona.query.js";
 
 const requiredString = (message: string) => z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string(message));
 
+export const loopSelectionAlgorithms = [`round-robin`, `highest-credit-percentage`, `highest-credit-absolute`, `weighted-round-robin`, `least-recently-used`, `priority-failover`, `health-aware-cooldown`] as const;
+
 export const loopInsertSchema = z.object({
   name: requiredString("name is required."),
   description: z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string().optional()),
 });
 
 export const loopUpdateSchema = loopInsertSchema;
+
+export const loopSelectionPolicyUpdateSchema = z.object({
+  openRouterSelectionAlgorithm: z.enum(loopSelectionAlgorithms).optional(),
+  copilotSelectionAlgorithm: z.enum(loopSelectionAlgorithms).optional(),
+  selectionCooldownWindowMs: z.int().min(1000).max(86_400_000).optional(),
+});
 
 export type Loop = {
   id: string;
@@ -19,9 +27,21 @@ export type Loop = {
   updatedAt: Date | string;
 };
 
+export type LoopSelectionPolicy = {
+  loop: string;
+  openRouterSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number];
+  copilotSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number];
+  openRouterSelectionCursor: number;
+  copilotSelectionCursor: number;
+  selectionCooldownWindowMs: number;
+  updatedAt: Date | string;
+};
+
 export type LoopInsert = z.infer<typeof loopInsertSchema>;
 
 export type LoopUpdate = z.infer<typeof loopUpdateSchema>;
+
+export type LoopSelectionPolicyUpdate = z.infer<typeof loopSelectionPolicyUpdateSchema>;
 
 export type LoopUser = {
   loop: string;

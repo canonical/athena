@@ -1,7 +1,21 @@
 import type { AuthenticatedUser } from "@components/authentication/session.schema.js";
 import { isValidUuid } from "@components/utilities/validation.js";
 import { type Request, type Response, Router } from "express";
-import { LoopNotFoundError, LoopValidationError, loopCreate, loopDelete, loopGet, loopList, loopUpdate, validateCreateLoopRequest, validateUpdateLoopRequest } from "./loop.controller.js";
+import {
+  LoopForbiddenError,
+  LoopNotFoundError,
+  LoopValidationError,
+  loopCreate,
+  loopDelete,
+  loopGet,
+  loopList,
+  loopSelectionPolicyGet,
+  loopSelectionPolicyUpdate,
+  loopUpdate,
+  validateCreateLoopRequest,
+  validateLoopSelectionPolicyUpdateRequest,
+  validateUpdateLoopRequest,
+} from "./loop.controller.js";
 
 export const loopRouter = Router();
 
@@ -13,6 +27,11 @@ const sendLoopError = (error: unknown, response: Response): boolean => {
 
   if (error instanceof LoopNotFoundError) {
     response.status(404).json({ error: error.message });
+    return true;
+  }
+
+  if (error instanceof LoopForbiddenError) {
+    response.status(403).json({ error: error.message });
     return true;
   }
 
@@ -99,6 +118,38 @@ loopRouter.delete(`/loop/:loopId`, async (request: Request, response: Response) 
 
     await loopDelete(loopId, getUserId(response));
     response.sendStatus(204);
+  } catch (error) {
+    if (!sendLoopError(error, response)) {
+      throw error;
+    }
+  }
+});
+
+loopRouter.get(`/loop/:loopId/selection-policy`, async (request: Request, response: Response) => {
+  try {
+    const loopId = getLoopId(request, response);
+
+    if (!loopId) {
+      return;
+    }
+
+    response.status(200).json(await loopSelectionPolicyGet(loopId, getUserId(response)));
+  } catch (error) {
+    if (!sendLoopError(error, response)) {
+      throw error;
+    }
+  }
+});
+
+loopRouter.put(`/loop/:loopId/selection-policy`, async (request: Request, response: Response) => {
+  try {
+    const loopId = getLoopId(request, response);
+
+    if (!loopId) {
+      return;
+    }
+
+    response.status(200).json(await loopSelectionPolicyUpdate(loopId, getUserId(response), validateLoopSelectionPolicyUpdateRequest(request.body)));
   } catch (error) {
     if (!sendLoopError(error, response)) {
       throw error;

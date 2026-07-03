@@ -21,15 +21,19 @@ Execution environment is selected per event step by the active routing persona (
 
 Athena routing authority remains unchanged. Execution-environment selection does not change ownership, handoff, or approval semantics.
 
-## Loop-admin configuration authority
+## Definition ownership and visibility
 
-Loop administrators configure provider settings for their loop.
+- Harness definitions and provider definitions are independent resources and are not loop-scoped records.
+- Definitions are owner-scoped; owners can create, read, update, and delete only their own definitions.
+- Secret material is entered directly by the owner and stored using encrypted credential envelopes in PostgreSQL.
+- API responses, logs, and audit payloads must never expose plaintext credential material.
 
-- Loop administrators configure an ordered coding harness profile list that can be selected by routing decisions.
-- Loop administrators configure an ordered OpenAI API-compatible LLM provider profile list for deterministic Athena thread execution when harness is not selected.
-- Order is priority-based (`1..N`) and is evaluated deterministically from highest to lowest priority.
-- Loop administrators can update these profiles over time.
-- Provider profile updates must be auditable with actor, timestamp, prior value, and new value.
+## Loop assignment authority and permissions
+
+- Loops assign one or more harness definitions and provider definitions through many-to-many assignment records.
+- Any loop member can assign existing owner-scoped definitions to the loop.
+- Only loop administrators can edit assignment ordering, assignment overrides, and runtime tuning fields (priority, timeout, retries, and metrics).
+- Order is priority-based (`1..N`) and must be deterministic and unique per loop.
 
 ## Coding harness catalog
 
@@ -57,14 +61,32 @@ Validated harness candidates for current and future use:
 
 Additional harnesses may be added to the catalog after capability and security validation.
 
-## Deterministic Athena thread runtime policy
+## Deterministic provider runtime policy (current phase)
 
-When routing does not select a harness-backed path, execution must run in the deterministic Athena thread using the loop's configured OpenAI API-compatible provider profiles.
+- Provider runtime in this phase is OpenRouter-only.
+- OpenRouter credentials are entered directly as API keys by the owner and assigned to loops as key pools.
+- Provider endpoints remain HTTPS-only.
+- Multiple OpenRouter keys and multiple Copilot keys can be assigned to a loop.
+- Athena definitions remain canonical for behavior and policy regardless of selected provider/key.
+- Provider/key choice must not alter deterministic routing, ownership rules, or approval authority.
 
-- Each configured profile must define provider endpoint, model identifier, and credential reference.
-- The loop configuration must include a deterministic provider priority order.
-- Athena definitions remain canonical for behavior and policy regardless of selected provider.
-- Provider choice must not alter deterministic routing, ownership rules, or approval authority.
+## Loop key-selection algorithms
+
+Both OpenRouter and Copilot key pools must support:
+
+1. Round Robin
+2. Highest Credit Percentage Available
+3. Highest Absolute Credit Available
+4. Weighted Round Robin by credit
+5. Least Recently Used key
+6. Priority Failover
+7. Health-aware selection with cooldown window
+
+Determinism contract:
+
+- Tie breakers are deterministic: priority, then createdAt, then id.
+- Missing metrics or algorithm-specific evaluation failures must use deterministic fallback (priority failover) and preserve audit reason.
+- Selection and skip decisions must be auditable per execution attempt.
 
 ## Conversation schema validation (Zod)
 

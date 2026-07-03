@@ -2,95 +2,95 @@
 
 ## Objective
 
-Define loop-scoped harness selection and execution for IC and CR personas within Athena's deterministic routing model.
-
-A harness is the LLM or coding tool provider that IC and CR personas use to execute work. Harness selection must be deterministic per loop, auditable, and support fallback under provider unavailability.
+Define owner-scoped harness definitions, loop assignments, and deterministic harness key selection for IC and CR personas within Athena's routing model.
 
 ## Scope
 
-- Loop-scoped harness activation model (what's allowed to execute)
-- Deterministic harness priority ordering
+- Owner-scoped harness definition schema
+- Loop assignment lifecycle and permissions
+- Deterministic assignment ordering
 - MVP execution constraint (GitHub Copilot Cloud Agent only)
+- Multi-key selection algorithms
 - Fallback and unavailability behavior
-- Audit trail for harness selection and failures
+- Audit trail for assignment and selection outcomes
 
 ## Harness catalog (predefined set)
 
-1. **GitHub Copilot Cloud Agent** — MVP executable; required for IC and CR work in Phase 1.
-2. **OpenAI Codex** — Post-MVP candidate; requires separate API management.
-3. **Claude Code** — Post-MVP candidate; requires separate API management.
-4. **Juju machine charm based harness** — MVP+1 Athena-owned target; internal/self-hosted runtime.
-5. **Devin** — Post-MVP candidate; external specialized tool execution.
+1. **GitHub Copilot Cloud Agent** — MVP executable; required for harness-backed execution in Phase 1.
+2. **OpenAI Codex** — Post-MVP candidate.
+3. **Claude Code** — Post-MVP candidate.
+4. **Juju machine charm based harness** — MVP+1 Athena-owned target.
+5. **Devin** — Post-MVP candidate.
 
-## Loop-scoped harness contract
+## Harness definition and assignment contract
 
-### What a loop admin configures
+### Definition ownership
 
-For each loop, the admin selects:
+1. Harness definitions are independent records and are not loop-scoped.
+2. Definitions are owner-scoped resources.
+3. Owners can create, read, update, and delete their own definitions.
+4. Credentials are entered directly and stored as encrypted envelopes.
 
-1. An ordered priority list of harnesses (e.g. `[GitHub Copilot Cloud Agent, Codex, Claude Code]`).
-2. For each harness: credential reference (API key or auth token), timeout, retry settings.
-3. Which harnesses are active/enabled for that loop.
+### Loop assignment permissions
 
-### Deterministic harness selection (per IC/CR execution)
+1. Loops assign one or more harness definitions through many-to-many assignment records.
+2. Loop members can assign definitions.
+3. Priority ordering and assignment overrides are editable by loop admins only.
 
-When IC or CR persona is assigned an event:
+### Deterministic harness selection
 
-1. Athena evaluates the loop's harness priority list in order.
-2. Select the first enabled harness where credentials are available.
-3. Execute the IC/CR work through that harness.
-4. If the harness is unavailable or the request fails, try the next harness in priority order.
-5. Persist the selected harness ID and any fallback decision in the event audit trail.
+When a harness-backed persona executes:
+
+1. Evaluate enabled assigned harness definitions in deterministic order.
+2. Apply configured loop selection algorithm for the Copilot pool.
+3. On unavailability/failure, use deterministic fallback policy.
+4. Persist selected assignment ID and skip reasons in execution metadata.
 
 ### MVP execution constraint
 
-1. In MVP, the **only executable harness** is `GitHub Copilot Cloud Agent`.
-2. Loop admins must configure at least one enabled profile for GitHub Copilot Cloud Agent.
-3. If admins include other harnesses in their priority list, Athena will skip them with an error logged (e.g. "post-MVP harness unavailable in MVP").
-4. This constraint is enforced at loop-admin profile-save time and at IC/CR execution time.
+1. In MVP, the only executable harness is `GitHub Copilot Cloud Agent`.
+2. Non-Copilot harness assignments are rejected at save time.
+3. Execution-time selection re-enforces the MVP rule and skips non-compliant entries with audit reason.
 
 ## Validation and safety gates
 
-1. At least one enabled harness must exist in a loop's priority list before activation.
+1. At least one enabled harness assignment must exist before harness-backed execution.
 2. Priority order must be unique and deterministic per loop.
-3. In MVP: reject any loop profile that does not include or prioritize GitHub Copilot Cloud Agent.
-4. Credential references must be resolvable and non-empty before IC/CR execution.
-5. Timeout and retry bounds must be within configured system limits.
+3. Timeout and retry values are bounded by deterministic limits.
+4. Assignment overrides are mutable only by loop admins.
+5. Selection must record deterministic tie-breakers and fallback reason.
 
 ## Observability and auditability
 
-Every IC/CR execution must capture:
+Every harness selection attempt captures:
 
 1. `loopId`
-2. `assignedPersona` (IC or CR)
-3. `selectedHarnessId`
-4. `attemptNumber`
-5. `fallbackActivated` (if a non-primary harness was selected)
-6. `executionResult` (`success` or failure reason)
-7. `failureCategory` (`unavailable`, `timeout`, `auth_error`, `validation_error`, or other)
-8. timestamp
+2. `selectedAssignmentId` (or null)
+3. `algorithmRequested`
+4. `algorithmUsed`
+5. `fallbackReason`
+6. `skipped[]` with assignment ID and reason
+7. timestamp
 
-Harness profile create/update actions must audit: actor, loop ID, harness priority list changes, and before/after credential references (redacted in output).
+Definition and assignment lifecycle updates must audit actor, target ID, and before/after snapshots with secret redaction.
 
 ## Implementation steps
 
-1. Define loop harness profile schema (ordered harness list with credentials, timeouts, retries).
-2. Implement loop-admin CRUD for harness profiles (create, list, update, delete).
-3. Add MVP validation: reject non-Copilot harnesses in MVP at profile-save and execution time.
-4. Implement IC/CR harness selector: deterministic priority evaluation, credential resolution, fallback logic.
-5. Integrate with IC/CR execution path to pass selected harness to persona workload.
-6. Add audit logging for profile changes and harness selection/fallback decisions.
-7. Add integration tests: priority ordering, fallback under unavailability, MVP constraint enforcement, all-harnesses-down behavior.
+1. Add owner-scoped harness definition persistence with encrypted credential envelope fields.
+2. Add loop assignment table with priority, overrides, timeout/retry, and runtime metrics.
+3. Implement owner-only definition CRUD.
+4. Implement member assignment CRUD and admin-only ordering/override mutation.
+5. Implement deterministic selection algorithms and fallback policy for Copilot pool.
+6. Add execution-time hook to resolve selected harness key and record audit metadata.
+7. Add E2E tests for permissions, deterministic ordering, MVP enforcement, and redaction.
 
 ## Acceptance criteria
 
-1. Loop admins can configure ordered harness profiles with credentials and timeouts.
-2. **MVP constraint enforced**: Only GitHub Copilot Cloud Agent is executable; other harnesses in a profile are skipped with clear error logging.
-3. IC and CR personas receive the deterministically selected harness (first enabled/available in priority order).
-4. Harness selection is deterministic: same loop configuration always selects the same harness under identical availability conditions.
-5. Fallback is auditable: every fallback decision is logged with harness ID, reason, and selected alternative.
-6. All-harnesses-down path pauses loop execution (per provider availability semantics in [theloop.md](../definitions/theloop.md)) without closing events.
-7. Harness profile lifecycle (create/update/delete) is fully audited with actor and timestamp.
+1. Owners can manage harness definitions independent of loops.
+2. Loop members can assign harness definitions; only admins can edit order/overrides.
+3. MVP constraint is enforced at save-time and execution-time.
+4. Harness selection is deterministic and auditable.
+5. Secret material is never exposed via API responses, logs, or audit payloads.
 
 ## Related specs
 

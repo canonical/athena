@@ -17,6 +17,11 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 \ir ./ddls/000500.session.sql
 \ir ./ddls/000600.persona.sql
 \ir ./ddls/000700.loopPersona.sql
+\ir ./ddls/000800.harnessDefinition.sql
+\ir ./ddls/000900.providerDefinition.sql
+\ir ./ddls/001000.loopHarnessDefinition.sql
+\ir ./ddls/001100.loopProviderDefinition.sql
+\ir ./ddls/001200.loopSelectionPolicy.sql
 \ir ./ddls/999999.cleanup.sql
 
 \echo >>> Running Athena seed data
