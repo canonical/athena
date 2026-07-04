@@ -31,8 +31,8 @@ Provider definitions are independent records with:
 
 1. Users can assign one or more provider definitions to loops.
 
-3. Loop admins exclusively select selection algorithm per loop from the Deterministic selection algorithm list.
-4. Priority values must be unique and deterministic per loop.
+2. Loop admins exclusively select selection algorithm per loop from the Deterministic selection algorithm list.
+3. Priority values must be unique and deterministic per loop.
 
 ### Deterministic selection and fallback
 

@@ -23,7 +23,11 @@ Runners are execution environments that host harnesses. See [runner-harness.md](
 | Juju VM | Open (Athena-owned) | `juju-vm` | Post-MVP — Athena-owned implementation target |
 | Local Ubuntu binary | Open (user-managed) | `local-ubuntu` | Post-MVP — disposable VMs encouraged, local machines discouraged |
 
+The runner catalog is a system-managed registry. Authenticated users can read the catalog to discover available runner types; entries are not user-editable.
+
 ## Runner definition and assignment contract
+
+Runner definitions are owner-scoped connection profiles (distinct from the system runner catalog) that Athena uses to invoke a harness on a runner. Each definition references a runner type from the catalog.
 
 ### Definition ownership
 
