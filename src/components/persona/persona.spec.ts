@@ -20,7 +20,7 @@ test(`persona catalog returns reference personas`, async ({ page }) => {
   const response = await page.request.get(`http://athena.localhost/api/persona/catalog`);
   expect(response.status()).toBe(200);
 
-  const catalog = (await response.json()) as Array<{ id: string; displayName: string; usesCodingHarness: boolean; isRouting: boolean; isDefault: boolean }>;
+  const catalog = (await response.json()) as Array<{ id: string; displayName: string; isRouting: boolean; isDefault: boolean }>;
   expect(catalog.length).toBeGreaterThan(0);
 
   for (const persona of catalog) {
@@ -29,11 +29,6 @@ test(`persona catalog returns reference personas`, async ({ page }) => {
 
   const routing = catalog.find((p) => p.isRouting);
   expect(routing).toBeDefined();
-  expect(routing?.usesCodingHarness).toBe(false);
-
-  const harness = catalog.find((p) => p.usesCodingHarness);
-  expect(harness).toBeDefined();
-  expect(harness?.isRouting).toBe(false);
 });
 
 test(`loop creation seeds an EM persona automatically`, async ({ page }) => {
@@ -58,15 +53,15 @@ test(`personas support create read update and delete through the API`, async ({ 
   const createResponse = await page.request.post(`http://athena.localhost/api/loop/${loop.id}/persona-list`, {
     data: {
       displayName: `IC Persona`,
+      role: `Senior IC`,
       personality: `You are a senior IC.`,
-      usesCodingHarness: true,
       lifecycleStatus: `active`,
     },
   });
   expect(createResponse.status()).toBe(201);
-  const created = (await createResponse.json()) as { id: string; displayName: string; usesCodingHarness: boolean; isRouting: boolean };
+  const created = (await createResponse.json()) as { id: string; displayName: string; role: string | null; isRouting: boolean };
   expect(created.displayName).toBe(`IC Persona`);
-  expect(created.usesCodingHarness).toBe(true);
+  expect(created.role).toBe(`Senior IC`);
   expect(created.isRouting).toBe(false);
 
   const listResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
@@ -77,8 +72,8 @@ test(`personas support create read update and delete through the API`, async ({ 
   const updateResponse = await page.request.put(`http://athena.localhost/api/persona/${created.id}`, {
     data: {
       displayName: `IC Persona Updated`,
+      role: `Principal IC`,
       personality: `You are a senior IC, updated.`,
-      usesCodingHarness: true,
       lifecycleStatus: `active`,
     },
   });
@@ -86,6 +81,7 @@ test(`personas support create read update and delete through the API`, async ({ 
   await expect(updateResponse.json()).resolves.toMatchObject({
     id: created.id,
     displayName: `IC Persona Updated`,
+    role: `Principal IC`,
   });
 
   const deleteResponse = await page.request.delete(`http://athena.localhost/api/loop/${loop.id}/persona/${created.id}`);
@@ -129,7 +125,6 @@ test(`default personas cannot be edited`, async ({ page }) => {
     data: {
       displayName: routingPersona.displayName,
       personality: routingPersona.personality,
-      usesCodingHarness: true,
       lifecycleStatus: routingPersona.lifecycleStatus,
     },
   });
@@ -141,13 +136,13 @@ test(`persona owner can update their own persona`, async ({ page }) => {
   await authenticate(page);
 
   const createResponse = await page.request.post(`http://athena.localhost/api/persona-list`, {
-    data: { displayName: `My IC`, personality: `An IC I own.`, usesCodingHarness: true, lifecycleStatus: `active` },
+    data: { displayName: `My IC`, personality: `An IC I own.`, lifecycleStatus: `active` },
   });
   expect(createResponse.status()).toBe(201);
   const created = (await createResponse.json()) as { id: string };
 
   const updateResponse = await page.request.put(`http://athena.localhost/api/persona/${created.id}`, {
-    data: { displayName: `My IC updated`, personality: `Updated personality.`, usesCodingHarness: true, lifecycleStatus: `active` },
+    data: { displayName: `My IC updated`, personality: `Updated personality.`, lifecycleStatus: `active` },
   });
   expect(updateResponse.status()).toBe(200);
   await expect(updateResponse.json()).resolves.toMatchObject({ id: created.id, displayName: `My IC updated` });
@@ -162,7 +157,6 @@ test(`personas reject missing required fields`, async ({ page }) => {
     data: {
       displayName: `   `,
       personality: `Valid personality`,
-      usesCodingHarness: false,
       lifecycleStatus: `active`,
     },
   });
@@ -255,7 +249,6 @@ test(`assign existing persona to loop via POST /persona-list?loop=`, async ({ pa
     data: {
       displayName: `Assignable IC`,
       personality: `A persona to be assigned.`,
-      usesCodingHarness: false,
       lifecycleStatus: `active`,
     },
   });
@@ -333,7 +326,6 @@ test(`persona detail page allows assigning persona to a loop`, async ({ page }) 
     data: {
       displayName: `Detail assign IC`,
       personality: `A persona assigned from its detail page.`,
-      usesCodingHarness: false,
       lifecycleStatus: `active`,
     },
   });
@@ -358,9 +350,9 @@ test(`persona routes return 400 for invalid UUID in path`, async ({ page }) => {
 
   const [getPersona, putPersona, getLoopList, postLoopList, deleteInvalidLoop, deleteInvalidPersona] = await Promise.all([
     page.request.get(`http://athena.localhost/api/persona/${invalidId}`),
-    page.request.put(`http://athena.localhost/api/persona/${invalidId}`, { data: { displayName: `x`, personality: `y`, usesCodingHarness: false, lifecycleStatus: `active` } }),
+    page.request.put(`http://athena.localhost/api/persona/${invalidId}`, { data: { displayName: `x`, personality: `y`, lifecycleStatus: `active` } }),
     page.request.get(`http://athena.localhost/api/loop/${invalidId}/persona-list`),
-    page.request.post(`http://athena.localhost/api/loop/${invalidId}/persona-list`, { data: { displayName: `x`, personality: `y`, usesCodingHarness: false, lifecycleStatus: `active` } }),
+    page.request.post(`http://athena.localhost/api/loop/${invalidId}/persona-list`, { data: { displayName: `x`, personality: `y`, lifecycleStatus: `active` } }),
     page.request.delete(`http://athena.localhost/api/loop/${invalidId}/persona/${validPersonaId}`),
     page.request.delete(`http://athena.localhost/api/loop/${validLoopId}/persona/${invalidId}`),
   ]);
@@ -406,7 +398,7 @@ test(`PUT /persona/:id returns 400 for missing required fields`, async ({ page }
   expect(catalogPersona).toBeDefined();
 
   const response = await page.request.put(`http://athena.localhost/api/persona/${catalogPersona?.id}`, {
-    data: { displayName: `   `, personality: `Valid personality`, usesCodingHarness: false, lifecycleStatus: `active` },
+    data: { displayName: `   `, personality: `Valid personality`, lifecycleStatus: `active` },
   });
   expect(response.status()).toBe(400);
   await expect(response.json()).resolves.toEqual({ error: `displayName is required.` });
@@ -416,7 +408,7 @@ test(`PUT /persona/:id returns 404 for unknown persona`, async ({ page }) => {
   await authenticate(page);
 
   const response = await page.request.put(`http://athena.localhost/api/persona/00000000-0000-7000-8000-000000000099`, {
-    data: { displayName: `Name`, personality: `Personality`, usesCodingHarness: false, lifecycleStatus: `active` },
+    data: { displayName: `Name`, personality: `Personality`, lifecycleStatus: `active` },
   });
   expect(response.status()).toBe(404);
   await expect(response.json()).resolves.toEqual({ error: `Persona not found.` });
@@ -428,7 +420,7 @@ test(`DELETE /loop/:loopId/persona/:personaId returns 404 when persona not assig
   const [loop, otherLoop] = await Promise.all([createLoop(page, `Delete unassigned loop`), createLoop(page, `Other loop for unassigned test`)]);
 
   const createResponse = await page.request.post(`http://athena.localhost/api/persona-list`, {
-    data: { displayName: `Unassigned persona`, personality: `Not in the target loop.`, usesCodingHarness: false, lifecycleStatus: `active` },
+    data: { displayName: `Unassigned persona`, personality: `Not in the target loop.`, lifecycleStatus: `active` },
   });
   const created = (await createResponse.json()) as { id: string };
 
@@ -449,7 +441,7 @@ test(`loop detail Personas tab allows removing a non-default persona`, async ({ 
 
   // Create and assign a non-default persona via API
   const createResponse = await page.request.post(`http://athena.localhost/api/loop/${loop.id}/persona-list`, {
-    data: { displayName: `Removable IC`, personality: `An IC that can be removed.`, usesCodingHarness: false, lifecycleStatus: `active` },
+    data: { displayName: `Removable IC`, personality: `An IC that can be removed.`, lifecycleStatus: `active` },
   });
   expect(createResponse.status()).toBe(201);
   const created = (await createResponse.json()) as { displayName: string };

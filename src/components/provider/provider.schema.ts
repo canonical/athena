@@ -11,12 +11,11 @@ export const providerInsertSchema = z.object({
   displayName: requiredString(`displayName is required.`),
   providerType: z.enum(providerTypes).default(`openrouter`),
   baseUrl: requiredString(`baseUrl is required.`).pipe(httpsUrlSchema),
-  model: z.preprocess((value) => (typeof value === `string` ? value.trim() || undefined : undefined), z.string().optional()),
   apiKey: requiredString(`apiKey is required.`),
   lifecycleStatus: z.enum(providerLifecycleStatuses).default(`active`),
 });
 
-export const providerUpdateSchema = providerInsertSchema.pick({ displayName: true, providerType: true, baseUrl: true, model: true, lifecycleStatus: true }).extend({
+export const providerUpdateSchema = providerInsertSchema.pick({ displayName: true, providerType: true, baseUrl: true, lifecycleStatus: true }).extend({
   apiKey: requiredString(`apiKey is required.`).optional(),
 });
 
@@ -49,7 +48,6 @@ export type Provider = {
   displayName: string;
   providerType: (typeof providerTypes)[number];
   baseUrl: string;
-  model: string | null;
   lifecycleStatus: (typeof providerLifecycleStatuses)[number];
   hasCredential: boolean;
   createdAt: Date | string;
@@ -59,6 +57,7 @@ export type Provider = {
 export type LoopProvider = {
   loop: string;
   provider: string;
+  owner: string;
   priority: number;
   priorityOverride: number | null;
   enabled: boolean;
@@ -78,5 +77,4 @@ export type LoopProvider = {
   displayName: string;
   providerType: string;
   baseUrl: string;
-  model: string | null;
 };

@@ -13,7 +13,7 @@ export const loopInsertSchema = z.object({
 
 export const loopUpdateSchema = loopInsertSchema;
 
-export const loopSelectionPolicyUpdateSchema = z.object({
+export const providerSelectionPolicyUpdateSchema = z.object({
   openRouterSelectionAlgorithm: z.enum(loopSelectionAlgorithms).optional(),
   copilotSelectionAlgorithm: z.enum(loopSelectionAlgorithms).optional(),
   selectionCooldownWindowMs: z.int().min(1000).max(86_400_000).optional(),
@@ -27,7 +27,7 @@ export type Loop = {
   updatedAt: Date | string;
 };
 
-export type LoopSelectionPolicy = {
+export type ProviderSelectionPolicy = {
   loop: string;
   openRouterSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number];
   copilotSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number];
@@ -41,7 +41,7 @@ export type LoopInsert = z.infer<typeof loopInsertSchema>;
 
 export type LoopUpdate = z.infer<typeof loopUpdateSchema>;
 
-export type LoopSelectionPolicyUpdate = z.infer<typeof loopSelectionPolicyUpdateSchema>;
+export type ProviderSelectionPolicyUpdate = z.infer<typeof providerSelectionPolicyUpdateSchema>;
 
 export type LoopUser = {
   loop: string;
@@ -56,11 +56,13 @@ export type Feedback = {
   message: string;
 };
 
-export type Tab = "details" | "personas";
+export type Tab = "details" | "personas" | "providers";
 
 export type LoopProps = {
   loopId: string;
   tab: Tab;
+  editor?: `create` | `edit` | `clone`;
+  personaId?: string;
 };
 
 export type LoopDetailsProps = {
@@ -73,7 +75,14 @@ export type LoopDetailsProps = {
 
 export type LoopPersonasProps = {
   loopId: string;
+  editor?: `create` | `edit` | `clone`;
+  personaId?: string;
   personaListState: PersonaListState;
   reloadPersonaList: () => void;
+  onFeedback: (feedback: Feedback | null) => void;
+};
+
+export type LoopProvidersProps = {
+  loopId: string;
   onFeedback: (feedback: Feedback | null) => void;
 };

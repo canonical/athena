@@ -2,7 +2,7 @@ import { getPool } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
 import type { LoopProvider, LoopProviderAdminUpdate, Provider, ProviderInsert, ProviderUpdate } from "./provider.schema.js";
 
-const providerColumns = `"id", "owner", "displayName", "providerType", "baseUrl", "model", "lifecycleStatus", "createdAt", "updatedAt"`;
+const providerColumns = `"id", "owner", "displayName", "providerType", "baseUrl", "lifecycleStatus", "createdAt", "updatedAt"`;
 
 export const queryProviderListByOwner = async (ownerId: string): Promise<Provider[]> => {
   const result = await getPool().query<Provider>(
@@ -42,17 +42,16 @@ export const queryProviderCreate = async (input: ProviderInsert, ownerId: string
         "displayName",
         "providerType",
         "baseUrl",
-        "model",
         "credentialCiphertext",
         "credentialIv",
         "credentialAuthTag",
         "credentialKeyVersion",
         "lifecycleStatus"
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING ${providerColumns}, TRUE AS "hasCredential"
     `,
-    [ownerId, input.displayName, input.providerType, input.baseUrl, input.model ?? null, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, input.lifecycleStatus],
+    [ownerId, input.displayName, input.providerType, input.baseUrl, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, input.lifecycleStatus],
   );
 
   const provider = result.rows[0];
@@ -74,17 +73,16 @@ export const queryProviderUpdate = async (providerId: string, ownerId: string, i
           "displayName" = $1,
           "providerType" = $2,
           "baseUrl" = $3,
-          "model" = $4,
-          "lifecycleStatus" = $5,
-          "credentialCiphertext" = $6,
-          "credentialIv" = $7,
-          "credentialAuthTag" = $8,
-          "credentialKeyVersion" = $9
-        WHERE "id" = $10
-          AND "owner" = $11
+          "lifecycleStatus" = $4,
+          "credentialCiphertext" = $5,
+          "credentialIv" = $6,
+          "credentialAuthTag" = $7,
+          "credentialKeyVersion" = $8
+        WHERE "id" = $9
+          AND "owner" = $10
         RETURNING ${providerColumns}, TRUE AS "hasCredential"
       `,
-      [input.displayName, input.providerType, input.baseUrl, input.model ?? null, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, providerId, ownerId],
+      [input.displayName, input.providerType, input.baseUrl, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, providerId, ownerId],
     );
 
     return result.rows[0];
@@ -97,13 +95,12 @@ export const queryProviderUpdate = async (providerId: string, ownerId: string, i
         "displayName" = $1,
         "providerType" = $2,
         "baseUrl" = $3,
-        "model" = $4,
-        "lifecycleStatus" = $5
-      WHERE "id" = $6
-        AND "owner" = $7
+        "lifecycleStatus" = $4
+      WHERE "id" = $5
+        AND "owner" = $6
       RETURNING ${providerColumns}, TRUE AS "hasCredential"
     `,
-    [input.displayName, input.providerType, input.baseUrl, input.model ?? null, input.lifecycleStatus, providerId, ownerId],
+    [input.displayName, input.providerType, input.baseUrl, input.lifecycleStatus, providerId, ownerId],
   );
 
   return result.rows[0];
@@ -121,6 +118,7 @@ export const queryLoopProviderList = async (loopId: string): Promise<LoopProvide
       SELECT
         lp."loop",
         lp."provider",
+        p."owner",
         lp."priority",
         lp."priorityOverride",
         lp."enabled",
@@ -139,8 +137,7 @@ export const queryLoopProviderList = async (loopId: string): Promise<LoopProvide
         lp."updatedAt",
         p."displayName",
         p."providerType",
-        p."baseUrl",
-        p."model"
+        p."baseUrl"
       FROM "loopProvider" lp
       JOIN "provider" p ON p."id" = lp."provider"
       WHERE lp."loop" = $1
@@ -249,7 +246,6 @@ export type LoopOpenRouterCandidateRow = {
   providerType: string;
   displayName: string;
   baseUrl: string;
-  model: string | null;
 };
 
 export const queryLoopOpenRouterCandidates = async (loopId: string): Promise<LoopOpenRouterCandidateRow[]> => {
@@ -278,8 +274,7 @@ export const queryLoopOpenRouterCandidates = async (loopId: string): Promise<Loo
         p."credentialKeyVersion",
         p."providerType",
         p."displayName",
-        p."baseUrl",
-        p."model"
+        p."baseUrl"
       FROM "loopProvider" lp
       JOIN "provider" p ON p."id" = lp."provider"
       WHERE lp."loop" = $1

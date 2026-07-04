@@ -1,9 +1,9 @@
 import { getPool } from "@components/postgres/postgres.js";
 import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
 
-const personaColumns = `p."id", p."displayName", p."personality", p."usesCodingHarness", p."isRouting", p."isDefault", p."owner", p."lifecycleStatus", p."createdAt", p."updatedAt"`;
+const personaColumns = `p."id", p."displayName", p."role", p."personality", p."isRouting", p."isDefault", p."owner", p."lifecycleStatus", p."createdAt", p."updatedAt"`;
 
-const personaColumnsUnqualified = `"id", "displayName", "personality", "usesCodingHarness", "isRouting", "isDefault", "owner", "lifecycleStatus", "createdAt", "updatedAt"`;
+const personaColumnsUnqualified = `"id", "displayName", "role", "personality", "isRouting", "isDefault", "owner", "lifecycleStatus", "createdAt", "updatedAt"`;
 
 export const queryLoopPersonaList = async (loopId: string): Promise<Persona[]> => {
   const result = await getPool().query<Persona>(
@@ -59,12 +59,11 @@ export const queryPersonaById = async (personaId: string): Promise<Persona | und
   return result.rows[0];
 };
 
-export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: number; withCodingHarness: number; routing: number }> => {
-  const result = await getPool().query<{ total: string; withCodingHarness: string; routing: string }>(
+export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: number; routing: number }> => {
+  const result = await getPool().query<{ total: string; routing: string }>(
     `
       SELECT
         COUNT(*) AS "total",
-        COUNT(*) FILTER (WHERE p."usesCodingHarness" = TRUE) AS "withCodingHarness",
         COUNT(*) FILTER (WHERE p."isRouting" = TRUE) AS "routing"
       FROM "persona" p
       JOIN "loopPersona" lp ON lp."persona" = p."id"
@@ -76,12 +75,11 @@ export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: 
   const row = result.rows[0];
 
   if (!row) {
-    return { total: 0, withCodingHarness: 0, routing: 0 };
+    return { total: 0, routing: 0 };
   }
 
   return {
     total: Number(row.total),
-    withCodingHarness: Number(row.withCodingHarness),
     routing: Number(row.routing),
   };
 };
@@ -94,11 +92,11 @@ export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, i
 
     const result = await client.query<Persona>(
       `
-        INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "owner", "lifecycleStatus")
+        INSERT INTO "persona" ("displayName", "role", "personality", "isRouting", "owner", "lifecycleStatus")
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING ${personaColumnsUnqualified}
       `,
-      [input.displayName, input.personality, input.usesCodingHarness, isRouting, ownerId, input.lifecycleStatus],
+      [input.displayName, input.role ?? null, input.personality, isRouting, ownerId, input.lifecycleStatus],
     );
 
     const [persona] = result.rows;
@@ -122,11 +120,11 @@ export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, i
 export const queryPersonaCreateGlobal = async (input: PersonaInsert, isRouting: boolean, ownerId: string | null): Promise<Persona> => {
   const result = await getPool().query<Persona>(
     `
-      INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "owner", "lifecycleStatus")
+      INSERT INTO "persona" ("displayName", "role", "personality", "isRouting", "owner", "lifecycleStatus")
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING ${personaColumnsUnqualified}
     `,
-    [input.displayName, input.personality, input.usesCodingHarness, isRouting, ownerId, input.lifecycleStatus],
+    [input.displayName, input.role ?? null, input.personality, isRouting, ownerId, input.lifecycleStatus],
   );
 
   const [persona] = result.rows;
@@ -144,13 +142,13 @@ export const queryPersonaUpdate = async (personaId: string, input: PersonaUpdate
       UPDATE "persona"
       SET
         "displayName" = $1,
-        "personality" = $2,
-        "usesCodingHarness" = $3,
+        "role" = $2,
+        "personality" = $3,
         "lifecycleStatus" = $4
       WHERE "id" = $5
       RETURNING ${personaColumnsUnqualified}
     `,
-    [input.displayName, input.personality, input.usesCodingHarness, input.lifecycleStatus, personaId],
+    [input.displayName, input.role ?? null, input.personality, input.lifecycleStatus, personaId],
   );
 
   return result.rows[0];

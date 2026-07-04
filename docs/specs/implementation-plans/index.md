@@ -11,7 +11,7 @@ This index is the entry point for implementation planning artifacts.
 ### Loop-Based Definitions First (Blocking)
 
 - [x] Define owner-scoped OpenRouter connection contract (definition schema, HTTPS endpoint, encrypted credential envelope, assignment, timeout/retry, and deterministic key fallback). Detailed plan: [openai-api-connection.plan.md](./openai-api-connection.plan.md)
-- [x] Define owner-scoped harness contract (catalog, assignment, allow/deny, and deterministic execution profile/key selection). Detailed plan: [runner-connection.plan.md](./runner-connection.plan.md)
+- [x] Define owner-scoped runner contract (catalog, assignment, allow/deny, and deterministic execution profile/key selection). Detailed plan: [runner-connection.plan.md](./runner-connection.plan.md)
   - [ ] Define GitHub Copilot Cloud Agent harness profile as MVP executable option.
   - [ ] Define OpenAI Codex harness profile as post-MVP candidate.
   - [ ] Define Claude Code harness profile as post-MVP candidate.

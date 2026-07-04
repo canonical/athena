@@ -1,7 +1,7 @@
 import { getPool } from "@components/postgres/postgres.js";
 import { decryptSecret } from "@components/utilities/secret-envelope.js";
 import type { PoolClient } from "pg";
-import type { LoopSelectionPolicy } from "./loop.schema.js";
+import type { ProviderSelectionPolicy } from "./loop.schema.js";
 
 type SelectionPoolType = `openrouter` | `copilot`;
 
@@ -178,8 +178,8 @@ const selectHealthAwareCooldown = (candidates: SelectionCandidate[]): SelectionC
   return selectPriorityFailover(healthyCandidates);
 };
 
-const getLoopSelectionPolicy = async (client: PoolClient, loopId: string): Promise<LoopSelectionPolicy | undefined> => {
-  const result = await client.query<LoopSelectionPolicy>(
+const getLoopProviderSelectionPolicy = async (client: PoolClient, loopId: string): Promise<ProviderSelectionPolicy | undefined> => {
+  const result = await client.query<ProviderSelectionPolicy>(
     `
       SELECT
         "id" AS "loop",
@@ -348,7 +348,7 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
   try {
     await client.query(`BEGIN`);
 
-    const policy = await getLoopSelectionPolicy(client, loopId);
+    const policy = await getLoopProviderSelectionPolicy(client, loopId);
 
     if (!policy) {
       await client.query(`ROLLBACK`);

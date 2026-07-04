@@ -1,24 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchLoop, fetchLoopList, fetchProviderSelectionPolicy } from "./loop.client.js";
-import type { Loop, ProviderSelectionPolicy } from "./loop.schema.js";
+import { fetchLoopProviderList, fetchProviderById, fetchProviderList } from "./provider.client.js";
+import type { LoopProvider, Provider } from "./provider.schema.js";
 
-export type LoopListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; loops: Loop[] };
+export type ProviderListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; providers: Provider[] };
+export type ProviderState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; provider: Provider };
+export type LoopProviderListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; providers: LoopProvider[] };
 
-export type LoopState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; loop: Loop };
-
-export type ProviderSelectionPolicyState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; policy: ProviderSelectionPolicy };
-
-export const useLoopList = () => {
-  const [state, setState] = useState<LoopListState>({ status: `loading` });
+export const useProviderList = () => {
+  const [state, setState] = useState<ProviderListState>({ status: `loading` });
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
 
-    fetchLoopList()
-      .then((loops) => {
+    setState({ status: `loading` });
+
+    fetchProviderList()
+      .then((providers) => {
         if (active) {
-          setState({ status: `success`, loops });
+          setState({ status: `success`, providers });
         }
       })
       .catch((error: unknown) => {
@@ -34,15 +34,14 @@ export const useLoopList = () => {
   }, [reloadToken]);
 
   const reload = useCallback(() => {
-    setState({ status: `loading` });
     setReloadToken((value) => value + 1);
   }, []);
 
   return { state, reload };
 };
 
-export const useLoop = (loopId: string) => {
-  const [state, setState] = useState<LoopState>({ status: `loading` });
+export const useProviderById = (providerId: string) => {
+  const [state, setState] = useState<ProviderState>({ status: `loading` });
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
@@ -50,10 +49,10 @@ export const useLoop = (loopId: string) => {
 
     setState({ status: `loading` });
 
-    fetchLoop(loopId)
-      .then((loop) => {
+    fetchProviderById(providerId)
+      .then((provider) => {
         if (active) {
-          setState({ status: `success`, loop });
+          setState({ status: `success`, provider });
         }
       })
       .catch((error: unknown) => {
@@ -66,7 +65,7 @@ export const useLoop = (loopId: string) => {
     return () => {
       active = false;
     };
-  }, [loopId, reloadToken]);
+  }, [providerId, reloadToken]);
 
   const reload = useCallback(() => {
     setReloadToken((value) => value + 1);
@@ -75,8 +74,8 @@ export const useLoop = (loopId: string) => {
   return { state, reload };
 };
 
-export const useProviderSelectionPolicy = (loopId: string) => {
-  const [state, setState] = useState<ProviderSelectionPolicyState>({ status: `loading` });
+export const useLoopProviderList = (loopId: string) => {
+  const [state, setState] = useState<LoopProviderListState>({ status: `loading` });
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
@@ -84,10 +83,10 @@ export const useProviderSelectionPolicy = (loopId: string) => {
 
     setState({ status: `loading` });
 
-    fetchProviderSelectionPolicy(loopId)
-      .then((policy) => {
+    fetchLoopProviderList(loopId)
+      .then((providers) => {
         if (active) {
-          setState({ status: `success`, policy });
+          setState({ status: `success`, providers });
         }
       })
       .catch((error: unknown) => {

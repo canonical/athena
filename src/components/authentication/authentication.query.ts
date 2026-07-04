@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { authenticationApiPaths } from "./authentication.client.js";
+import { fetchAuthenticationProfile } from "./authentication.client.js";
 import type { User } from "./session.schema.js";
 
 export type CurrentUserState = User | null;
@@ -12,13 +12,7 @@ export const useCurrentUser = (): CurrentUserState => {
 
     const load = async () => {
       try {
-        const response = await fetch(authenticationApiPaths.profile, { credentials: `include` });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const payload = (await response.json()) as { isAuthenticated: boolean; user: User | null };
+        const payload = await fetchAuthenticationProfile();
 
         if (active && payload.isAuthenticated && payload.user) {
           setUser(payload.user);

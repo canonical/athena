@@ -1,5 +1,5 @@
 import { getPool } from "@components/postgres/postgres.js";
-import type { Loop, LoopInsert, LoopSelectionPolicy, LoopSelectionPolicyUpdate, LoopUpdate } from "./loop.schema.js";
+import type { Loop, LoopInsert, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
 
 const loopColumns = `"id", "name", "description", "createdAt", "updatedAt"`;
 const loopSelectColumns = `l."id", l."name", l."description", l."createdAt", l."updatedAt"`;
@@ -121,8 +121,8 @@ export const queryLoopDelete = async (loopId: string, userId: string): Promise<b
   return Boolean(result.rowCount);
 };
 
-export const queryLoopSelectionPolicy = async (loopId: string, userId: string): Promise<LoopSelectionPolicy | undefined> => {
-  const result = await getPool().query<LoopSelectionPolicy>(
+export const queryLoopProviderSelectionPolicy = async (loopId: string, userId: string): Promise<ProviderSelectionPolicy | undefined> => {
+  const result = await getPool().query<ProviderSelectionPolicy>(
     `
       SELECT
         l."id" AS "loop",
@@ -143,8 +143,8 @@ export const queryLoopSelectionPolicy = async (loopId: string, userId: string): 
   return result.rows[0];
 };
 
-export const queryLoopSelectionPolicyUpdate = async (loopId: string, userId: string, input: LoopSelectionPolicyUpdate): Promise<LoopSelectionPolicy | undefined> => {
-  const result = await getPool().query<LoopSelectionPolicy>(
+export const queryLoopProviderSelectionPolicyUpdate = async (loopId: string, userId: string, input: ProviderSelectionPolicyUpdate): Promise<ProviderSelectionPolicy | undefined> => {
+  const result = await getPool().query<ProviderSelectionPolicy>(
     `
       UPDATE "loop" AS l
       SET

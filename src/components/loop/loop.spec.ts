@@ -83,7 +83,10 @@ test(`loops page supports create update and delete`, async ({ page }) => {
   await expect(page.getByRole(`grid`)).toBeVisible();
   await expect(page.getByRole(`gridcell`, { name: `UI loop`, exact: true }).first()).toBeVisible();
 
-  await page.getByRole(`button`, { name: `Edit UI loop` }).click();
+  await page
+    .getByRole(`row`, { name: /UI loop/ })
+    .getByRole(`button`, { name: `Edit` })
+    .click();
   await page.getByLabel(`Loop name`).nth(1).fill(`UI loop updated`);
   await page.getByLabel(`Loop description`).nth(1).fill(`Updated through the UI`);
   await page.getByRole(`button`, { name: `Save loop` }).click();
@@ -91,7 +94,10 @@ test(`loops page supports create update and delete`, async ({ page }) => {
   await expect(page.getByText(`UI loop updated has been updated.`)).toBeVisible();
   await expect(page.getByRole(`gridcell`, { name: `UI loop updated`, exact: true }).first()).toBeVisible();
 
-  await page.getByRole(`button`, { name: `Delete UI loop updated` }).click();
+  await page
+    .getByRole(`row`, { name: /UI loop updated/ })
+    .getByRole(`button`, { name: `Delete` })
+    .click();
 
   await expect(page.getByText(`UI loop updated has been deleted.`)).toBeVisible();
   await expect(page.getByRole(`gridcell`, { name: `UI loop updated`, exact: true })).toHaveCount(0);
@@ -112,6 +118,7 @@ test(`loop list allows navigating to loop detail page`, async ({ page }) => {
   await expect(page.getByRole(`heading`, { name: `Navigation test loop` })).toBeVisible();
   await expect(page.getByRole(`tab`, { name: `Details` })).toBeVisible();
   await expect(page.getByRole(`tab`, { name: `Personas` })).toBeVisible();
+  await expect(page.getByRole(`tab`, { name: `Providers` })).toBeVisible();
 });
 
 test(`loop detail page tabs are deep-linkable`, async ({ page }) => {
@@ -124,6 +131,11 @@ test(`loop detail page tabs are deep-linkable`, async ({ page }) => {
   await expect(page.getByRole(`heading`, { name: `Deep link tab loop` })).toBeVisible();
   await expect(page.getByRole(`tab`, { name: `Personas` })).toHaveAttribute(`aria-selected`, `true`);
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=providers`);
+  await expect(page.getByRole(`tab`, { name: `Providers` })).toHaveAttribute(`aria-selected`, `true`);
+  await expect(page.getByRole(`heading`, { name: `Assigned providers` })).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Provider selection algorithm` })).toBeVisible();
 });
 
 test(`loop routes return 400 for invalid UUID in path`, async ({ page }) => {
@@ -166,6 +178,7 @@ test(`loop detail page saves loop details from the Details tab`, async ({ page }
   await page.goto(`http://athena.localhost/loop/${loop.id}`);
 
   await expect(page.getByRole(`tab`, { name: `Details` })).toHaveAttribute(`aria-selected`, `true`);
+  await page.getByRole(`button`, { name: `Edit loop` }).click();
   await page.getByLabel(`Loop name`).fill(`Detail save loop updated`);
   await page.getByRole(`button`, { name: `Save loop` }).click();
 

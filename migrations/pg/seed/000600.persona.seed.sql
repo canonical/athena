@@ -2,10 +2,11 @@
 -- Each default persona is sourced directly from docs/specs/personas/*.md and is
 -- marked isDefault = TRUE so that the application can prevent users from deleting them.
 -- Idempotent: skipped when default personas already exist.
-INSERT INTO "persona" ("displayName", "personality", "usesCodingHarness", "isRouting", "isDefault", "lifecycleStatus")
+INSERT INTO "persona" ("displayName", "role", "personality", "isRouting", "isDefault", "lifecycleStatus")
 VALUES
 (
   'Diana',
+  'Engineering Manager',
   '# EM Persona: Diana
 
 ## Identity
@@ -95,13 +96,13 @@ When responding as Diana:
 "If this is not getting done now, it should not disappear; it needs PM ownership and a maintained specification trail."
 
 "The useful question is not whether this matters, but what we are willing to prioritize ahead of it."',
-  FALSE,
   TRUE,
   TRUE,
   'active'
 ),
 (
   'Clara',
+  'Individual Contributor',
   '# IC Persona: Clara
 
 ## Identity
@@ -195,13 +196,13 @@ When responding as Clara:
 "We can move quickly here, but we should keep the change narrow and validate the touched path immediately."
 
 "Let''s solve the root cause cleanly instead of adding another layer of workaround."',
-  TRUE,
   FALSE,
   TRUE,
   'active'
 ),
 (
   'Elena',
+  'Code Reviewer',
   '# Code Reviewer Persona: Elena
 
 ## Identity
@@ -290,12 +291,12 @@ When responding as Elena:
 
 "There are no material findings in the implementation as written, but coverage on the touched behavior is still thin."',
   FALSE,
-  FALSE,
   TRUE,
   'active'
 ),
 (
   'Alice',
+  'Product Manager (Detail Oriented)',
   '# PM Persona: Alice
 
 ## Identity
@@ -384,12 +385,12 @@ When responding as Alice:
 
 "Let''s separate the core requirement from the follow-on enhancements so the team can execute cleanly."',
   FALSE,
-  FALSE,
   TRUE,
   'active'
 ),
 (
   'Beatrice',
+  'Product Manager (Strategical)',
   '# PM Persona: Beatrice
 
 ## Identity
@@ -478,12 +479,12 @@ When responding as Beatrice:
 
 "We do not need the perfect end-state today; we need the next move that creates learning and keeps the product coherent."',
   FALSE,
-  FALSE,
   TRUE,
   'active'
 ),
 (
   'Grace',
+  'Quality Assurance',
   '# QA Persona: Grace
 
 ## Identity
@@ -572,12 +573,12 @@ When responding as Grace:
 
 "Before we call this ready, we need evidence on the risky workflow rather than assumption-based confidence."',
   FALSE,
-  FALSE,
   TRUE,
   'active'
 ),
 (
   'Fiona',
+  'UX Designer',
   '# UX Persona: Fiona
 
 ## Identity
@@ -665,7 +666,6 @@ When responding as Fiona:
 "If this is difficult with a keyboard, unclear to a screen reader, or confusing under stress, the design is not finished."
 
 "We should start from the Vanilla Framework pattern in Figma and only diverge if there is a clear user benefit."',
-  FALSE,
   FALSE,
   TRUE,
   'active'

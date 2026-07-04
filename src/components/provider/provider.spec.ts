@@ -31,7 +31,6 @@ test(`provider definitions enforce OpenRouter-only and HTTPS-only`, async ({ pag
       displayName: `Invalid type provider`,
       providerType: `other`,
       baseUrl: `https://openrouter.ai/api/v1`,
-      model: `openai/gpt-4.1-mini`,
       apiKey: `test-key`,
     },
   });
@@ -42,7 +41,6 @@ test(`provider definitions enforce OpenRouter-only and HTTPS-only`, async ({ pag
       displayName: `Invalid https provider`,
       providerType: `openrouter`,
       baseUrl: `http://openrouter.ai/api/v1`,
-      model: `openai/gpt-4.1-mini`,
       apiKey: `test-key`,
     },
   });
@@ -58,7 +56,6 @@ test(`definition responses redact credential material`, async ({ page }) => {
       displayName: `OpenRouter Secret Provider ${Date.now()}`,
       providerType: `openrouter`,
       baseUrl: `https://openrouter.ai/api/v1`,
-      model: `openai/gpt-4.1-mini`,
       apiKey: `sk-openrouter-sensitive-value`,
     },
   });
@@ -142,7 +139,6 @@ test(`loop members can assign definitions but non-admins cannot mutate priority 
       displayName: `Assignment provider ${Date.now()}`,
       providerType: `openrouter`,
       baseUrl: `https://openrouter.ai/api/v1`,
-      model: `openai/gpt-4.1-mini`,
       apiKey: `member-assignment-key`,
     },
   });
@@ -185,7 +181,6 @@ test(`selection algorithms are deterministic and rotate under round robin`, asyn
         displayName: `OpenRouter Round Robin A ${loop.id}`,
         providerType: `openrouter`,
         baseUrl: `https://openrouter.ai/api/v1`,
-        model: `openai/gpt-4.1-mini`,
         apiKey: `openrouter-a-key`,
       },
     }),
@@ -194,7 +189,6 @@ test(`selection algorithms are deterministic and rotate under round robin`, asyn
         displayName: `OpenRouter Round Robin B ${loop.id}`,
         providerType: `openrouter`,
         baseUrl: `https://openrouter.ai/api/v1`,
-        model: `openai/gpt-4.1-mini`,
         apiKey: `openrouter-b-key`,
       },
     }),
@@ -208,7 +202,7 @@ test(`selection algorithms are deterministic and rotate under round robin`, asyn
   await page.request.post(`http://athena.localhost/api/loop/${loop.id}/provider-list`, { data: { provider: providerA.id } });
   await page.request.post(`http://athena.localhost/api/loop/${loop.id}/provider-list`, { data: { provider: providerB.id } });
 
-  const policyResponse = await page.request.put(`http://athena.localhost/api/loop/${loop.id}/selection-policy`, {
+  const policyResponse = await page.request.put(`http://athena.localhost/api/loop/${loop.id}/provider-selection-policy`, {
     data: {
       openRouterSelectionAlgorithm: `round-robin`,
     },

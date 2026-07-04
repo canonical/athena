@@ -1,126 +1,40 @@
 import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
-import { Link } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
-import { createLoop, deleteLoop, updateLoop } from "./loop.client.js";
+import { EntityDrawer } from "@components/base/EntityDrawer.js";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { LoopEditor } from "./LoopEditor.js";
+import { deleteLoop } from "./loop.client.js";
 import { useLoopList } from "./loop.query.js";
 import type { Feedback, Loop } from "./loop.schema.js";
-import { loopInsertSchema, loopUpdateSchema } from "./loop.schema.js";
 
 const formatTimestamp = (value: Date | string) => new Date(value).toLocaleString();
 
-export function LoopList() {
+type LoopListProps = {
+  editor?: `create` | `edit`;
+  loopId?: string;
+};
+
+export function LoopList({ editor, loopId }: LoopListProps) {
+  const navigate = useNavigate();
   const { state, reload } = useLoopList();
-  const [createName, setCreateName] = useState(``);
-  const [createDescription, setCreateDescription] = useState(``);
-  const [editingLoop, setEditingLoop] = useState<Loop | null>(null);
-  const [editName, setEditName] = useState(``);
-  const [editDescription, setEditDescription] = useState(``);
   const [busyLoopId, setBusyLoopId] = useState<string | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
-  const resetEditState = () => {
-    setEditingLoop(null);
-    setEditName(``);
-    setEditDescription(``);
-    setIsSaving(false);
-  };
-
-  const startEditing = (loop: Loop) => {
-    setEditingLoop(loop);
-    setEditName(loop.name);
-    setEditDescription(loop.description ?? ``);
+  const openCreateDrawer = () => {
+    void navigate({ to: `/loop/list`, search: { create: true, edit: undefined } });
     setFeedback(null);
   };
 
-  const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const parseResult = loopInsertSchema.safeParse({ name: createName, description: createDescription });
-
-    if (!parseResult.success) {
-      setFeedback({
-        severity: NotificationSeverity.NEGATIVE,
-        title: `Unable to create loop`,
-        message: parseResult.error.issues[0]?.message ?? `Invalid input.`,
-      });
-      return;
-    }
-
-    setIsCreating(true);
+  const openEditDrawer = (loop: Loop) => {
+    void navigate({ to: `/loop/list`, search: { create: undefined, edit: loop.id } });
     setFeedback(null);
-
-    try {
-      const loop = await createLoop({
-        name: createName,
-        description: createDescription,
-      });
-
-      setCreateName(``);
-      setCreateDescription(``);
-      setFeedback({
-        severity: NotificationSeverity.INFORMATION,
-        title: `Loop created`,
-        message: `${loop.name} is ready to receive events.`,
-      });
-      reload();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setFeedback({
-        severity: NotificationSeverity.NEGATIVE,
-        title: `Unable to create loop`,
-        message,
-      });
-    } finally {
-      setIsCreating(false);
-    }
   };
 
-  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!editingLoop) {
-      return;
-    }
-
-    const parseResult = loopUpdateSchema.safeParse({ name: editName, description: editDescription });
-
-    if (!parseResult.success) {
-      setFeedback({
-        severity: NotificationSeverity.NEGATIVE,
-        title: `Unable to update loop`,
-        message: parseResult.error.issues[0]?.message ?? `Invalid input.`,
-      });
-      return;
-    }
-
-    setIsSaving(true);
-    setFeedback(null);
-
-    try {
-      const loop = await updateLoop(editingLoop.id, {
-        name: editName,
-        description: editDescription,
-      });
-
-      setFeedback({
-        severity: NotificationSeverity.INFORMATION,
-        title: `Loop updated`,
-        message: `${loop.name} has been updated.`,
-      });
-      resetEditState();
-      reload();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setFeedback({
-        severity: NotificationSeverity.NEGATIVE,
-        title: `Unable to update loop`,
-        message,
-      });
-      setIsSaving(false);
-    }
+  const closeDrawer = () => {
+    void navigate({ to: `/loop/list`, search: { create: undefined, edit: undefined } });
   };
+
+  const selectedLoop = state.status === `success` && loopId ? state.loops.find((loop) => loop.id === loopId) : undefined;
 
   const handleDelete = async (loop: Loop) => {
     setBusyLoopId(loop.id);
@@ -134,8 +48,8 @@ export function LoopList() {
         message: `${loop.name} has been deleted.`,
       });
 
-      if (editingLoop?.id === loop.id) {
-        resetEditState();
+      if (editor === `edit` && loopId === loop.id) {
+        closeDrawer();
       }
 
       reload();
@@ -152,44 +66,11 @@ export function LoopList() {
   };
 
   return (
-    <>
-      <h1 className="p-heading--2">Loops</h1>
-      <p className="p-text--default">Create and manage the long-lived loops that hold Athena events.</p>
+    <section className="u-no-max-width">
       {feedback ? (
         <Notification severity={feedback.severity} title={feedback.title}>
           {feedback.message}
         </Notification>
-      ) : null}
-      <div className="p-strip is-shallow">
-        <form onSubmit={handleCreate}>
-          <h2 className="p-heading--4">Create loop</h2>
-          <label htmlFor="create-loop-name">Loop name</label>
-          <input id="create-loop-name" name="create-loop-name" onChange={(event) => setCreateName(event.target.value)} required type="text" value={createName} />
-          <label htmlFor="create-loop-description">Loop description</label>
-          <textarea id="create-loop-description" name="create-loop-description" onChange={(event) => setCreateDescription(event.target.value)} rows={3} value={createDescription} />
-          <Button appearance="positive" disabled={isCreating} type="submit">
-            {isCreating ? `Creating loop...` : `Create loop`}
-          </Button>
-        </form>
-      </div>
-      {editingLoop ? (
-        <div className="p-strip is-shallow">
-          <form onSubmit={handleSave}>
-            <h2 className="p-heading--4">Edit loop</h2>
-            <label htmlFor="edit-loop-name">Loop name</label>
-            <input id="edit-loop-name" name="edit-loop-name" onChange={(event) => setEditName(event.target.value)} required type="text" value={editName} />
-            <label htmlFor="edit-loop-description">Loop description</label>
-            <textarea id="edit-loop-description" name="edit-loop-description" onChange={(event) => setEditDescription(event.target.value)} rows={3} value={editDescription} />
-            <div>
-              <Button appearance="positive" disabled={isSaving} type="submit">
-                {isSaving ? `Saving loop...` : `Save loop`}
-              </Button>
-              <Button appearance="base" onClick={resetEditState} type="button">
-                Cancel edit
-              </Button>
-            </div>
-          </form>
-        </div>
       ) : null}
       {state.status === `loading` ? <p className="p-text--default">Loading loops...</p> : null}
       {state.status === `error` ? (
@@ -197,38 +78,77 @@ export function LoopList() {
           {state.message}
         </Notification>
       ) : null}
-      {state.status === `success` && state.loops.length === 0 ? <p className="p-text--default">No loops yet. Create a loop to start organizing events.</p> : null}
-      {state.status === `success` && state.loops.length > 0 ? (
-        <MainTable
-          headers={[{ content: "Name" }, { content: "Description" }, { content: "Updated at" }, { content: "Actions" }]}
-          rows={state.loops.map((loop) => ({
-            key: loop.id,
-            columns: [
-              {
-                content: (
-                  <Link to={`/loop/$loopId`} params={{ loopId: loop.id }}>
-                    {loop.name}
-                  </Link>
-                ),
-              },
-              { content: loop.description ?? "—" },
-              { content: formatTimestamp(loop.updatedAt) },
-              {
-                content: (
-                  <div>
-                    <Button appearance="base" onClick={() => startEditing(loop)} type="button">
-                      {`Edit ${loop.name}`}
-                    </Button>
-                    <Button appearance="negative" disabled={busyLoopId === loop.id} onClick={() => handleDelete(loop)} type="button">
-                      {busyLoopId === loop.id ? `Deleting ${loop.name}...` : `Delete ${loop.name}`}
-                    </Button>
-                  </div>
-                ),
-              },
-            ],
-          }))}
-        />
-      ) : null}
-    </>
+      {state.status === `success` && state.loops.length === 0 ? <p className="p-text--default">No loops yet.</p> : null}
+      <div className="p-card p-strip is-shallow">
+        <div className="p-grid">
+          <div className="p-grid__row">
+            <div className="p-grid__col-12 u-align--right">
+              <Button appearance="positive" onClick={openCreateDrawer} type="button">
+                Create
+              </Button>
+            </div>
+          </div>
+        </div>
+        {state.status === `success` && state.loops.length > 0 ? (
+          <MainTable
+            headers={[{ content: "Actions" }, { content: "Name" }, { content: "Description" }, { content: "Updated at" }]}
+            rows={state.loops.map((loop) => ({
+              key: loop.id,
+              columns: [
+                {
+                  content: (
+                    <div>
+                      <Button appearance="base" aria-label="Edit" hasIcon={true} onClick={() => openEditDrawer(loop)} title="Edit" type="button">
+                        <i className="p-icon--edit" />
+                        <span className="u-off-screen">Edit</span>
+                      </Button>
+                      <Button
+                        appearance="negative"
+                        aria-label={busyLoopId === loop.id ? `Deleting` : `Delete`}
+                        disabled={busyLoopId === loop.id}
+                        hasIcon={true}
+                        onClick={() => handleDelete(loop)}
+                        title={busyLoopId === loop.id ? `Deleting` : `Delete`}
+                        type="button"
+                      >
+                        <i className="p-icon--delete" />
+                        <span className="u-off-screen">{busyLoopId === loop.id ? `Deleting` : `Delete`}</span>
+                      </Button>
+                    </div>
+                  ),
+                },
+                {
+                  content: (
+                    <Link params={{ loopId: loop.id }} to={`/loop/$loopId`}>
+                      {loop.name}
+                    </Link>
+                  ),
+                },
+                { content: loop.description ?? "-" },
+                { content: formatTimestamp(loop.updatedAt) },
+              ],
+            }))}
+          />
+        ) : state.status === `success` ? (
+          <p className="p-text--default">No loops yet.</p>
+        ) : null}
+      </div>
+      <EntityDrawer isOpen={editor === `create` || editor === `edit`} onClose={closeDrawer} title={editor === `edit` ? `Edit loop` : `Create loop`}>
+        {editor === `edit` && !selectedLoop ? (
+          <Notification severity={NotificationSeverity.CAUTION} title="Loop not found">
+            The selected loop no longer exists.
+          </Notification>
+        ) : (
+          <LoopEditor
+            loop={editor === `edit` ? selectedLoop : undefined}
+            onSuccess={(nextFeedback) => {
+              setFeedback(nextFeedback);
+              closeDrawer();
+              reload();
+            }}
+          />
+        )}
+      </EntityDrawer>
+    </section>
   );
 }

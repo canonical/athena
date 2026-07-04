@@ -9,11 +9,11 @@ import {
   loopDelete,
   loopGet,
   loopList,
-  loopSelectionPolicyGet,
-  loopSelectionPolicyUpdate,
+  loopProviderSelectionPolicyGet,
+  loopProviderSelectionPolicyUpdate,
   loopUpdate,
   validateCreateLoopRequest,
-  validateLoopSelectionPolicyUpdateRequest,
+  validateProviderSelectionPolicyUpdateRequest,
   validateUpdateLoopRequest,
 } from "./loop.controller.js";
 
@@ -125,7 +125,7 @@ loopRouter.delete(`/loop/:loopId`, async (request: Request, response: Response) 
   }
 });
 
-loopRouter.get(`/loop/:loopId/selection-policy`, async (request: Request, response: Response) => {
+loopRouter.get(`/loop/:loopId/provider-selection-policy`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -133,7 +133,7 @@ loopRouter.get(`/loop/:loopId/selection-policy`, async (request: Request, respon
       return;
     }
 
-    response.status(200).json(await loopSelectionPolicyGet(loopId, getUserId(response)));
+    response.status(200).json(await loopProviderSelectionPolicyGet(loopId, getUserId(response)));
   } catch (error) {
     if (!sendLoopError(error, response)) {
       throw error;
@@ -141,7 +141,7 @@ loopRouter.get(`/loop/:loopId/selection-policy`, async (request: Request, respon
   }
 });
 
-loopRouter.put(`/loop/:loopId/selection-policy`, async (request: Request, response: Response) => {
+loopRouter.put(`/loop/:loopId/provider-selection-policy`, async (request: Request, response: Response) => {
   try {
     const loopId = getLoopId(request, response);
 
@@ -149,7 +149,7 @@ loopRouter.put(`/loop/:loopId/selection-policy`, async (request: Request, respon
       return;
     }
 
-    response.status(200).json(await loopSelectionPolicyUpdate(loopId, getUserId(response), validateLoopSelectionPolicyUpdateRequest(request.body)));
+    response.status(200).json(await loopProviderSelectionPolicyUpdate(loopId, getUserId(response), validateProviderSelectionPolicyUpdateRequest(request.body)));
   } catch (error) {
     if (!sendLoopError(error, response)) {
       throw error;

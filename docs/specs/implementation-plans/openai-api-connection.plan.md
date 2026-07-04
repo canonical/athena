@@ -23,9 +23,8 @@ Provider definitions are independent records with:
 2. `displayName`
 3. `providerType` (`openrouter` only in this phase)
 4. `baseUrl` (HTTPS only)
-5. `model` (optional default)
-6. encrypted credential envelope fields
-7. lifecycle status
+5. encrypted credential envelope fields
+6. lifecycle status
 
 ### Loop assignment contract
 
