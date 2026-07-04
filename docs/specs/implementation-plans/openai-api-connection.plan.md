@@ -29,9 +29,9 @@ Provider definitions are independent records with:
 
 ### Loop assignment contract
 
-1. Loops can assign one or more provider definitions.
-2. Loop members can add assignments.
-3. Loop admins exclusively edit ordering, overrides, and runtime tuning fields.
+1. Users can assign one or more provider definitions to loops.
+
+3. Loop admins exclusively select selection algorithm per loop from the Deterministic selection algorithm list.
 4. Priority values must be unique and deterministic per loop.
 
 ### Deterministic selection and fallback

@@ -7,6 +7,7 @@ import { harnessRouter } from "@components/harness/harness.router.js";
 import { loopRouter } from "@components/loop/loop.router.js";
 import { personaRouter } from "@components/persona/persona.router.js";
 import { providerRouter } from "@components/provider/provider.router.js";
+import { runnerRouter } from "@components/runner/runner.router.js";
 import { staticRouter } from "@components/static/static.router.js";
 import { statusRouter } from "@components/status/status.router.js";
 import express, { type Request, type Response } from "express";
@@ -33,6 +34,7 @@ app.use(apiRoot, loopRouter);
 app.use(apiRoot, personaRouter);
 app.use(apiRoot, harnessRouter);
 app.use(apiRoot, providerRouter);
+app.use(apiRoot, runnerRouter);
 app.use(staticRouter);
 
 app.use((_request: Request, response: Response) => {
