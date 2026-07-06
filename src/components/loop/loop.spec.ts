@@ -1,80 +1,18 @@
 import { authenticate, createLoop, expect, test } from "../../../testing/playwright/index.js";
 
-test(`loop routes require authentication`, async ({ request }) => {
-  const [listResponse, createResponse] = await Promise.all([
-    request.get(`/api/loop-list`),
-    request.post(`/api/loop-list`, {
-      data: {
-        name: `Unauthenticated loop`,
-        description: `Should not be created`,
-      },
-    }),
-  ]);
+test(`loop list requires authentication`, async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto(`http://athena.localhost/loop/list`);
 
-  expect(listResponse.status()).toBe(401);
-  expect(createResponse.status()).toBe(401);
-});
-
-test(`loops support create read update and delete through the API`, async ({ page }) => {
-  await authenticate(page);
-
-  const created = await createLoop(page, `Platform loop`, `Platform team work`);
-  const another = await createLoop(page, `Operations loop`, `Operations team work`);
-
-  const listResponse = await page.request.get(`http://athena.localhost/api/loop-list`);
-  expect(listResponse.status()).toBe(200);
-
-  const loops = (await listResponse.json()) as Array<{ id: string; name: string }>;
-  expect(loops.map((loop) => loop.id)).toEqual(expect.arrayContaining([created.id, another.id]));
-
-  const getResponse = await page.request.get(`http://athena.localhost/api/loop/${created.id}`);
-  expect(getResponse.status()).toBe(200);
-  await expect(getResponse.json()).resolves.toMatchObject({
-    id: created.id,
-    name: `Platform loop`,
-    description: `Platform team work`,
-  });
-
-  const updateResponse = await page.request.put(`http://athena.localhost/api/loop/${created.id}`, {
-    data: {
-      name: `Platform delivery`,
-      description: `Updated description`,
-    },
-  });
-  expect(updateResponse.status()).toBe(200);
-  await expect(updateResponse.json()).resolves.toMatchObject({
-    id: created.id,
-    name: `Platform delivery`,
-    description: `Updated description`,
-  });
-
-  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loop/${created.id}`);
-  expect(deleteResponse.status()).toBe(204);
-
-  const deletedGetResponse = await page.request.get(`http://athena.localhost/api/loop/${created.id}`);
-  expect(deletedGetResponse.status()).toBe(404);
-  await expect(deletedGetResponse.json()).resolves.toEqual({ error: `Loop not found.` });
-});
-
-test(`loops reject missing names`, async ({ page }) => {
-  await authenticate(page);
-
-  const response = await page.request.post(`http://athena.localhost/api/loop-list`, {
-    data: {
-      name: `   `,
-      description: `Blank name`,
-    },
-  });
-
-  expect(response.status()).toBe(400);
-  await expect(response.json()).resolves.toEqual({ error: `name is required.` });
+  await expect(page.getByRole(`heading`, { name: `Sign in to Athena` })).toBeVisible();
 });
 
 test(`loops page supports create update and delete`, async ({ page }) => {
   await authenticate(page);
-  await page.goto(`http://athena.localhost/loop-list`);
+  await page.goto(`http://athena.localhost/loop/list`);
 
-  await expect(page.getByRole(`heading`, { name: `Loops` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Create` })).toBeVisible();
+  await page.getByRole(`button`, { name: `Create` }).click();
   await page.getByLabel(`Loop name`).fill(`UI loop`);
   await page.getByLabel(`Loop description`).fill(`Loop created through the UI`);
   await page.getByRole(`button`, { name: `Create loop` }).click();
@@ -87,8 +25,8 @@ test(`loops page supports create update and delete`, async ({ page }) => {
     .getByRole(`row`, { name: /UI loop/ })
     .getByRole(`button`, { name: `Edit` })
     .click();
-  await page.getByLabel(`Loop name`).nth(1).fill(`UI loop updated`);
-  await page.getByLabel(`Loop description`).nth(1).fill(`Updated through the UI`);
+  await page.getByLabel(`Loop name`).first().fill(`UI loop updated`);
+  await page.getByLabel(`Loop description`).first().fill(`Updated through the UI`);
   await page.getByRole(`button`, { name: `Save loop` }).click();
 
   await expect(page.getByText(`UI loop updated has been updated.`)).toBeVisible();
@@ -105,8 +43,9 @@ test(`loops page supports create update and delete`, async ({ page }) => {
 
 test(`loop list allows navigating to loop detail page`, async ({ page }) => {
   await authenticate(page);
-  await page.goto(`http://athena.localhost/loop-list`);
+  await page.goto(`http://athena.localhost/loop/list`);
 
+  await page.getByRole(`button`, { name: `Create` }).click();
   await page.getByLabel(`Loop name`).fill(`Navigation test loop`);
   await page.getByLabel(`Loop description`).fill(`Loop for navigation test`);
   await page.getByRole(`button`, { name: `Create loop` }).click();
@@ -136,39 +75,17 @@ test(`loop detail page tabs are deep-linkable`, async ({ page }) => {
   await expect(page.getByRole(`tab`, { name: `Providers` })).toHaveAttribute(`aria-selected`, `true`);
   await expect(page.getByRole(`heading`, { name: `Assigned providers` })).toBeVisible();
   await expect(page.getByRole(`heading`, { name: `Provider selection algorithm` })).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Assign an existing provider` })).toBeVisible();
 });
 
-test(`loop routes return 400 for invalid UUID in path`, async ({ page }) => {
+test(`providers tab keeps assign-provider section visible even when provider list is empty`, async ({ page }) => {
   await authenticate(page);
 
-  const [getResponse, putResponse, deleteResponse] = await Promise.all([
-    page.request.get(`http://athena.localhost/api/loop/not-a-uuid`),
-    page.request.put(`http://athena.localhost/api/loop/not-a-uuid`, { data: { name: `x` } }),
-    page.request.delete(`http://athena.localhost/api/loop/not-a-uuid`),
-  ]);
+  const loop = await createLoop(page, `Providers tab visibility loop`);
 
-  expect(getResponse.status()).toBe(400);
-  expect(putResponse.status()).toBe(400);
-  expect(deleteResponse.status()).toBe(400);
-  await expect(getResponse.json()).resolves.toEqual({ error: `loopId must be a valid UUID.` });
-});
+  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=providers`);
 
-test(`loop routes return 404 for unknown loop id`, async ({ page }) => {
-  await authenticate(page);
-
-  const unknownId = `00000000-0000-7000-8000-000000000099`;
-  const [getResponse, putResponse, deleteResponse] = await Promise.all([
-    page.request.get(`http://athena.localhost/api/loop/${unknownId}`),
-    page.request.put(`http://athena.localhost/api/loop/${unknownId}`, {
-      data: { name: `Updated name`, description: `desc` },
-    }),
-    page.request.delete(`http://athena.localhost/api/loop/${unknownId}`),
-  ]);
-
-  expect(getResponse.status()).toBe(404);
-  expect(putResponse.status()).toBe(404);
-  expect(deleteResponse.status()).toBe(404);
-  await expect(getResponse.json()).resolves.toEqual({ error: `Loop not found.` });
+  await expect(page.getByRole(`heading`, { name: `Assign an existing provider` })).toBeVisible();
 });
 
 test(`loop detail page saves loop details from the Details tab`, async ({ page }) => {

@@ -65,24 +65,45 @@ export function ProviderEditor({ provider, onSuccess }: ProviderEditorProps) {
     onSubmit: async (values, helpers) => {
       helpers.setStatus(undefined);
 
-      const payload = {
-        displayName: values.displayName,
-        providerType: values.providerType,
-        baseUrl: values.baseUrl,
-        apiKey: isEdit ? values.apiKey || undefined : values.apiKey,
-        lifecycleStatus: values.lifecycleStatus,
-      };
-
-      const parseResult = (isEdit ? providerUpdateSchema : providerInsertSchema).safeParse(payload);
-
-      if (!parseResult.success) {
-        helpers.setStatus(parseResult.error.issues[0]?.message ?? `Invalid input.`);
-        return;
-      }
-
       try {
-        const savedProvider = isEdit ? await updateProvider(provider.id, parseResult.data) : await createProvider(parseResult.data);
-        onSuccess(isEdit ? `Provider updated` : `Provider created`, isEdit ? `${savedProvider.displayName} has been updated.` : `${savedProvider.displayName} is available for loop assignment.`);
+        if (provider) {
+          const payload = {
+            displayName: values.displayName,
+            providerType: values.providerType,
+            baseUrl: values.baseUrl,
+            apiKey: values.apiKey || undefined,
+            lifecycleStatus: values.lifecycleStatus,
+          };
+
+          const parseResult = providerUpdateSchema.safeParse(payload);
+
+          if (!parseResult.success) {
+            helpers.setStatus(parseResult.error.issues[0]?.message ?? `Invalid input.`);
+            return;
+          }
+
+          const savedProvider = await updateProvider(provider.id, parseResult.data);
+          onSuccess(`Provider updated`, `${savedProvider.displayName} has been updated.`);
+          return;
+        }
+
+        const payload = {
+          displayName: values.displayName,
+          providerType: values.providerType,
+          baseUrl: values.baseUrl,
+          apiKey: values.apiKey,
+          lifecycleStatus: values.lifecycleStatus,
+        };
+
+        const parseResult = providerInsertSchema.safeParse(payload);
+
+        if (!parseResult.success) {
+          helpers.setStatus(parseResult.error.issues[0]?.message ?? `Invalid input.`);
+          return;
+        }
+
+        const savedProvider = await createProvider(parseResult.data);
+        onSuccess(`Provider created`, `${savedProvider.displayName} is available for loop assignment.`);
       } catch (submitError) {
         const message = submitError instanceof Error ? submitError.message : String(submitError);
         helpers.setStatus(message);

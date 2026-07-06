@@ -53,7 +53,7 @@ export function LoopEditor({ loop, onSuccess }: LoopEditorProps) {
       }
 
       try {
-        const savedLoop = isEdit ? await updateLoop(loop.id, parseResult.data) : await createLoop(parseResult.data);
+        const savedLoop = loop ? await updateLoop(loop.id, parseResult.data) : await createLoop(parseResult.data);
 
         onSuccess({
           severity: NotificationSeverity.INFORMATION,

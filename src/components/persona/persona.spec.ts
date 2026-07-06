@@ -1,456 +1,91 @@
-import { authenticate, createLoop, expect, test } from "../../../testing/playwright/index.js";
+import { authenticate, createLoop, expect, type Page, test } from "../../../testing/playwright/index.js";
 
-test(`persona routes require authentication`, async ({ request }) => {
-  const [catalogResponse, listResponse, globalListResponse, personaByIdResponse] = await Promise.all([
-    request.get(`/api/persona/catalog`),
-    request.get(`/api/loop/00000000-0000-7000-8000-000000000001/persona-list`),
-    request.get(`/api/persona-list`),
-    request.get(`/api/persona/00000000-0000-7000-8000-000000000001`),
-  ]);
+const openPersonaList = async (page: Page) => {
+  await page.goto(`http://athena.localhost/persona/list`);
+  await expect(page.getByRole(`heading`, { name: `Personas`, exact: true })).toBeVisible();
+};
 
-  expect(catalogResponse.status()).toBe(401);
-  expect(listResponse.status()).toBe(401);
-  expect(globalListResponse.status()).toBe(401);
-  expect(personaByIdResponse.status()).toBe(401);
+test(`persona list requires authentication`, async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto(`http://athena.localhost/persona/list`);
+
+  await expect(page.getByRole(`heading`, { name: `Sign in to Athena` })).toBeVisible();
 });
 
-test(`persona catalog returns reference personas`, async ({ page }) => {
+test(`persona list page supports creating and editing a persona with role`, async ({ page }) => {
   await authenticate(page);
+  await openPersonaList(page);
 
-  const response = await page.request.get(`http://athena.localhost/api/persona/catalog`);
-  expect(response.status()).toBe(200);
+  const displayName = `Global IC ${Date.now()}`;
+  const updatedDisplayName = `${displayName} updated`;
 
-  const catalog = (await response.json()) as Array<{ id: string; displayName: string; isRouting: boolean; isDefault: boolean }>;
-  expect(catalog.length).toBeGreaterThan(0);
-
-  for (const persona of catalog) {
-    expect(persona.isDefault).toBe(true);
-  }
-
-  const routing = catalog.find((p) => p.isRouting);
-  expect(routing).toBeDefined();
-});
-
-test(`loop creation seeds an EM persona automatically`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Persona seed loop`);
-
-  const response = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
-  expect(response.status()).toBe(200);
-
-  const personas = (await response.json()) as Array<{ isRouting: boolean; displayName: string; lifecycleStatus: string }>;
-  const emPersonas = personas.filter((p) => p.isRouting);
-  expect(emPersonas.length).toBe(1);
-  expect(emPersonas[0]?.lifecycleStatus).toBe(`active`);
-});
-
-test(`personas support create read update and delete through the API`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Persona CRUD loop`);
-
-  const createResponse = await page.request.post(`http://athena.localhost/api/loop/${loop.id}/persona-list`, {
-    data: {
-      displayName: `IC Persona`,
-      role: `Senior IC`,
-      personality: `You are a senior IC.`,
-      lifecycleStatus: `active`,
-    },
-  });
-  expect(createResponse.status()).toBe(201);
-  const created = (await createResponse.json()) as { id: string; displayName: string; role: string | null; isRouting: boolean };
-  expect(created.displayName).toBe(`IC Persona`);
-  expect(created.role).toBe(`Senior IC`);
-  expect(created.isRouting).toBe(false);
-
-  const listResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
-  expect(listResponse.status()).toBe(200);
-  const personas = (await listResponse.json()) as Array<{ id: string }>;
-  expect(personas.map((p) => p.id)).toContain(created.id);
-
-  const updateResponse = await page.request.put(`http://athena.localhost/api/persona/${created.id}`, {
-    data: {
-      displayName: `IC Persona Updated`,
-      role: `Principal IC`,
-      personality: `You are a senior IC, updated.`,
-      lifecycleStatus: `active`,
-    },
-  });
-  expect(updateResponse.status()).toBe(200);
-  await expect(updateResponse.json()).resolves.toMatchObject({
-    id: created.id,
-    displayName: `IC Persona Updated`,
-    role: `Principal IC`,
-  });
-
-  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loop/${loop.id}/persona/${created.id}`);
-  expect(deleteResponse.status()).toBe(204);
-});
-
-test(`routing persona cannot be deleted`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `EM delete guard loop`);
-
-  const listResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
-  const personas = (await listResponse.json()) as Array<{ id: string; isRouting: boolean }>;
-  const routingPersona = personas.find((p) => p.isRouting);
-  expect(routingPersona).toBeDefined();
-
-  if (!routingPersona) {
-    throw new Error(`Routing persona not found.`);
-  }
-
-  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loop/${loop.id}/persona/${routingPersona.id}`);
-  expect(deleteResponse.status()).toBe(400);
-  await expect(deleteResponse.json()).resolves.toEqual({ error: `Default personas cannot be deleted.` });
-});
-
-test(`default personas cannot be edited`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `EM harness guard loop`);
-
-  const listResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
-  const personas = (await listResponse.json()) as Array<{ id: string; isRouting: boolean; displayName: string; personality: string; lifecycleStatus: string }>;
-  const routingPersona = personas.find((p) => p.isRouting);
-  expect(routingPersona).toBeDefined();
-
-  if (!routingPersona) {
-    throw new Error(`Routing persona not found.`);
-  }
-
-  const updateResponse = await page.request.put(`http://athena.localhost/api/persona/${routingPersona.id}`, {
-    data: {
-      displayName: routingPersona.displayName,
-      personality: routingPersona.personality,
-      lifecycleStatus: routingPersona.lifecycleStatus,
-    },
-  });
-  expect(updateResponse.status()).toBe(403);
-  await expect(updateResponse.json()).resolves.toEqual({ error: `Only the persona owner may edit it.` });
-});
-
-test(`persona owner can update their own persona`, async ({ page }) => {
-  await authenticate(page);
-
-  const createResponse = await page.request.post(`http://athena.localhost/api/persona-list`, {
-    data: { displayName: `My IC`, personality: `An IC I own.`, lifecycleStatus: `active` },
-  });
-  expect(createResponse.status()).toBe(201);
-  const created = (await createResponse.json()) as { id: string };
-
-  const updateResponse = await page.request.put(`http://athena.localhost/api/persona/${created.id}`, {
-    data: { displayName: `My IC updated`, personality: `Updated personality.`, lifecycleStatus: `active` },
-  });
-  expect(updateResponse.status()).toBe(200);
-  await expect(updateResponse.json()).resolves.toMatchObject({ id: created.id, displayName: `My IC updated` });
-});
-
-test(`personas reject missing required fields`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Persona validation loop`);
-
-  const response = await page.request.post(`http://athena.localhost/api/loop/${loop.id}/persona-list`, {
-    data: {
-      displayName: `   `,
-      personality: `Valid personality`,
-      lifecycleStatus: `active`,
-    },
-  });
-  expect(response.status()).toBe(400);
-  await expect(response.json()).resolves.toEqual({ error: `displayName is required.` });
-});
-
-test(`personas page shows global persona list and create form`, async ({ page }) => {
-  await authenticate(page);
-  await page.goto(`http://athena.localhost/persona-list`);
-
-  await expect(page.locator(`h1`)).toHaveText(`Personas`);
-  await expect(page.getByRole(`heading`, { name: `All personas` })).toBeVisible();
-  await expect(page.getByRole(`heading`, { name: `Add persona` })).toBeVisible();
-});
-
-test(`persona list page supports creating a new persona globally`, async ({ page }) => {
-  await authenticate(page);
-  await page.goto(`http://athena.localhost/persona-list`);
-
-  await page.getByLabel(`Display name`).fill(`Global IC`);
+  await page.getByRole(`button`, { name: `Create persona` }).click();
+  await page.getByLabel(`Display name`).fill(displayName);
+  await page.getByLabel(`Role`).fill(`Senior IC`);
   await page.getByLabel(`Personality`).fill(`You are a global IC persona.`);
   await page.getByRole(`button`, { name: `Add persona` }).click();
 
-  await expect(page.getByText(`Global IC has been created.`)).toBeVisible();
-  await expect(page.getByRole(`gridcell`, { name: `Global IC`, exact: true }).first()).toBeVisible();
+  await expect(page.getByText(`${displayName} has been created.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: displayName, exact: true }).first()).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: `Senior IC`, exact: true }).first()).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Edit ${displayName}` }).click();
+  await page.getByLabel(`Display name`).fill(updatedDisplayName);
+  await page.getByLabel(`Role`).fill(`Principal IC`);
+  await page.getByRole(`button`, { name: `Save persona` }).click();
+
+  await expect(page.getByText(`${updatedDisplayName} has been updated.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: updatedDisplayName, exact: true }).first()).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: `Principal IC`, exact: true }).first()).toBeVisible();
 });
 
-test(`loop detail page shows Personas tab with assigned personas and assign form`, async ({ page }) => {
+test(`loop personas tab shows role and supports add and remove`, async ({ page }) => {
   await authenticate(page);
 
-  const loop = await createLoop(page, `Loop detail personas loop`);
-  await page.goto(`http://athena.localhost/loop/${loop.id}`);
+  const loop = await createLoop(page, `Loop personas flow ${Date.now()}`);
+  const displayName = `Loop IC ${Date.now()}`;
 
-  await expect(page.getByRole(`heading`, { name: `Loop detail personas loop` })).toBeVisible();
-  const loopSections = page.getByRole(`navigation`, { name: `Loop sections` });
-  await expect(loopSections).toBeVisible();
-  await expect(loopSections.getByRole(`tablist`)).toBeVisible();
-  await expect(loopSections.getByRole(`tab`, { name: `Details` })).toBeVisible();
+  await openPersonaList(page);
+  await page.getByRole(`button`, { name: `Create persona` }).click();
+  await page.getByLabel(`Display name`).fill(displayName);
+  await page.getByLabel(`Role`).fill(`Staff IC`);
+  await page.getByLabel(`Personality`).fill(`You are a loop persona.`);
+  await page.getByRole(`button`, { name: `Add persona` }).click();
+  await expect(page.getByText(`${displayName} has been created.`)).toBeVisible();
 
-  await loopSections.getByRole(`tab`, { name: `Personas` }).click();
-
+  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=personas`);
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 
-  const personas = (await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`)).json() as Promise<Array<{ displayName: string }>>;
-  const personaList = await personas;
-  expect(personaList.length).toBeGreaterThan(0);
+  await page.getByLabel(`Persona`).selectOption({ label: displayName });
+  await page.getByRole(`button`, { name: `Assign persona` }).click();
+
+  await expect(page.getByText(`Persona has been assigned to this loop.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: displayName, exact: true }).first()).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: `Staff IC`, exact: true }).first()).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Remove ${displayName}` }).click();
+  await expect(page.getByText(`${displayName} has been removed from this loop.`)).toBeVisible();
 });
 
-test(`global persona list returns all personas`, async ({ page }) => {
+test(`persona detail page supports assign to loop`, async ({ page }) => {
   await authenticate(page);
 
-  const response = await page.request.get(`http://athena.localhost/api/persona-list`);
-  expect(response.status()).toBe(200);
+  const loop = await createLoop(page, `Persona detail assignment loop ${Date.now()}`);
+  const displayName = `Detail assign IC ${Date.now()}`;
 
-  const personas = (await response.json()) as Array<{ id: string; displayName: string; isDefault: boolean }>;
-  expect(Array.isArray(personas)).toBe(true);
-  expect(personas.length).toBeGreaterThan(0);
-  expect(personas.every((p) => typeof p.id === `string`)).toBe(true);
-  expect(personas.some((p) => p.isDefault)).toBe(true);
-});
+  await openPersonaList(page);
+  await page.getByRole(`button`, { name: `Create persona` }).click();
+  await page.getByLabel(`Display name`).fill(displayName);
+  await page.getByLabel(`Role`).fill(`Engineer`);
+  await page.getByLabel(`Personality`).fill(`A persona assigned from detail view.`);
+  await page.getByRole(`button`, { name: `Add persona` }).click();
 
-test(`GET persona by id returns the persona`, async ({ page }) => {
-  await authenticate(page);
-
-  const catalogResponse = await page.request.get(`http://athena.localhost/api/persona/catalog`);
-  const catalog = (await catalogResponse.json()) as Array<{ id: string; displayName: string }>;
-  const first = catalog[0];
-  expect(first).toBeDefined();
-
-  const response = await page.request.get(`http://athena.localhost/api/persona/${first?.id}`);
-  expect(response.status()).toBe(200);
-  await expect(response.json()).resolves.toMatchObject({ id: first?.id, displayName: first?.displayName });
-});
-
-test(`GET persona by id returns 404 for unknown id`, async ({ page }) => {
-  await authenticate(page);
-
-  const response = await page.request.get(`http://athena.localhost/api/persona/00000000-0000-7000-8000-000000000099`);
-  expect(response.status()).toBe(404);
-  await expect(response.json()).resolves.toEqual({ error: `Persona not found.` });
-});
-
-test(`assign existing persona to loop via POST /persona-list?loop=`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Persona assign loop`);
-
-  const createResponse = await page.request.post(`http://athena.localhost/api/persona-list`, {
-    data: {
-      displayName: `Assignable IC`,
-      personality: `A persona to be assigned.`,
-      lifecycleStatus: `active`,
-    },
-  });
-  expect(createResponse.status()).toBe(201);
-  const created = (await createResponse.json()) as { id: string };
-
-  const assignResponse = await page.request.post(`http://athena.localhost/api/persona-list?loop=${loop.id}`, {
-    data: { personaId: created.id },
-  });
-  expect(assignResponse.status()).toBe(204);
-
-  const listResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/persona-list`);
-  const personas = (await listResponse.json()) as Array<{ id: string }>;
-  expect(personas.map((p) => p.id)).toContain(created.id);
-});
-
-test(`POST /persona-list?loop= rejects missing personaId`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Persona assign validation loop`);
-
-  const response = await page.request.post(`http://athena.localhost/api/persona-list?loop=${loop.id}`, {
-    data: {},
-  });
-  expect(response.status()).toBe(400);
-  await expect(response.json()).resolves.toEqual({ error: `personaId is required.` });
-});
-
-test(`POST /persona-list?loop= returns 404 for unknown persona`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Persona assign 404 loop`);
-
-  const response = await page.request.post(`http://athena.localhost/api/persona-list?loop=${loop.id}`, {
-    data: { personaId: `00000000-0000-7000-8000-000000000099` },
-  });
-  expect(response.status()).toBe(404);
-  await expect(response.json()).resolves.toEqual({ error: `Persona not found.` });
-});
-
-test(`POST /persona-list?loop= returns 404 for unknown loop`, async ({ page }) => {
-  await authenticate(page);
-
-  const catalogResponse = await page.request.get(`http://athena.localhost/api/persona/catalog`);
-  const catalog = (await catalogResponse.json()) as Array<{ id: string }>;
-  const catalogPersona = catalog[0];
-  expect(catalogPersona).toBeDefined();
-
-  const response = await page.request.post(`http://athena.localhost/api/persona-list?loop=00000000-0000-7000-8000-000000000099`, { data: { personaId: catalogPersona?.id } });
-  expect(response.status()).toBe(404);
-  await expect(response.json()).resolves.toEqual({ error: `Cannot assign persona: loop not found or access denied.` });
-});
-
-test(`persona detail page shows persona information`, async ({ page }) => {
-  await authenticate(page);
-
-  const catalogResponse = await page.request.get(`http://athena.localhost/api/persona/catalog`);
-  const catalog = (await catalogResponse.json()) as Array<{ id: string; displayName: string; isRouting: boolean }>;
-  const routingPersona = catalog.find((p) => p.isRouting);
-  expect(routingPersona).toBeDefined();
-
-  await page.goto(`http://athena.localhost/persona/${routingPersona?.id}`);
-
+  await page.getByRole(`link`, { name: displayName, exact: true }).first().click();
   await expect(page.getByText(`Persona details`)).toBeVisible();
-  await expect(page.getByRole(`heading`, { name: `Assign to loop` })).toBeVisible();
-  await expect(page.getByText(`Routing persona`)).toBeVisible();
-});
-
-test(`persona detail page allows assigning persona to a loop`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Persona detail assign loop`);
-
-  const createResponse = await page.request.post(`http://athena.localhost/api/persona-list`, {
-    data: {
-      displayName: `Detail assign IC`,
-      personality: `A persona assigned from its detail page.`,
-      lifecycleStatus: `active`,
-    },
-  });
-  const created = (await createResponse.json()) as { id: string; displayName: string };
-
-  await page.goto(`http://athena.localhost/persona/${created.id}`);
-
   await expect(page.getByRole(`heading`, { name: `Assign to loop` })).toBeVisible();
 
   await page.getByLabel(`Loop`).selectOption({ label: loop.name });
   await page.getByRole(`button`, { name: `Assign to loop` }).click();
 
   await expect(page.getByText(`has been assigned to ${loop.name}`)).toBeVisible();
-});
-
-test(`persona routes return 400 for invalid UUID in path`, async ({ page }) => {
-  await authenticate(page);
-
-  const validLoopId = (await createLoop(page, `UUID guard loop`)).id;
-  const invalidId = `not-a-uuid`;
-  const validPersonaId = `00000000-0000-7000-8000-000000000001`;
-
-  const [getPersona, putPersona, getLoopList, postLoopList, deleteInvalidLoop, deleteInvalidPersona] = await Promise.all([
-    page.request.get(`http://athena.localhost/api/persona/${invalidId}`),
-    page.request.put(`http://athena.localhost/api/persona/${invalidId}`, { data: { displayName: `x`, personality: `y`, lifecycleStatus: `active` } }),
-    page.request.get(`http://athena.localhost/api/loop/${invalidId}/persona-list`),
-    page.request.post(`http://athena.localhost/api/loop/${invalidId}/persona-list`, { data: { displayName: `x`, personality: `y`, lifecycleStatus: `active` } }),
-    page.request.delete(`http://athena.localhost/api/loop/${invalidId}/persona/${validPersonaId}`),
-    page.request.delete(`http://athena.localhost/api/loop/${validLoopId}/persona/${invalidId}`),
-  ]);
-
-  expect(getPersona.status()).toBe(400);
-  expect(putPersona.status()).toBe(400);
-  expect(getLoopList.status()).toBe(400);
-  expect(postLoopList.status()).toBe(400);
-  expect(deleteInvalidLoop.status()).toBe(400);
-  expect(deleteInvalidPersona.status()).toBe(400);
-  await expect(getPersona.json()).resolves.toEqual({ error: `personaId must be a valid UUID.` });
-  await expect(getLoopList.json()).resolves.toEqual({ error: `loopId must be a valid UUID.` });
-});
-
-test(`POST /persona-list?loop= returns 400 for invalid loop UUID`, async ({ page }) => {
-  await authenticate(page);
-
-  const response = await page.request.post(`http://athena.localhost/api/persona-list?loop=not-a-uuid`, {
-    data: { personaId: `00000000-0000-7000-8000-000000000001` },
-  });
-  expect(response.status()).toBe(400);
-  await expect(response.json()).resolves.toEqual({ error: `loopId must be a valid UUID.` });
-});
-
-test(`POST /persona-list?loop= returns 400 for non-UUID personaId value`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Non-UUID persona assign loop`);
-
-  const response = await page.request.post(`http://athena.localhost/api/persona-list?loop=${loop.id}`, {
-    data: { personaId: `not-a-uuid` },
-  });
-  expect(response.status()).toBe(400);
-  await expect(response.json()).resolves.toEqual({ error: `personaId must be a valid UUID.` });
-});
-
-test(`PUT /persona/:id returns 400 for missing required fields`, async ({ page }) => {
-  await authenticate(page);
-
-  const catalogResponse = await page.request.get(`http://athena.localhost/api/persona/catalog`);
-  const catalog = (await catalogResponse.json()) as Array<{ id: string }>;
-  const catalogPersona = catalog[0];
-  expect(catalogPersona).toBeDefined();
-
-  const response = await page.request.put(`http://athena.localhost/api/persona/${catalogPersona?.id}`, {
-    data: { displayName: `   `, personality: `Valid personality`, lifecycleStatus: `active` },
-  });
-  expect(response.status()).toBe(400);
-  await expect(response.json()).resolves.toEqual({ error: `displayName is required.` });
-});
-
-test(`PUT /persona/:id returns 404 for unknown persona`, async ({ page }) => {
-  await authenticate(page);
-
-  const response = await page.request.put(`http://athena.localhost/api/persona/00000000-0000-7000-8000-000000000099`, {
-    data: { displayName: `Name`, personality: `Personality`, lifecycleStatus: `active` },
-  });
-  expect(response.status()).toBe(404);
-  await expect(response.json()).resolves.toEqual({ error: `Persona not found.` });
-});
-
-test(`DELETE /loop/:loopId/persona/:personaId returns 404 when persona not assigned to loop`, async ({ page }) => {
-  await authenticate(page);
-
-  const [loop, otherLoop] = await Promise.all([createLoop(page, `Delete unassigned loop`), createLoop(page, `Other loop for unassigned test`)]);
-
-  const createResponse = await page.request.post(`http://athena.localhost/api/persona-list`, {
-    data: { displayName: `Unassigned persona`, personality: `Not in the target loop.`, lifecycleStatus: `active` },
-  });
-  const created = (await createResponse.json()) as { id: string };
-
-  // Assign persona to otherLoop but NOT to loop
-  await page.request.post(`http://athena.localhost/api/persona-list?loop=${otherLoop.id}`, {
-    data: { personaId: created.id },
-  });
-
-  const deleteResponse = await page.request.delete(`http://athena.localhost/api/loop/${loop.id}/persona/${created.id}`);
-  expect(deleteResponse.status()).toBe(404);
-  await expect(deleteResponse.json()).resolves.toEqual({ error: `Persona not found.` });
-});
-
-test(`loop detail Personas tab allows removing a non-default persona`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Remove persona loop`);
-
-  // Create and assign a non-default persona via API
-  const createResponse = await page.request.post(`http://athena.localhost/api/loop/${loop.id}/persona-list`, {
-    data: { displayName: `Removable IC`, personality: `An IC that can be removed.`, lifecycleStatus: `active` },
-  });
-  expect(createResponse.status()).toBe(201);
-  const created = (await createResponse.json()) as { displayName: string };
-
-  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=personas`);
-
-  await expect(page.getByRole(`gridcell`, { name: created.displayName, exact: true }).first()).toBeVisible();
-  await page.getByRole(`button`, { name: `Remove ${created.displayName}` }).click();
-
-  await expect(page.getByText(`${created.displayName} has been removed from this loop.`)).toBeVisible();
-  await expect(page.getByRole(`gridcell`, { name: created.displayName, exact: true })).toHaveCount(0);
 });

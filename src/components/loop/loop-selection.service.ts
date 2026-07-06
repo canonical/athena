@@ -127,9 +127,13 @@ const selectWeightedRoundRobin = (candidates: SelectionCandidate[], cursor: numb
 
   const weighted = [...candidates].sort(deterministicOrder).flatMap((candidate) => {
     const normalizedCredit = (candidate.remainingCreditPercentage ?? 0) / creditWeightDivisor;
-    const effectiveCreditWeight = normalizedCredit !== 0 ? normalizedCredit : 1;
     const baseWeight = candidate.selectionWeight || 1;
-    const weight = Math.max(1, Math.round(baseWeight * effectiveCreditWeight));
+    const weight = Math.max(0, Math.round(baseWeight * normalizedCredit));
+
+    if (weight === 0) {
+      return [];
+    }
+
     return Array.from({ length: weight }).map(() => candidate);
   });
 
@@ -312,13 +316,17 @@ const evaluateSelection = (algorithm: string, candidates: SelectionCandidate[], 
   }
 
   if (algorithm === `weighted-round-robin`) {
+    if (candidates.some((candidate) => candidate.remainingCreditPercentage === null)) {
+      return { selected: selectPriorityFailover(candidates), algorithmUsed: `priority-failover`, fallbackReason: `Missing credit metrics for weighted round robin.` };
+    }
+
     const selected = selectWeightedRoundRobin(candidates, cursor);
 
     if (selected) {
       return { selected, algorithmUsed: algorithm, fallbackReason: null };
     }
 
-    return { selected: selectPriorityFailover(candidates), algorithmUsed: `priority-failover`, fallbackReason: `Missing credit metrics for weighted round robin.` };
+    return { selected: null, algorithmUsed: algorithm, fallbackReason: `No candidates with remaining credit for weighted round robin.` };
   }
 
   if (algorithm === `least-recently-used`) {

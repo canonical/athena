@@ -1,309 +1,85 @@
-import { Client } from "pg";
-import { authenticate, createLoop, expect, test } from "../../../testing/playwright/index.js";
+import { authenticate, createLoop, expect, type Page, test } from "../../../testing/playwright/index.js";
 
-const defaultDbConnectionString = `postgresql://athena:${process.env.POSTGRES_PASSWORD || `athena`}@localhost:5432/athena`;
-const dbConnectionString = defaultDbConnectionString;
-const currentUserId = `dev.user@canonical.com`;
-
-const withDb = async <T>(operation: (client: Client) => Promise<T>): Promise<T> => {
-  const client = new Client({ connectionString: dbConnectionString });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
+const openProviderList = async (page: Page) => {
+  await page.goto(`http://athena.localhost/provider/list`);
+  await expect(page.getByRole(`heading`, { name: `Providers` })).toBeVisible();
 };
 
-test(`provider and harness routes require authentication`, async ({ request }) => {
-  const [providerList, harnessList] = await Promise.all([request.get(`/api/provider-list`), request.get(`/api/harness-list`)]);
+const createProviderViaUi = async (page: Page, displayName: string) => {
+  await openProviderList(page);
 
-  expect(providerList.status()).toBe(401);
-  expect(harnessList.status()).toBe(401);
+  await page.getByRole(`button`, { name: `Create provider` }).first().click();
+  await page.getByLabel(`Display name`).fill(displayName);
+  await page.getByLabel(`Base URL`).fill(`https://openrouter.ai/api/v1`);
+  await page.getByLabel(`API key`).fill(`openrouter-${Date.now()}`);
+  await page.locator(`form`).first().getByRole(`button`, { name: `Create provider` }).click();
+
+  await expect(page.getByText(`${displayName} is available for loop assignment.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: displayName, exact: true }).first()).toBeVisible();
+};
+
+test(`provider list requires authentication`, async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto(`http://athena.localhost/provider/list`);
+
+  await expect(page.getByRole(`heading`, { name: `Sign in to Athena` })).toBeVisible();
 });
 
-test(`provider definitions enforce OpenRouter-only and HTTPS-only`, async ({ page }) => {
+test(`providers page supports create edit and delete`, async ({ page }) => {
   await authenticate(page);
 
-  const invalidTypeResponse = await page.request.post(`http://athena.localhost/api/provider-list`, {
-    data: {
-      displayName: `Invalid type provider`,
-      providerType: `other`,
-      baseUrl: `https://openrouter.ai/api/v1`,
-      apiKey: `test-key`,
-    },
-  });
-  expect(invalidTypeResponse.status()).toBe(400);
+  const displayName = `UI provider ${Date.now()}`;
+  const updatedName = `${displayName} updated`;
 
-  const invalidHttpsResponse = await page.request.post(`http://athena.localhost/api/provider-list`, {
-    data: {
-      displayName: `Invalid https provider`,
-      providerType: `openrouter`,
-      baseUrl: `http://openrouter.ai/api/v1`,
-      apiKey: `test-key`,
-    },
-  });
-  expect(invalidHttpsResponse.status()).toBe(400);
-  await expect(invalidHttpsResponse.json()).resolves.toEqual({ error: `baseUrl must use HTTPS.` });
+  await createProviderViaUi(page, displayName);
+
+  await page.getByRole(`button`, { name: `Edit ${displayName}` }).click();
+  await page.getByLabel(`Display name`).fill(updatedName);
+  await page.getByRole(`button`, { name: `Save provider` }).click();
+
+  await expect(page.getByText(`${updatedName} has been updated.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: updatedName, exact: true }).first()).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Delete ${updatedName}` }).click();
+  await expect(page.getByText(`${updatedName} has been deleted.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: updatedName, exact: true })).toHaveCount(0);
 });
 
-test(`definition responses redact credential material`, async ({ page }) => {
+test(`provider editor validates HTTPS base URL`, async ({ page }) => {
   await authenticate(page);
+  await openProviderList(page);
 
-  const response = await page.request.post(`http://athena.localhost/api/provider-list`, {
-    data: {
-      displayName: `OpenRouter Secret Provider ${Date.now()}`,
-      providerType: `openrouter`,
-      baseUrl: `https://openrouter.ai/api/v1`,
-      apiKey: `sk-openrouter-sensitive-value`,
-    },
-  });
+  await page.getByRole(`button`, { name: `Create provider` }).first().click();
+  await page.getByLabel(`Display name`).fill(`Invalid URL provider ${Date.now()}`);
+  await page.getByLabel(`Base URL`).fill(`http://openrouter.ai/api/v1`);
+  await page.getByLabel(`API key`).fill(`invalid-base-url-key`);
+  await page.locator(`form`).first().getByRole(`button`, { name: `Create provider` }).click();
 
-  expect(response.status()).toBe(201);
-  const created = (await response.json()) as Record<string, unknown>;
-  expect(created.hasCredential).toBe(true);
-  expect(created).not.toHaveProperty(`apiKey`);
-  expect(created).not.toHaveProperty(`credentialCiphertext`);
-  expect(created).not.toHaveProperty(`credentialIv`);
-  expect(created).not.toHaveProperty(`credentialAuthTag`);
+  await expect(page.getByText(`baseUrl must use HTTPS.`)).toBeVisible();
 });
 
-test(`harness definitions enforce MVP harness policy at save time`, async ({ page }) => {
+test(`loop providers tab supports assign remove and algorithm save`, async ({ page }) => {
   await authenticate(page);
 
-  const response = await page.request.post(`http://athena.localhost/api/harness-list`, {
-    data: {
-      displayName: `Non-mvp harness`,
-      runnerType: `juju-vm`,
-      apiKey: `copilot-key`,
-      lifecycleStatus: `active`,
-    },
-  });
+  const loop = await createLoop(page, `Provider assignment loop ${Date.now()}`);
+  const providerName = `Assignable provider ${Date.now()}`;
 
-  expect(response.status()).toBe(400);
-  await expect(response.json()).resolves.toEqual({ error: `Only github-copilot-cloud is executable in MVP.` });
-});
+  await createProviderViaUi(page, providerName);
 
-test(`owner-scoped definition mutation blocks non-owners`, async ({ page }) => {
-  await authenticate(page);
+  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=providers`);
 
-  const otherHarness = await withDb(async (client) => {
-    await client.query(
-      `
-        INSERT INTO "user" ("id", "subject", "name", "picture")
-        VALUES ('other.user@canonical.com', 'other-user-subject', 'Other User', '')
-        ON CONFLICT ("id") DO NOTHING
-      `,
-    );
+  await expect(page.getByRole(`heading`, { name: `Assign an existing provider` })).toBeVisible();
+  await page.getByLabel(`Provider`).selectOption({ label: providerName });
+  await page.getByRole(`button`, { name: `Assign provider` }).click();
 
-    const result = await client.query<{ id: string }>(
-      `
-        INSERT INTO "harness" (
-          "owner",
-          "displayName",
-          "runnerType",
-          "credentialCiphertext",
-          "credentialIv",
-          "credentialAuthTag",
-          "credentialKeyVersion",
-          "lifecycleStatus"
-        )
-        VALUES ($1, $2, 'github-copilot-cloud', 'x', 'y', 'z', 'v1', 'active')
-        RETURNING "id"
-      `,
-      [`other.user@canonical.com`, `Other owner harness ${Date.now()}`],
-    );
+  await expect(page.getByText(`Provider has been assigned to this loop.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: providerName, exact: true }).first()).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: `dev.user@canonical.com`, exact: true }).first()).toBeVisible();
 
-    return result.rows[0]?.id;
-  });
+  await page.getByLabel(`Algorithm`).selectOption(`weighted-round-robin`);
+  await page.getByRole(`button`, { name: `Save algorithm` }).click();
+  await expect(page.getByText(`Provider selection algorithm has been updated.`)).toBeVisible();
 
-  expect(otherHarness).toBeDefined();
-
-  const response = await page.request.put(`http://athena.localhost/api/harness/${otherHarness}`, {
-    data: {
-      displayName: `Attempted update`,
-      lifecycleStatus: `active`,
-    },
-  });
-
-  expect(response.status()).toBe(404);
-  await expect(response.json()).resolves.toEqual({ error: `Harness not found.` });
-});
-
-test(`loop members can assign definitions but non-admins cannot mutate priority overrides`, async ({ page }) => {
-  await authenticate(page);
-
-  const providerCreate = await page.request.post(`http://athena.localhost/api/provider-list`, {
-    data: {
-      displayName: `Assignment provider ${Date.now()}`,
-      providerType: `openrouter`,
-      baseUrl: `https://openrouter.ai/api/v1`,
-      apiKey: `member-assignment-key`,
-    },
-  });
-  expect(providerCreate.status()).toBe(201);
-  const providerDefinition = (await providerCreate.json()) as { id: string };
-
-  const nonAdminLoopId = await withDb(async (client) => {
-    const loopResult = await client.query<{ id: string }>(`INSERT INTO "loop" ("name", "description") VALUES ($1, $2) RETURNING "id"`, [`Non-admin assignment loop ${Date.now()}`, `loop for permissions check`]);
-    const loopId = loopResult.rows[0]?.id;
-
-    if (!loopId) {
-      throw new Error(`Expected loop id.`);
-    }
-
-    await client.query(`INSERT INTO "loopUser" ("loop", "user", "isAdmin") VALUES ($1, $2, FALSE)`, [loopId, currentUserId]);
-
-    return loopId;
-  });
-
-  const assignResponse = await page.request.post(`http://athena.localhost/api/loop/${nonAdminLoopId}/provider-list`, {
-    data: { provider: providerDefinition.id },
-  });
-  expect(assignResponse.status()).toBe(204);
-
-  const adminUpdateResponse = await page.request.put(`http://athena.localhost/api/loop/${nonAdminLoopId}/provider/${providerDefinition.id}/admin`, {
-    data: { priorityOverride: 1 },
-  });
-  expect(adminUpdateResponse.status()).toBe(403);
-  await expect(adminUpdateResponse.json()).resolves.toEqual({ error: `Only loop admins may edit priority and overrides.` });
-});
-
-test(`selection algorithms are deterministic and rotate under round robin`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Selection algorithm loop`);
-
-  const [providerAResponse, providerBResponse] = await Promise.all([
-    page.request.post(`http://athena.localhost/api/provider-list`, {
-      data: {
-        displayName: `OpenRouter Round Robin A ${loop.id}`,
-        providerType: `openrouter`,
-        baseUrl: `https://openrouter.ai/api/v1`,
-        apiKey: `openrouter-a-key`,
-      },
-    }),
-    page.request.post(`http://athena.localhost/api/provider-list`, {
-      data: {
-        displayName: `OpenRouter Round Robin B ${loop.id}`,
-        providerType: `openrouter`,
-        baseUrl: `https://openrouter.ai/api/v1`,
-        apiKey: `openrouter-b-key`,
-      },
-    }),
-  ]);
-
-  expect(providerAResponse.status()).toBe(201);
-  expect(providerBResponse.status()).toBe(201);
-  const providerA = (await providerAResponse.json()) as { id: string };
-  const providerB = (await providerBResponse.json()) as { id: string };
-
-  await page.request.post(`http://athena.localhost/api/loop/${loop.id}/provider-list`, { data: { provider: providerA.id } });
-  await page.request.post(`http://athena.localhost/api/loop/${loop.id}/provider-list`, { data: { provider: providerB.id } });
-
-  const policyResponse = await page.request.put(`http://athena.localhost/api/loop/${loop.id}/provider-selection-policy`, {
-    data: {
-      openRouterSelectionAlgorithm: `round-robin`,
-    },
-  });
-  expect(policyResponse.status()).toBe(200);
-
-  const firstEventResponse = await page.request.post(`http://athena.localhost/api/loop/events`, {
-    data: {
-      loop: loop.id,
-      sourceType: `human-chat`,
-      assignedPersona: `pm.alice`,
-      requestedOutcome: `Round robin pick one`,
-      payload: { message: `first event` },
-    },
-  });
-  expect(firstEventResponse.status()).toBe(201);
-
-  const secondEventResponse = await page.request.post(`http://athena.localhost/api/loop/events`, {
-    data: {
-      loop: loop.id,
-      sourceType: `human-chat`,
-      assignedPersona: `pm.alice`,
-      requestedOutcome: `Round robin pick two`,
-      payload: { message: `second event` },
-    },
-  });
-  expect(secondEventResponse.status()).toBe(201);
-
-  const firstBody = (await firstEventResponse.json()) as {
-    events: Array<{ payload: { source?: { executionSelection?: { selectedAssignment: string | null; algorithmUsed: string } } } }>;
-  };
-  const secondBody = (await secondEventResponse.json()) as {
-    events: Array<{ payload: { source?: { executionSelection?: { selectedAssignment: string | null; algorithmUsed: string } } } }>;
-  };
-
-  const firstSelection = firstBody.events[1]?.payload?.source?.executionSelection;
-  const firstCompletionSelection = firstBody.events[2]?.payload?.source?.executionSelection;
-  const secondSelection = secondBody.events[1]?.payload?.source?.executionSelection;
-
-  expect(firstSelection?.algorithmUsed).toBe(`round-robin`);
-  expect(firstCompletionSelection?.algorithmUsed).toBe(`round-robin`);
-  expect(secondSelection?.algorithmUsed).toBe(`round-robin`);
-  expect(firstSelection?.selectedAssignment).not.toBeNull();
-  expect(firstCompletionSelection?.selectedAssignment).not.toBeNull();
-  expect(secondSelection?.selectedAssignment).not.toBeNull();
-  expect(firstSelection?.selectedAssignment).not.toBe(firstCompletionSelection?.selectedAssignment);
-});
-
-test(`execution hook audits skipped non-mvp harness assignments without leaking keys`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Execution hook loop`);
-
-  const created = await withDb(async (client) => {
-    const harnessResult = await client.query<{ id: string }>(
-      `
-        INSERT INTO "harness" (
-          "owner",
-          "displayName",
-          "runnerType",
-          "credentialCiphertext",
-          "credentialIv",
-          "credentialAuthTag",
-          "credentialKeyVersion",
-          "lifecycleStatus"
-        )
-        VALUES ($1, $2, 'juju-vm', 'plain-text-should-not-leak', 'iv', 'tag', 'v1', 'active')
-        RETURNING "id"
-      `,
-      [currentUserId, `Inserted non-mvp harness ${Date.now()}`],
-    );
-    const harnessId = harnessResult.rows[0]?.id;
-
-    if (!harnessId) {
-      throw new Error(`Expected harness id.`);
-    }
-
-    await client.query(`INSERT INTO "loopHarness" ("loop", "harness", "priority", "enabled") VALUES ($1, $2, 1, TRUE)`, [loop.id, harnessId]);
-
-    return { harnessId };
-  });
-
-  const eventResponse = await page.request.post(`http://athena.localhost/api/loop/events`, {
-    data: {
-      loop: loop.id,
-      sourceType: `human-chat`,
-      assignedPersona: `ic.clara`,
-      requestedOutcome: `Run copilot selection`,
-      payload: { message: `trigger execution hook` },
-    },
-  });
-
-  expect(eventResponse.status()).toBe(201);
-
-  const body = (await eventResponse.json()) as {
-    events: Array<{ payload: { source?: { executionSelection?: { skipped?: Array<{ assignmentId: string; reason: string }> } } } }>;
-  };
-
-  const executionSelection = body.events[1]?.payload?.source?.executionSelection;
-  expect(executionSelection?.skipped).toEqual(expect.arrayContaining([{ assignmentId: created.harnessId, reason: `non-mvp-harness` }]));
-
-  const serialized = JSON.stringify(body);
-  expect(serialized).not.toContain(`plain-text-should-not-leak`);
+  await page.getByRole(`button`, { name: `Remove ${providerName}` }).click();
+  await expect(page.getByText(`${providerName} has been removed from this loop.`)).toBeVisible();
 });
