@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
 import type { Event } from "./event.schema.js";
 
@@ -6,7 +7,7 @@ export const eventApiPaths = {
 } as const;
 
 export const fetchEvents = async (): Promise<Event[]> => {
-  const response = await fetch(eventApiPaths.list, { credentials: `include` });
+  const response = await authenticatedFetch(eventApiPaths.list);
 
   if (!response.ok) {
     throw new Error(`Events request failed with status ${response.status}`);

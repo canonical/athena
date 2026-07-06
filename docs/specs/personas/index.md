@@ -6,14 +6,14 @@ This document is the canonical index of reference personas for Athena loops.
 
 Each entry below is a reference persona. Reference personas are provided as templates when loop admins configure a new loop. Admins can add them as-is, customize their personality, or create entirely custom personas.
 
-| Role | Display name | Uses coding harness | Is routing persona |
-|------|--------------|---------------------|-------------------|
-| EM   | Engineering Manager | No | Yes |
-| IC   | Individual Contributor | Yes | No |
-| CR   | Code Reviewer | No | No |
-| PM   | Product Manager | No | No |
-| QA   | Quality Assurance | No | No |
-| UX   | User Experience | No | No |
+| Role | Display name | Is routing persona |
+|------|--------------|-------------------|
+| EM   | Engineering Manager | Yes |
+| IC   | Individual Contributor | No |
+| CR   | Code Reviewer | No |
+| PM   | Product Manager | No |
+| QA   | Quality Assurance | No |
+| UX   | User Experience | No |
 
 ## Reference persona files
 

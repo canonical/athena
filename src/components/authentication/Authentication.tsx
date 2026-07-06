@@ -1,16 +1,7 @@
 import { Button, Notification, NotificationSeverity } from "@canonical/react-components";
 import { useEffect, useState } from "react";
-import { authenticationApiPaths, getAuthenticationLoginPath } from "./authentication.client.js";
-
-type AuthenticationProfile = {
-  isAuthenticated: boolean;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    picture: string;
-  } | null;
-};
+import { authenticationApiPaths, fetchAuthenticationProfile, getAuthenticationLoginPath } from "./authentication.client.js";
+import type { AuthenticationProfile } from "./authentication.schema.js";
 
 type AuthenticationViewProps = {
   returnTo: string;
@@ -47,13 +38,7 @@ export function AuthenticationView({ returnTo }: AuthenticationViewProps) {
 
     const loadProfile = async () => {
       try {
-        const response = await fetch(authenticationApiPaths.profile, { credentials: `include` });
-
-        if (!response.ok) {
-          throw new Error(`Authentication profile request failed with status ${response.status}`);
-        }
-
-        const payload = (await response.json()) as AuthenticationProfile;
+        const payload = await fetchAuthenticationProfile();
 
         if (!active) {
           return;
@@ -79,45 +64,101 @@ export function AuthenticationView({ returnTo }: AuthenticationViewProps) {
 
   if (errorMessage) {
     return (
-      <section className="athena-home">
-        <p className="p-heading--5">Authentication</p>
-        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load authentication state">
-          {errorMessage}
-        </Notification>
+      <section className="p-strip is-shallow u-no-max-width">
+        <div className="p-card p-strip is-shallow">
+          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load authentication state">
+            {errorMessage}
+          </Notification>
+        </div>
       </section>
     );
   }
 
   if (!profile) {
     return (
-      <section className="athena-home">
-        <p className="p-heading--5">Authentication</p>
-        <p className="p-text--default">Checking authentication status...</p>
+      <section className="p-strip is-shallow u-no-max-width">
+        <div className="p-card p-strip is-shallow">
+          <p className="p-text--default">Checking authentication status...</p>
+        </div>
       </section>
     );
   }
 
   if (!profile.isAuthenticated || !profile.user) {
     return (
-      <section className="athena-home">
-        <p className="p-heading--5">Authentication</p>
+      <section className="p-strip is-shallow u-no-max-width">
         <h1 className="p-heading--2">Sign in to Athena</h1>
-        <p className="p-text--default">Authenticate with the configured OIDC provider to access protected backend routes.</p>
-        <Button appearance="positive" element="a" href={authenticationLoginPath}>
-          Sign in
-        </Button>
+        <div className="p-card p-strip is-shallow">
+          <p className="p-text--default">Authenticate with the configured OIDC provider to access protected backend routes.</p>
+          <div className="u-align--right">
+            <Button appearance="positive" element="a" href={authenticationLoginPath}>
+              Sign in
+            </Button>
+          </div>
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="athena-home">
-      <p className="p-heading--5">Authentication</p>
+    <section className="p-strip is-shallow u-no-max-width">
       <h1 className="p-heading--2">You are authenticated</h1>
-      <p className="p-text--default">Signed in as {profile.user.email || profile.user.name || profile.user.id}.</p>
-      <Button appearance="base" disabled={isSigningOut} onClick={handleSignOut} type="button">
-        {isSigningOut ? `Signing out...` : `Sign out`}
-      </Button>
+      <div className="p-card p-strip is-shallow">
+        <p className="p-text--default">Signed in as {profile.user.email || profile.user.name || profile.user.id}.</p>
+        <div className="u-align--right">
+          <Button appearance="base" disabled={isSigningOut} onClick={handleSignOut} type="button">
+            {isSigningOut ? `Signing out...` : `Sign out`}
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function AuthenticationSignOutView() {
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const signOut = async () => {
+      try {
+        const response = await fetch(authenticationApiPaths.logout, { method: `POST`, credentials: `include` });
+
+        if (!response.ok) {
+          throw new Error(`Authentication logout request failed with status ${response.status}`);
+        }
+
+        window.location.assign(new URL(`/authentication`, window.location.origin).toString());
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : String(error);
+        setErrorMessage(message);
+      }
+    };
+
+    void signOut();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <section className="p-strip is-shallow u-no-max-width">
+      <h1 className="p-heading--2">Signing out</h1>
+      <div className="p-card p-strip is-shallow">
+        {errorMessage ? (
+          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to sign out">
+            {errorMessage}
+          </Notification>
+        ) : (
+          <p className="p-text--default">Ending your session...</p>
+        )}
+      </div>
     </section>
   );
 }

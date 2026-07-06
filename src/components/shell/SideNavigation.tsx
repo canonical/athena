@@ -1,45 +1,66 @@
 import type { SideNavigationProps } from "@canonical/react-components";
+import { useCurrentUser } from "@components/authentication/authentication.query.js";
 import type { LinkProps } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import type { ComponentPropsWithoutRef } from "react";
 
-export const sideNavigationItems: SideNavigationProps["items"] = [
+export const primarySideNavigationItems: SideNavigationProps["items"] = [
   {
-    className: "athena-nav-primary",
     items: [
       {
-        icon: "status-online",
+        icon: "status",
         label: "Overview",
         href: `/`,
       },
       {
-        icon: "user",
-        label: "Authentication",
-        href: `/authentication`,
-      },
-      {
         icon: "applications",
         label: "Loops",
-        href: `/loop-list`,
+        href: `/loop/list`,
       },
       {
-        icon: "queue",
+        icon: "topic",
         label: "Events",
-        href: `/events`,
+        href: `/event/list`,
       },
       {
         icon: "user-group",
         label: "Personas",
-        href: `/persona-list`,
+        href: `/persona/list`,
       },
       {
-        icon: "code",
+        icon: "models",
+        label: "Providers",
+        href: `/provider/list`,
+      },
+      {
+        icon: "settings",
         label: "Definitions",
         nonInteractive: true,
       },
     ],
   },
 ];
+
+export function useAccountSideNavigationItems(): SideNavigationProps["items"] {
+  const user = useCurrentUser();
+
+  return [
+    {
+      items: [
+        {
+          icon: "profile",
+          label: "Profile",
+          href: `/authentication`,
+        },
+        {
+          icon: "log-out",
+          label: user ? "Sign out" : "Sign in",
+          href: user ? `/authentication/sign-out` : `/authentication`,
+        },
+      ],
+    },
+  ];
+}
 
 type NavigationLinkProps = ComponentPropsWithoutRef<"a">;
 type InternalToPath = LinkProps["to"];

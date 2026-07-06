@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS "persona" (
   "id" UUID PRIMARY KEY DEFAULT uuidv7(),
   "displayName" TEXT NOT NULL,
+  "role" TEXT,
   "personality" TEXT NOT NULL,
-  "usesCodingHarness" BOOLEAN NOT NULL DEFAULT FALSE,
   "isRouting" BOOLEAN NOT NULL DEFAULT FALSE,
   "isDefault" BOOLEAN NOT NULL DEFAULT FALSE,
   "owner" TEXT REFERENCES "user"("id") ON DELETE SET NULL,

@@ -5,3 +5,13 @@ export type OIDCUserInfo = {
   picture?: string;
   [key: string]: unknown;
 };
+
+export type AuthenticationProfile = {
+  isAuthenticated: boolean;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    picture: string;
+  } | null;
+};

@@ -21,50 +21,83 @@ Execution environment is selected per event step by the active routing persona (
 
 Athena routing authority remains unchanged. Execution-environment selection does not change ownership, handoff, or approval semantics.
 
-## Loop-admin configuration authority
+## Definition ownership and visibility
 
-Loop administrators configure provider settings for their loop.
+- Harness definitions and provider definitions are independent resources and are not loop-scoped records.
+- Definitions are owner-scoped; owners can create, read, update, and delete only their own definitions.
+- Secret material is entered directly by the owner and stored using encrypted credential envelopes in PostgreSQL.
+- API responses, logs, and audit payloads must never expose plaintext credential material.
 
-- Loop administrators configure an ordered coding harness profile list that can be selected by routing decisions.
-- Loop administrators configure an ordered OpenAI API-compatible LLM provider profile list for deterministic Athena thread execution when harness is not selected.
-- Order is priority-based (`1..N`) and is evaluated deterministically from highest to lowest priority.
-- Loop administrators can update these profiles over time.
-- Provider profile updates must be auditable with actor, timestamp, prior value, and new value.
+## Loop assignment authority and permissions
+
+- Users assign one or more of their harness definitions and provider definitions to loops through many-to-many assignment records.
+- Any loop member can assign existing owner-scoped definitions to the loop.
+- Only loop administrators can edit assignment ordering, assignment overrides, and runtime tuning fields (priority, timeout, retries, and metrics).
+- Order is priority-based (`1..N`) and must be deterministic and unique per loop.
 
 ## Coding harness catalog
 
-Athena should maintain a registered harness catalog with per-entry lifecycle state.
+A **runner** is the execution environment that hosts a harness; a **harness** is the AI coding agent tool that runs within a runner. See [runner-harness.md](./runner-harness.md) for normative definitions and the proprietary vs open runner distinction.
+
+Athena should maintain a registered runner type catalog with per-entry lifecycle state. A harness definition record stores `runnerType` to identify which execution environment it connects to.
 
 MVP catalog policy:
 
 - The loop admin must explicitly configure a harness profile priority list.
-- The only harness that is allowed for execution in MVP is GitHub Copilot Cloud Agent.
-- If a different harness is configured in MVP, Athena must reject activation and return a clear unsupported-in-MVP validation error.
+- The only runner that is allowed for execution in MVP is GitHub Copilot Cloud (`github-copilot-cloud`).
+- If a harness definition targets a different runner type in MVP, Athena must reject activation and return a clear unsupported-in-MVP validation error.
 
-Validated harness candidates for current and future use:
+### Runner catalog
 
-1. GitHub Copilot Cloud Agent
-   - Status: MVP execution harness (required allowed option).
-2. OpenAI Codex agent surfaces (Codex app and related Codex agent workflows)
-   - Status: candidate harness for post-MVP enablement.
-3. Claude Code agent surfaces
-   - Status: candidate harness for post-MVP enablement.
-   - Validation note: public Claude Code documentation confirms terminal, IDE, desktop, and web agent surfaces; naming is "Claude Code" rather than a distinct product named "Claude Code Cloud Agent".
-4. Devin (Cognition) cloud agent
-   - Status: candidate harness for post-MVP enablement.
-5. Juju machine charm based harness
-   - Status: MVP+1 Athena-owned implementation target.
+| Runner | Type | Identifier | Status |
+|---|---|---|---|
+| GitHub Copilot Cloud | Proprietary | `github-copilot-cloud` | MVP — only executable runner |
+| Juju VM | Open (Athena-owned) | `juju-vm` | Post-MVP (MVP+1) — Athena-owned implementation target |
+| Local Ubuntu binary | Open (user-managed) | `local-ubuntu` | Post-MVP — discouraged for production use |
 
-Additional harnesses may be added to the catalog after capability and security validation.
+Juju VM is a runner; it hosts harness processes. It is not itself a harness.
 
-## Deterministic Athena thread runtime policy
+### Harness catalog
 
-When routing does not select a harness-backed path, execution must run in the deterministic Athena thread using the loop's configured OpenAI API-compatible provider profiles.
+The harness (agent tool) running within a runner:
 
-- Each configured profile must define provider endpoint, model identifier, and credential reference.
-- The loop configuration must include a deterministic provider priority order.
-- Athena definitions remain canonical for behavior and policy regardless of selected provider.
-- Provider choice must not alter deterministic routing, ownership rules, or approval authority.
+| Harness | Compatible runners | Status |
+|---|---|---|
+| GitHub Copilot | `github-copilot-cloud` (bundled) | MVP |
+| OpenCode | `juju-vm`, `local-ubuntu` | Post-MVP candidate |
+| Claude Code | `juju-vm`, `local-ubuntu` | Post-MVP candidate |
+| Additional open harnesses | `juju-vm`, `local-ubuntu` | Post-MVP — subject to open runner contract |
+
+Additional runners and harnesses may be added to the catalog after capability and security validation.
+
+## Deterministic provider runtime policy (current phase)
+
+- Provider runtime in this phase is OpenRouter-only.
+- OpenRouter credentials are entered directly as API keys by the owner and assigned to loops as key pools.
+- Provider definitions must not require or store model selection fields.
+- Model selection is decided at routing/execution time by the active routing persona and deterministic Athena policy.
+- Provider endpoints remain HTTPS-only.
+- Multiple OpenRouter keys and multiple Copilot keys can be assigned to a loop.
+- Athena definitions remain canonical for behavior and policy regardless of selected provider/key.
+- Provider/key choice must not alter deterministic routing, ownership rules, or approval authority.
+
+## Loop key-selection algorithms
+
+Both OpenRouter and Copilot key pools must support:
+
+1. Round Robin
+2. Highest Credit Percentage Available
+3. Highest Absolute Credit Available
+4. Weighted Round Robin by credit
+5. Least Recently Used key
+6. Priority Failover
+7. Health-aware selection with cooldown window
+
+Determinism contract:
+
+- Tie breakers are deterministic: priority, then createdAt, then id.
+- Missing metrics or algorithm-specific evaluation failures must use deterministic fallback (priority failover) and preserve audit reason.
+- Selection and skip decisions must be auditable per execution attempt.
 
 ## Conversation schema validation (Zod)
 

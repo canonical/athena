@@ -105,10 +105,6 @@ export const personaUpdateGlobal = async (personaId: string, input: PersonaUpdat
     throw new PersonaForbiddenError(`Only the persona owner may edit it.`);
   }
 
-  if (existing.isRouting && input.usesCodingHarness) {
-    throw new PersonaValidationError(`A routing persona cannot use a coding harness.`);
-  }
-
   const updated = await queryPersonaUpdate(personaId, input);
 
   if (!updated) {
