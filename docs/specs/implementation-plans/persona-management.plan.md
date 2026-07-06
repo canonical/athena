@@ -16,7 +16,7 @@ Each persona is an orchestration role that performs a specific function in a loo
 
 ## Persona catalog (predefined set)
 
-1. **IC (Individual Contributor)** — Executes implementation work (coding, tool execution) via harness. Routes events to CR for review.
+1. **IC (Individual Contributor)** — Executes implementation work (coding, tool execution). Routes events to CR for review.
 2. **CR (Code Reviewer)** — Reviews IC outputs, approves, requests changes, or escalates. Can assign events back to IC or forward to EM.
 3. **EM (Engineering Manager)** — Handles escalations, overrides, and loop governance decisions. Can pause/resume loops or assign to other personas.
 4. **PM (Product Manager)** — Defines acceptance criteria and loop goals; provides context for IC/CR decisions.
@@ -39,6 +39,7 @@ For each loop, the admin selects:
 2. A persona processes the event, makes a decision (approve, request changes, escalate, etc.), and may route to another persona.
 3. Routing decisions are deterministic based on loop policy and persona capability constraints.
 4. All persona assignments and transitions are recorded in the event audit trail.
+5. For each event step, the active routing persona determines whether execution uses a runner/harness path or the deterministic Athena thread path under [../definitions/llm-harness.md](../definitions/llm-harness.md).
 
 ## Persona definition schema
 
@@ -47,7 +48,6 @@ For each loop, the admin selects:
   "id": "uuidv7",
   "displayName": "string (e.g., 'Individual Contributor')",
   "personality": "string (persona description and responsibilities)",
-  "usesCodingHarness": boolean,
   "isRouting": boolean,
   "isDefault": boolean,
   "owner": "string | null (user ID of the creator; null for default/system personas)",
@@ -58,10 +58,8 @@ For each loop, the admin selects:
 ## Validation and safety gates
 
 1. Exactly one active routing persona must be assigned to a loop for the loop to function. A loop with zero or more than one active routing persona is considered **paused** and will not process events until the configuration is corrected.
-2. At least one persona with `usesCodingHarness: true` must be enabled in any loop.
-3. Persona routing must be acyclic (no infinite handoff loops).
-4. If `isRouting` is true, `usesCodingHarness` must be false.
-5. If a persona has `usesCodingHarness: true`, a harness must be available before assignment.
+2. Persona routing must be acyclic (no infinite handoff loops).
+3. Execution-environment decisions (runner/harness path vs deterministic thread path) are made by the active routing persona per event step and validated against loop configuration.
 
 ## Observability and auditability
 
@@ -87,14 +85,14 @@ Persona profile create/update/delete actions must audit: actor, loop ID, change 
 5. Implement persona router: deterministic assignment based on event type and loop policy.
 6. Integrate persona assignment into event audit trail; record all persona transitions.
 7. Add persona profile CRUD (create, list, update, delete) with full audit logging.
-8. Add integration tests: valid/invalid persona configurations (EM required, at least one coding harness), routing policy validation, acyclic constraint enforcement.
+8. Add integration tests: valid/invalid persona configurations (exactly one routing persona required), routing policy validation, and acyclic constraint enforcement.
 
 ## Acceptance criteria
 
 1. Loop admins can configure persona profiles (enabled, disabled, routing priority).
-2. Minimum requirement: one EM persona and at least one coding-harness persona enabled.
+2. Minimum requirement: exactly one active routing persona (EM by default) is enabled.
 3. UI recommends all reference personas (IC, CR, EM, PM, QA, UX) as templates.
 4. Persona routing is deterministic: same loop configuration always routes to the same persona under identical event conditions.
 5. Persona transitions are fully audited with decision reason and actor (if manual).
-6. Invalid persona configurations (missing EM, no coding harness, cyclic routing) are rejected at save time with clear error messages.
+6. Invalid persona configurations (missing or multiple routing personas, cyclic routing) are rejected at save time with clear error messages.
 7. All persona assignment decisions visible in event audit trail with transitions and decision reasoning.

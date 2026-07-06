@@ -1,4 +1,5 @@
 import { queryLoopForUser } from "@components/loop/loop.service.js";
+import { resolveLoopSelection } from "@components/loop/loop-selection.service.js";
 import type {
   BlockedEventCreation,
   ConcludedEventCreation,
@@ -57,6 +58,23 @@ const buildSourceContext = (request: ValidatedCreateEventRequest, sourceRef: str
   sourceType: request.sourceType,
   ...(sourceRef && { sourceRef }),
 });
+
+const codingHarnessPersonas = new Set<PersonaId>([`ic.clara`, `cr.elena`]);
+
+const resolveExecutionSelectionMetadata = async (loopId: string, assignee: PersonaId): Promise<EventPayload> => {
+  const pool = codingHarnessPersonas.has(assignee) ? `copilot` : `openrouter`;
+  const resolution = await resolveLoopSelection(loopId, pool);
+
+  return {
+    pool,
+    selectedAssignment: resolution.selected?.assignmentId ?? null,
+    selectedType: resolution.selected?.definitionType ?? null,
+    algorithmRequested: resolution.audit.algorithmRequested,
+    algorithmUsed: resolution.audit.algorithmUsed,
+    fallbackReason: resolution.audit.fallbackReason,
+    skipped: resolution.audit.skipped,
+  };
+};
 
 const selectAssignee = (event: Pick<Event, "sourceType" | "sourceRef" | "requestedOutcome">): ExecutionPersonaId => {
   const seed = `${event.sourceType}:${event.sourceRef ?? ``}:${event.requestedOutcome ?? ``}`;
@@ -244,36 +262,52 @@ const createBlockedEvent = async ({ assignee, blocker, note, request, sourcePayl
 
 const createFollowUpEvents = async ({ currentEvent, request, result, sourcePayload, sourceRef }: EventFollowUpRequest): Promise<Event[]> => {
   if (result.status === `completed`) {
+    const assignee = getAssignedPersona(currentEvent);
+    const executionSelection = await resolveExecutionSelectionMetadata(request.loop, assignee);
+
     return [
       await createCompletedEvent({
-        assignee: getAssignedPersona(currentEvent),
+        assignee,
         note: result.note,
         request,
-        sourcePayload,
+        sourcePayload: {
+          ...sourcePayload,
+          executionSelection,
+        },
         sourceRef,
       }),
     ];
   }
 
   if (result.status === `blocked`) {
+    const assignee = getAssignedPersona(currentEvent);
+    const executionSelection = await resolveExecutionSelectionMetadata(request.loop, assignee);
+
     return [
       await createBlockedEvent({
-        assignee: getAssignedPersona(currentEvent),
+        assignee,
         blocker: result.blocker,
         note: result.note,
         request,
-        sourcePayload,
+        sourcePayload: {
+          ...sourcePayload,
+          executionSelection,
+        },
         sourceRef,
       }),
     ];
   }
 
+  const executionSelection = await resolveExecutionSelectionMetadata(request.loop, result.assignee);
   const routedEvent = await createRoutedEvent({
     assignee: result.assignee,
     emittedByPersona: engineeringManagerPersonaId,
     note: result.note,
     request,
-    sourcePayload,
+    sourcePayload: {
+      ...sourcePayload,
+      executionSelection,
+    },
     sourceRef,
   });
   const completionResult = getPersonaHandler(result.assignee).handle(routedEvent);
@@ -309,11 +343,16 @@ export const eventCreate = async (input: CreateEventRequest, userId: string): Pr
   const initialEvent = await createInitialEvent(eventContext);
 
   if (request.assignedPersona) {
+    const executionSelection = await resolveExecutionSelectionMetadata(request.loop, request.assignedPersona);
     const routedEvent = await createRoutedEvent({
       ...eventContext,
       assignee: request.assignedPersona,
       emittedByPersona: athenaPersonaId,
       note: `${athenaPersonaId} routed the event to ${request.assignedPersona}.`,
+      sourcePayload: {
+        ...eventContext.sourcePayload,
+        executionSelection,
+      },
     });
 
     const completionResult = getPersonaHandler(request.assignedPersona).handle(routedEvent);

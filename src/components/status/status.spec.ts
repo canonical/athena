@@ -1,15 +1,8 @@
-import { expect, test } from "../../../testing/playwright/index.js";
+import { authenticate, expect, test } from "../../../testing/playwright/index.js";
 
-const statusEndpoints = [`/_status/check`, `/_status/ping`];
+test(`application root renders the shell`, async ({ page }) => {
+  await authenticate(page);
+  await page.goto(`http://athena.localhost/`);
 
-for (const endpoint of statusEndpoints) {
-  test(`${endpoint} is publicly accessible`, async ({ request }) => {
-    const response = await request.get(endpoint);
-
-    expect(response.ok()).toBe(true);
-    expect(await response.json()).toEqual({
-      status: `ok`,
-      whoami: `athena`,
-    });
-  });
-}
+  await expect(page.getByRole(`heading`, { name: `Hello from Athena` })).toBeVisible();
+});

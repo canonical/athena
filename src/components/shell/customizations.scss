@@ -2,15 +2,48 @@ body {
   min-height: 100vh;
 }
 
-.athena-home {
-  padding: 2rem 1rem;
-  width: 100%;
+.l-navigation__drawer {
+  height: 100%;
 }
 
-.athena-home h1 {
-  margin-top: 0.5rem;
+.l-navigation .p-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-.athena-callout {
-  margin-top: 1.5rem;
+.l-navigation .p-panel__content {
+  flex: 1;
+  min-height: 0;
+}
+
+.athena-side-navigation-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.athena-side-navigation-shell__account {
+  margin-top: auto;
+}
+
+.p-modal.athena-entity-drawer {
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.p-modal.athena-entity-drawer .p-modal__dialog {
+  border-radius: 0;
+  height: 100dvh;
+  left: auto;
+  margin: 0;
+  max-height: 100dvh;
+  max-width: min(48rem, 100vw);
+  right: 0;
+  width: min(48rem, 100vw);
+}
+
+.p-modal.athena-entity-drawer .p-modal__header {
+  position: sticky;
+  top: 0;
 }

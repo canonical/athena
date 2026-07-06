@@ -1,5 +1,5 @@
 import { getPool } from "@components/postgres/postgres.js";
-import type { Loop, LoopInsert, LoopUpdate } from "./loop.schema.js";
+import type { Loop, LoopInsert, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
 
 const loopColumns = `"id", "name", "description", "createdAt", "updatedAt"`;
 const loopSelectColumns = `l."id", l."name", l."description", l."createdAt", l."updatedAt"`;
@@ -17,6 +17,18 @@ export const queryLoopForUser = async (loopId: string, userId: string): Promise<
   );
 
   return result.rows[0];
+};
+
+export const queryLoopMembership = async (loopId: string, userId: string): Promise<boolean> => {
+  const result = await getPool().query(`SELECT 1 FROM "loopUser" WHERE "loop" = $1 AND "user" = $2`, [loopId, userId]);
+
+  return Boolean(result.rowCount);
+};
+
+export const queryLoopAdminMembership = async (loopId: string, userId: string): Promise<boolean> => {
+  const result = await getPool().query(`SELECT 1 FROM "loopUser" WHERE "loop" = $1 AND "user" = $2 AND "isAdmin" = TRUE`, [loopId, userId]);
+
+  return Boolean(result.rowCount);
 };
 
 export const queryLoopList = async (userId: string): Promise<Loop[]> => {
@@ -107,4 +119,54 @@ export const queryLoopDelete = async (loopId: string, userId: string): Promise<b
   );
 
   return Boolean(result.rowCount);
+};
+
+export const queryLoopProviderSelectionPolicy = async (loopId: string, userId: string): Promise<ProviderSelectionPolicy | undefined> => {
+  const result = await getPool().query<ProviderSelectionPolicy>(
+    `
+      SELECT
+        l."id" AS "loop",
+        l."openRouterSelectionAlgorithm",
+        l."copilotSelectionAlgorithm",
+        l."openRouterSelectionCursor",
+        l."copilotSelectionCursor",
+        l."selectionCooldownWindowMs",
+        l."updatedAt"
+      FROM "loop" l
+      JOIN "loopUser" lu ON lu."loop" = l."id"
+      WHERE l."id" = $1
+        AND lu."user" = $2
+    `,
+    [loopId, userId],
+  );
+
+  return result.rows[0];
+};
+
+export const queryLoopProviderSelectionPolicyUpdate = async (loopId: string, userId: string, input: ProviderSelectionPolicyUpdate): Promise<ProviderSelectionPolicy | undefined> => {
+  const result = await getPool().query<ProviderSelectionPolicy>(
+    `
+      UPDATE "loop" AS l
+      SET
+        "openRouterSelectionAlgorithm" = COALESCE($1, l."openRouterSelectionAlgorithm"),
+        "copilotSelectionAlgorithm" = COALESCE($2, l."copilotSelectionAlgorithm"),
+        "selectionCooldownWindowMs" = COALESCE($3, l."selectionCooldownWindowMs")
+      FROM "loopUser" AS lu
+      WHERE l."id" = $4
+        AND lu."loop" = l."id"
+        AND lu."user" = $5
+        AND lu."isAdmin" = TRUE
+      RETURNING
+        l."id" AS "loop",
+        l."openRouterSelectionAlgorithm",
+        l."copilotSelectionAlgorithm",
+        l."openRouterSelectionCursor",
+        l."copilotSelectionCursor",
+        l."selectionCooldownWindowMs",
+        l."updatedAt"
+    `,
+    [input.openRouterSelectionAlgorithm ?? null, input.copilotSelectionAlgorithm ?? null, input.selectionCooldownWindowMs ?? null, loopId, userId],
+  );
+
+  return result.rows[0];
 };

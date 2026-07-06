@@ -152,11 +152,12 @@ Authentication-related runtime variables:
 - `APP_ATHENA_OIDC_CLIENT_SECRET`
 - `APP_ATHENA_OAUTH_CALLBACK_URL`
 - `APP_ATHENA_SECRET_KEY`
+- `APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY`
 - `APP_ATHENA_SESSION_MAX_AGE`
 - `APP_ATHENA_ALLOWED_ORIGINS`
 - `APP_ATHENA_FRONTEND_BASE_URL`
 
-`APP_ATHENA_OIDC_CLIENT_SECRET` and `APP_ATHENA_SECRET_KEY` are required and must be explicitly set. Do not rely on development sample values outside local development.
+`APP_ATHENA_OIDC_CLIENT_SECRET`, `APP_ATHENA_SECRET_KEY`, and `APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY` are required and must be explicitly set. Do not rely on development sample values outside local development.
 
 Database runtime variables:
 

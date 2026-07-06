@@ -1,4 +1,7 @@
+import { availableParallelism, cpus } from "node:os";
 import { defineConfig } from "@playwright/test";
+
+const workerCount = Math.max(1, availableParallelism ? availableParallelism() : cpus().length);
 
 const config = defineConfig({
   testDir: `./src`,
@@ -7,11 +10,11 @@ const config = defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: workerCount,
   reporter: `line`,
-  timeout: 120_000,
+  timeout: 10_000,
   expect: {
-    timeout: 120_000,
+    timeout: 10_000,
   },
   use: {
     baseURL: `http://athena.localhost`,
