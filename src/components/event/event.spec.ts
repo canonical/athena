@@ -12,4 +12,5 @@ test(`events page renders for authenticated users`, async ({ page }) => {
   await page.goto(`http://athena.localhost/event/list`);
 
   await expect(page.getByRole(`heading`, { name: `Events` })).toBeVisible();
+  await expect(page.getByText(`No events yet. Submit an event to get started.`)).toBeVisible();
 });

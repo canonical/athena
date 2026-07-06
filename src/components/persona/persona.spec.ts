@@ -89,3 +89,29 @@ test(`persona detail page supports assign to loop`, async ({ page }) => {
 
   await expect(page.getByText(`has been assigned to ${loop.name}`)).toBeVisible();
 });
+
+test(`persona list supports clone and edit flow for non-owned personas`, async ({ page }) => {
+  await authenticate(page);
+  await openPersonaList(page);
+
+  const cloneButton = page.getByRole(`button`, { name: /Clone & Edit / }).first();
+  await expect(cloneButton).toBeVisible();
+
+  await cloneButton.click();
+  await expect(page.getByRole(`dialog`).getByRole(`button`, { name: `Clone persona` })).toBeVisible();
+
+  const clonedName = `Cloned persona ${Date.now()}`;
+  await page.getByLabel(`Display name`).fill(clonedName);
+  await page.getByRole(`button`, { name: `Clone persona` }).click();
+
+  await expect(page.getByText(`${clonedName} has been created.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: clonedName, exact: true }).first()).toBeVisible();
+});
+
+test(`persona list edit drawer shows not found message for unknown persona id`, async ({ page }) => {
+  await authenticate(page);
+  await page.goto(`http://athena.localhost/persona/list?edit=00000000-0000-4000-8000-000000000000`);
+
+  await expect(page.getByText(`Persona not found`)).toBeVisible();
+  await expect(page.getByText(`The selected persona no longer exists.`)).toBeVisible();
+});

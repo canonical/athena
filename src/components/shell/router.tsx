@@ -14,13 +14,9 @@ const rootPath = `/`;
 const authenticationPath = `/authentication`;
 const authenticationSignOutPath = `/authentication/sign-out`;
 const loopBasePath = `/loop`;
-const loopListPath = `/loop/list`;
 const eventBasePath = `/event`;
-const eventListPath = `/event/list`;
 const personaBasePath = `/persona`;
-const personaListPath = `/persona/list`;
 const providerBasePath = `/provider`;
-const providerListPath = `/provider/list`;
 
 const loopListRoutePath = `list`;
 const loopDetailRoutePath = `$loopId`;
@@ -29,11 +25,6 @@ const personaListRoutePath = `list`;
 const personaDetailRoutePath = `$personaId`;
 const providerListRoutePath = `list`;
 const providerDetailRoutePath = `$providerId`;
-
-const legacyLoopListPath = `/loop-list`;
-const legacyEventsPath = `/events`;
-const legacyPersonaListPath = `/persona-list`;
-const legacyProviderListPath = `/provider-list`;
 
 const parseCreateFlag = (value: unknown): true | undefined => (value === true || value === `true` ? true : undefined);
 
@@ -411,25 +402,6 @@ const eventRoute = createRoute({
   component: EventRouteView,
 });
 
-const legacyEventsRoute = createRoute({
-  getParentRoute: () => protectedRoute,
-  path: legacyEventsPath,
-  beforeLoad: () => {
-    throw redirect({ to: eventListPath });
-  },
-  component: Outlet,
-});
-
-const legacyLoopListRoute = createRoute({
-  getParentRoute: () => protectedRoute,
-  path: legacyLoopListPath,
-  validateSearch: parseLoopListSearch,
-  beforeLoad: ({ search }) => {
-    throw redirect({ to: loopListPath, search });
-  },
-  component: Outlet,
-});
-
 const personaLayoutRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: personaBasePath,
@@ -447,16 +419,6 @@ const personaDetailRoute = createRoute({
   getParentRoute: () => personaLayoutRoute,
   path: personaDetailRoutePath,
   component: PersonaDetailView,
-});
-
-const legacyPersonaListRoute = createRoute({
-  getParentRoute: () => protectedRoute,
-  path: legacyPersonaListPath,
-  validateSearch: parsePersonaListSearch,
-  beforeLoad: ({ search }) => {
-    throw redirect({ to: personaListPath, search });
-  },
-  component: Outlet,
 });
 
 const providerLayoutRoute = createRoute({
@@ -478,29 +440,15 @@ const providerDetailRoute = createRoute({
   component: ProviderDetailView,
 });
 
-const legacyProviderListRoute = createRoute({
-  getParentRoute: () => protectedRoute,
-  path: legacyProviderListPath,
-  validateSearch: parseProviderListSearch,
-  beforeLoad: ({ search }) => {
-    throw redirect({ to: providerListPath, search });
-  },
-  component: Outlet,
-});
-
 const routeTree = rootRoute.addChildren([
   authenticationRoute,
   authenticationSignOutRoute,
   protectedRoute.addChildren([
     overviewRoute,
     loopLayoutRoute.addChildren([loopListRoute, loopDetailRoute]),
-    legacyLoopListRoute,
     eventLayoutRoute.addChildren([eventRoute]),
-    legacyEventsRoute,
     personaLayoutRoute.addChildren([personaRoute, personaDetailRoute]),
-    legacyPersonaListRoute,
     providerLayoutRoute.addChildren([providerRoute, providerDetailRoute]),
-    legacyProviderListRoute,
   ]),
 ]);
 

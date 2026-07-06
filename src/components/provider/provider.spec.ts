@@ -83,3 +83,40 @@ test(`loop providers tab supports assign remove and algorithm save`, async ({ pa
   await page.getByRole(`button`, { name: `Remove ${providerName}` }).click();
   await expect(page.getByText(`${providerName} has been removed from this loop.`)).toBeVisible();
 });
+
+test(`provider detail page renders expected fields`, async ({ page }) => {
+  await authenticate(page);
+
+  const displayName = `Detail provider ${Date.now()}`;
+  await createProviderViaUi(page, displayName);
+
+  await page.getByRole(`button`, { name: `Edit ${displayName}` }).click();
+  await expect(page).toHaveURL(/\/provider\/list\?edit=/);
+  const currentUrl = page.url();
+  const providerId = new URL(currentUrl).searchParams.get(`edit`);
+
+  expect(providerId).toBeTruthy();
+  await page.goto(`http://athena.localhost/provider/${providerId}`);
+
+  await expect(page.getByRole(`heading`, { name: displayName })).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Provider details` })).toBeVisible();
+  await expect(page.getByText(`openrouter`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`https://openrouter.ai/api/v1`)).toBeVisible();
+  await expect(page.getByText(`Credential configured`)).toBeVisible();
+});
+
+test(`provider detail with invalid id shows an error notification`, async ({ page }) => {
+  await authenticate(page);
+  await page.goto(`http://athena.localhost/provider/not-a-uuid`);
+
+  await expect(page.getByText(`Unable to load provider`)).toBeVisible();
+  await expect(page.getByText(`providerId must be a valid UUID.`)).toBeVisible();
+});
+
+test(`provider list edit drawer shows not found message for unknown provider id`, async ({ page }) => {
+  await authenticate(page);
+  await page.goto(`http://athena.localhost/provider/list?edit=00000000-0000-4000-8000-000000000000`);
+
+  await expect(page.getByText(`Provider not found`)).toBeVisible();
+  await expect(page.getByText(`The selected provider no longer exists.`)).toBeVisible();
+});

@@ -116,3 +116,11 @@ test(`loop details tab shows no paused banner for a properly configured loop`, a
   await expect(page.getByRole(`tab`, { name: `Details` })).toHaveAttribute(`aria-selected`, `true`);
   await expect(page.getByText(`Loop is paused`)).toHaveCount(0);
 });
+
+test(`loop detail with invalid id shows an error notification`, async ({ page }) => {
+  await authenticate(page);
+  await page.goto(`http://athena.localhost/loop/not-a-uuid`);
+
+  await expect(page.getByText(`Unable to load loop`)).toBeVisible();
+  await expect(page.getByText(`loopId must be a valid UUID.`)).toBeVisible();
+});
