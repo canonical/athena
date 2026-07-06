@@ -277,14 +277,28 @@ export const queryLoopCopilotCandidates = async (loopId: string): Promise<LoopCo
   return result.rows;
 };
 
-export const queryHarnessCredential = async (harnessId: string): Promise<string | undefined> => {
+export const queryHarnessCredential = async (harnessId: string, requesterId: string, loopId?: string): Promise<string | undefined> => {
   const result = await getPool().query<{ credentialCiphertext: string; credentialIv: string; credentialAuthTag: string; credentialKeyVersion: string }>(
     `
-      SELECT "credentialCiphertext", "credentialIv", "credentialAuthTag", "credentialKeyVersion"
-      FROM "harness"
-      WHERE "id" = $1
+      SELECT h."credentialCiphertext", h."credentialIv", h."credentialAuthTag", h."credentialKeyVersion"
+      FROM "harness" h
+      WHERE h."id" = $1
+        AND (
+          h."owner" = $2
+          OR (
+            $3::uuid IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM "loopHarness" lh
+              JOIN "loopUser" lu ON lu."loop" = lh."loop"
+              WHERE lh."harness" = h."id"
+                AND lh."loop" = $3::uuid
+                AND lu."user" = $2
+            )
+          )
+        )
     `,
-    [harnessId],
+    [harnessId, requesterId, loopId ?? null],
   );
 
   const row = result.rows[0];

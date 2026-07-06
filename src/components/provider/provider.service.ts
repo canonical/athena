@@ -287,14 +287,28 @@ export const queryLoopOpenRouterCandidates = async (loopId: string): Promise<Loo
   return result.rows;
 };
 
-export const queryProviderCredential = async (providerId: string): Promise<string | undefined> => {
+export const queryProviderCredential = async (providerId: string, requesterId: string, loopId?: string): Promise<string | undefined> => {
   const result = await getPool().query<{ credentialCiphertext: string; credentialIv: string; credentialAuthTag: string; credentialKeyVersion: string }>(
     `
-      SELECT "credentialCiphertext", "credentialIv", "credentialAuthTag", "credentialKeyVersion"
-      FROM "provider"
-      WHERE "id" = $1
+      SELECT p."credentialCiphertext", p."credentialIv", p."credentialAuthTag", p."credentialKeyVersion"
+      FROM "provider" p
+      WHERE p."id" = $1
+        AND (
+          p."owner" = $2
+          OR (
+            $3::uuid IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM "loopProvider" lp
+              JOIN "loopUser" lu ON lu."loop" = lp."loop"
+              WHERE lp."provider" = p."id"
+                AND lp."loop" = $3::uuid
+                AND lu."user" = $2
+            )
+          )
+        )
     `,
-    [providerId],
+    [providerId, requesterId, loopId ?? null],
   );
 
   const row = result.rows[0];
