@@ -8,12 +8,16 @@ This document is the source of truth for test strategy and test scope.
 2. We do not introduce unit tests or integration-only test suites unless explicitly requested.
 3. E2E tests are the primary verification mechanism for backend and frontend behavior.
 4. E2E specs must not use mocks, fixtures, or test doubles; they should exercise the real application stack end to end.
+5. All E2E scenarios are UI-driven in every case: setup, triggering actions, and assertions must be performed through the rendered application UI.
+6. Tests must not use direct database access or SQL helpers for test setup, mutation, or assertions.
+7. When UI coverage depends on state that cannot yet be created through the UI, add or extend a user-facing flow first, then test through UI; do not bypass via direct DB writes in specs.
 
 ## Scope requirements
 
-1. Tests must validate backend and frontend functionality through public interfaces (HTTP endpoints and end-to-end flows).
+1. Tests must validate backend and frontend functionality exclusively through UI-driven end-to-end flows.
 2. New backend and frontend behavior should ship with E2E coverage in co-located `*.spec.ts` tests.
 3. E2E scenarios should exercise happy paths, key validation failures, and error handling paths for changed backend and frontend behavior.
+4. API-only checks are not allowed in specs; backend contracts must be validated through UI-driven end-to-end behavior.
 
 ## Coverage requirements
 

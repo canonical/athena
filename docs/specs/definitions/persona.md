@@ -36,7 +36,7 @@ Users can manage personas in a loop with the following constraints:
 4. Users can remove personas from a loop (does not delete the persona unless it is non-default with no remaining loop assignments).
 5. Default personas cannot be deleted.
 6. Each loop must always have exactly one active routing persona.
-7. Event execution environment (harness-backed path or deterministic Athena thread path) is selected per event by routing decision as defined in [llm-harness.md](./llm-harness.md).
+7. For each event step, the active routing persona decides whether the assigned persona executes through a runner/harness path or the deterministic Athena thread path, as defined in [llm-harness.md](./llm-harness.md).
 
 ## Deterministic Routing Inputs
 
@@ -46,6 +46,8 @@ Athena deterministically provides the routing persona with:
 - each persona's current personality/definition context
 
 These deterministic inputs are used by the routing persona to select the next assigned persona for each routing decision.
+
+The same routing decision authority determines whether execution for that step should use runner/harness-backed execution or deterministic Athena thread execution.
 
 ## Persona, Loop, and Event Data Model Diagram
 
@@ -73,7 +75,6 @@ erDiagram
 		uuid id PK
 		string displayName
 		string personality
-		boolean usesCodingHarness
 		boolean isRouting
 		boolean isDefault
 		string owner FK

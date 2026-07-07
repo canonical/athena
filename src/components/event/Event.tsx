@@ -42,59 +42,52 @@ export function Event() {
   const state = useEvents();
 
   if (state.status === "loading") {
-    return (
-      <section className="athena-home">
-        <p className="p-heading--5">Events</p>
-        <p className="p-text--default">Loading events...</p>
-      </section>
-    );
+    return <p className="p-text--default">Loading events...</p>;
   }
 
   if (state.status === "error") {
     return (
-      <section className="athena-home">
-        <p className="p-heading--5">Events</p>
-        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load events">
-          {state.message}
-        </Notification>
-      </section>
+      <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load events">
+        {state.message}
+      </Notification>
     );
   }
 
   return (
-    <section className="athena-home">
-      <p className="p-heading--5">Events</p>
+    <>
       <h1 className="p-heading--2">Events</h1>
       {state.events.length === 0 ? (
         <p className="p-text--default">No events yet. Submit an event to get started.</p>
       ) : (
-        <MainTable
-          headers={[{ content: "Status" }, { content: "Source" }, { content: "Work item" }, { content: "Requested outcome" }, { content: "Assignee" }, { content: "Emitted at" }]}
-          rows={state.events.map((event) => {
-            const eventUrl = readEventUrl(event.payload);
+        <div className="p-card p-strip is-shallow">
+          <MainTable
+            headers={[{ content: "Status" }, { content: "Source" }, { content: "Work item" }, { content: "Requested outcome" }, { content: "Assignee" }, { content: "Emitted at" }]}
+            rows={state.events.map((event) => {
+              const eventUrl = readEventUrl(event.payload);
 
-            return {
-              key: event.id,
-              columns: [
-                { content: statusLabel[event.status] ?? event.status },
-                { content: event.sourceRef ? `${event.sourceType} · ${event.sourceRef}` : event.sourceType },
-                {
-                  content: eventUrl ? (
-                    <a href={eventUrl} rel="noreferrer" target="_blank">
-                      {eventUrl}
-                    </a>
-                  ) : (
-                    "—"
-                  ),
-                },
-                { content: event.requestedOutcome ?? "—" },
-                { content: event.assignee ?? "—" },
-                { content: new Date(event.emittedAt).toLocaleString() },
-              ],
-            };
-          })}
-        />
+              return {
+                key: event.id,
+                columns: [
+                  { content: statusLabel[event.status] ?? event.status },
+                  { content: event.sourceRef ? `${event.sourceType} · ${event.sourceRef}` : event.sourceType },
+                  {
+                    content: eventUrl ? (
+                      <a href={eventUrl} rel="noreferrer" target="_blank">
+                        {eventUrl}
+                      </a>
+                    ) : (
+                      "—"
+                    ),
+                  },
+                  { content: event.requestedOutcome ?? "—" },
+                  { content: event.assignee ?? "—" },
+                  { content: new Date(event.emittedAt).toLocaleString() },
+                ],
+              };
+            })}
+          />
+        </div>
       )}
-    </section>
+    </>
   );
 }

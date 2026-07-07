@@ -77,3 +77,47 @@ Notes:
 
 1. Use spaces instead of tabs for indentation.
 2. In Markdown files, indent nested list items with two spaces so GitHub renders lists consistently.
+3. Use Backticks in strings instead of single or double quotes, except imports. 
+
+
+## Verification Standard
+1. Use `npm run check` & `npm run lint` commands to validate changes. 
+2. Use `npm run format:fix` to correct the formatting issues. 
+
+## Forms
+1. Use Formik for forms. 
+
+## Routing
+1. All the front-end routed components should lazy loaded.
+
+## Application Layout
+Application component hierarchy standard is as below:
+- Application
+  - Side bar
+  - Main Area
+    - [Entity]Layout.tsx
+      - [Entity]List.tsx
+      - [Entity].tsx
+      - [Entity]Editor.tsx
+
+1. [Entity]Layout.tsx
+  - Breadcrumbs on the top, route children right below. No headings, only defines layout & routing.
+  - Lazy loaded route
+  - Encapsulates without a Card component
+  - Provides top-bottom-right-left default paddings to its content & children
+  - Route: /[entity]
+2. [Entity]List.tsx
+  - Lists the existing entities
+  - Lazy loaded route
+  - Route: /[entity]/list
+3. [Entity].tsx
+  - Displays read-only version of the entity
+  - Lazy loaded route
+  - Route: /[entity]/[:id]
+4. [Entity]Editor.tsx
+  - 2 modes: edit & create
+  - Displays entity editor formik form
+  - Strictly works within a Drawer (from Canonical React Components)
+  - Lazy loaded route
+  - Create Mode Route: /[entity]/[anyroute]?create=true
+  - Edit Mode Route: /[entity]/[anyroute]?edit=[id]

@@ -1,9 +1,9 @@
 import { Button, Notification, NotificationSeverity, Select } from "@canonical/react-components";
 import type { User } from "@components/authentication/session.schema.js";
-import { type FormEvent, useState } from "react";
+import { useFormik } from "formik";
 import { assignPersonaToLoop, createPersona, updatePersona } from "./persona.client.js";
-import type { Feedback, FormState, PersonaEditorProps, Persona as PersonaRecord } from "./persona.schema.js";
-import { personaLifecycleStatuses } from "./persona.schema.js";
+import type { PersonaEditorProps, Persona as PersonaRecord } from "./persona.schema.js";
+import { personaInsertSchema, personaLifecycleStatuses, personaUpdateSchema } from "./persona.schema.js";
 
 export const isPersonaOwner = (persona: PersonaRecord, currentUser: User | null): boolean => {
   if (!currentUser || !persona.owner) {
@@ -21,81 +21,104 @@ const lifecycleStatusLabel: Record<string, string> = {
   archived: `Archived`,
 };
 
-const emptyForm = (): FormState => ({
-  displayName: ``,
-  personality: ``,
-  usesCodingHarness: false,
-  lifecycleStatus: `active`,
-});
+type PersonaFormValues = {
+  displayName: string;
+  role: string;
+  personality: string;
+  lifecycleStatus: (typeof personaLifecycleStatuses)[number];
+};
 
 export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemplates, onSuccess, onCancel }: PersonaEditorProps) {
-  const [form, setForm] = useState<FormState>(
-    editingPersona
+  const isEdit = Boolean(editingPersona);
+
+  const formik = useFormik<PersonaFormValues>({
+    enableReinitialize: true,
+    initialValues: editingPersona
       ? {
           displayName: editingPersona.displayName,
+          role: editingPersona.role ?? ``,
           personality: editingPersona.personality,
-          usesCodingHarness: editingPersona.usesCodingHarness,
           lifecycleStatus: editingPersona.lifecycleStatus,
         }
       : cloneSource
         ? {
             displayName: cloneSource.displayName,
+            role: cloneSource.role ?? ``,
             personality: cloneSource.personality,
-            usesCodingHarness: cloneSource.usesCodingHarness,
             lifecycleStatus: cloneSource.lifecycleStatus,
           }
-        : emptyForm(),
-  );
-  const [isBusy, setIsBusy] = useState(false);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
+        : {
+            displayName: ``,
+            role: ``,
+            personality: ``,
+            lifecycleStatus: `active`,
+          },
+    validate: (values) => {
+      const parseResult = (isEdit ? personaUpdateSchema : personaInsertSchema).safeParse(values);
 
-  const applyTemplate = (ref: PersonaRecord) => {
-    setForm({
-      displayName: ref.displayName,
-      personality: ref.personality,
-      usesCodingHarness: ref.usesCodingHarness,
-      lifecycleStatus: `active`,
-    });
-    setFeedback(null);
-  };
+      if (parseResult.success) {
+        return {};
+      }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsBusy(true);
-    setFeedback(null);
+      const errors: Partial<Record<keyof PersonaFormValues, string>> = {};
 
-    try {
-      if (editingPersona) {
-        await updatePersona(editingPersona.id, form);
-        onSuccess(`${form.displayName} has been updated.`);
-      } else {
-        const created = await createPersona(form);
-        if (loopId) {
-          await assignPersonaToLoop(loopId, created.id);
-          onSuccess(`${form.displayName} has been added to the loop.`);
-        } else {
-          onSuccess(`${form.displayName} has been created.`);
+      for (const issue of parseResult.error.issues) {
+        const key = issue.path[0];
+
+        if (typeof key === `string` && key in values && !errors[key as keyof PersonaFormValues]) {
+          errors[key as keyof PersonaFormValues] = issue.message;
         }
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setFeedback({
-        severity: NotificationSeverity.NEGATIVE,
-        title: editingPersona ? `Unable to update persona` : `Unable to create persona`,
-        message,
-      });
-    } finally {
-      setIsBusy(false);
-    }
+
+      return errors;
+    },
+    onSubmit: async (values, helpers) => {
+      helpers.setStatus(undefined);
+
+      const parseResult = (isEdit ? personaUpdateSchema : personaInsertSchema).safeParse(values);
+
+      if (!parseResult.success) {
+        helpers.setStatus(parseResult.error.issues[0]?.message ?? `Invalid input.`);
+        return;
+      }
+
+      try {
+        if (editingPersona) {
+          await updatePersona(editingPersona.id, parseResult.data);
+          onSuccess(`${values.displayName} has been updated.`);
+        } else {
+          const created = await createPersona(parseResult.data);
+          if (loopId) {
+            await assignPersonaToLoop(loopId, created.id);
+            onSuccess(`${values.displayName} has been added to the loop.`);
+          } else {
+            onSuccess(`${values.displayName} has been created.`);
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        helpers.setStatus(message);
+      }
+    },
+  });
+
+  const applyTemplate = (ref: PersonaRecord) => {
+    formik.setValues({
+      displayName: ref.displayName,
+      role: ref.role ?? ``,
+      personality: ref.personality,
+      lifecycleStatus: `active`,
+    });
+    formik.setStatus(undefined);
   };
 
   return (
     <div>
       {catalogTemplates && catalogTemplates.length > 0 ? (
-        <div className="p-strip is-shallow">
+        <div className="p-card p-strip is-shallow">
           <h2 className="p-heading--4">Reference persona templates</h2>
           <p className="p-text--default">Select a reference persona to pre-fill the form below with a standard personality definition.</p>
-          <div style={{ display: `flex`, flexWrap: `wrap`, gap: `0.5rem` }}>
+          <div>
             {catalogTemplates.map((ref) => (
               <Button appearance="base" key={ref.id} onClick={() => applyTemplate(ref)} type="button">
                 {ref.displayName}
@@ -104,39 +127,40 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
           </div>
         </div>
       ) : null}
-      <div className="p-strip is-shallow">
-        {feedback ? (
-          <Notification severity={feedback.severity} title={feedback.title}>
-            {feedback.message}
+      <div className="p-card p-strip is-shallow">
+        {typeof formik.status === `string` ? (
+          <Notification severity={NotificationSeverity.NEGATIVE} title={editingPersona ? `Unable to update persona` : `Unable to create persona`}>
+            {formik.status}
           </Notification>
         ) : null}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={formik.handleSubmit}>
           <h2 className="p-heading--4">{editingPersona ? `Edit persona` : cloneSource ? `Clone persona` : `Add persona`}</h2>
           <label htmlFor="persona-display-name">Display name</label>
-          <input id="persona-display-name" name="persona-display-name" onChange={(event) => setForm((prev) => ({ ...prev, displayName: event.target.value }))} required type="text" value={form.displayName} />
+          <input id="persona-display-name" name="displayName" onBlur={formik.handleBlur} onChange={formik.handleChange} required type="text" value={formik.values.displayName} />
+          {formik.touched.displayName && formik.errors.displayName ? <p className="p-form-validation is-error">{formik.errors.displayName}</p> : null}
+          <label htmlFor="persona-role">Role</label>
+          <input id="persona-role" name="role" onBlur={formik.handleBlur} onChange={formik.handleChange} type="text" value={formik.values.role} />
+          {formik.touched.role && formik.errors.role ? <p className="p-form-validation is-error">{formik.errors.role}</p> : null}
           <label htmlFor="persona-personality">Personality</label>
-          <textarea id="persona-personality" name="persona-personality" onChange={(event) => setForm((prev) => ({ ...prev, personality: event.target.value }))} required rows={6} value={form.personality} />
+          <textarea id="persona-personality" name="personality" onBlur={formik.handleBlur} onChange={formik.handleChange} required rows={6} value={formik.values.personality} />
+          {formik.touched.personality && formik.errors.personality ? <p className="p-form-validation is-error">{formik.errors.personality}</p> : null}
           <Select
             id="persona-lifecycle-status"
             label="Lifecycle status"
-            name="persona-lifecycle-status"
-            onChange={(event) => setForm((prev) => ({ ...prev, lifecycleStatus: event.target.value as (typeof personaLifecycleStatuses)[number] }))}
+            name="lifecycleStatus"
+            onChange={formik.handleChange}
             options={personaLifecycleStatuses.map((status) => ({ value: status, label: lifecycleStatusLabel[status] ?? status }))}
-            value={form.lifecycleStatus}
+            value={formik.values.lifecycleStatus}
           />
-          <label>
-            <input checked={form.usesCodingHarness} name="persona-uses-coding-harness" onChange={(event) => setForm((prev) => ({ ...prev, usesCodingHarness: event.target.checked }))} type="checkbox" />
-            {` Uses coding harness`}
-          </label>
-          <div style={{ marginTop: `1rem` }}>
-            <Button appearance="positive" disabled={isBusy} type="submit">
-              {editingPersona ? (isBusy ? `Saving persona...` : `Save persona`) : cloneSource ? (isBusy ? `Cloning persona...` : `Clone persona`) : isBusy ? `Adding persona...` : `Add persona`}
-            </Button>
+          <div className="u-align--right">
             {(editingPersona || cloneSource) && onCancel ? (
               <Button appearance="base" onClick={onCancel} type="button">
                 Cancel edit
               </Button>
             ) : null}
+            <Button appearance="positive" disabled={formik.isSubmitting} type="submit">
+              {editingPersona ? (formik.isSubmitting ? `Saving persona...` : `Save persona`) : cloneSource ? (formik.isSubmitting ? `Cloning persona...` : `Clone persona`) : formik.isSubmitting ? `Adding persona...` : `Add persona`}
+            </Button>
           </div>
         </form>
       </div>

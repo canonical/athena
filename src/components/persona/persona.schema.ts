@@ -8,23 +8,23 @@ const requiredString = (message: string) => z.preprocess((v) => (typeof v === "s
 
 export const personaInsertSchema = z.object({
   displayName: requiredString(`displayName is required.`),
+  role: z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string().optional()),
   personality: requiredString(`personality is required.`),
-  usesCodingHarness: z.boolean({ message: `usesCodingHarness is required.` }),
   lifecycleStatus: z.enum(personaLifecycleStatuses).default(`active`),
 });
 
 export const personaUpdateSchema = z.object({
   displayName: requiredString(`displayName is required.`),
+  role: z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string().optional()),
   personality: requiredString(`personality is required.`),
-  usesCodingHarness: z.boolean({ message: `usesCodingHarness is required.` }),
   lifecycleStatus: z.enum(personaLifecycleStatuses),
 });
 
 export type Persona = {
   id: string;
   displayName: string;
+  role: string | null;
   personality: string;
-  usesCodingHarness: boolean;
   isRouting: boolean;
   isDefault: boolean;
   owner: string | null;
@@ -44,8 +44,8 @@ export type Feedback = {
 
 export type FormState = {
   displayName: string;
+  role: string;
   personality: string;
-  usesCodingHarness: boolean;
   lifecycleStatus: (typeof personaLifecycleStatuses)[number];
 };
 
