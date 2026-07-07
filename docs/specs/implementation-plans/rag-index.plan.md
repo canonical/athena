@@ -28,7 +28,8 @@ In scope:
   `loopRagAttachment`) backed by Postgres with pgvector.
 - A source-adapter contract, with the Markdown-file-collection adapter as the only
   implementation.
-- Overlapping chunking with file-path-and-character-offset lineage.
+- A chunking-strategy contract, with a fixed-size overlapping window (`fixedOverlap`) as
+  the only implementation, producing file-path-and-character-offset lineage.
 - Embedding via an extension to the loop OpenAI API-compatible provider contract.
 - `rebuild`-based ingestion: walk the corpus, chunk, embed, idempotently upsert.
 - A per-index lookup tool, governed by the per-loop tool allow/deny list.
@@ -44,6 +45,7 @@ Out of scope (deferred):
 - Query-time facets derived from chunk parameters.
 - Retention and compaction.
 - Multiple or variable embedding models and re-embedding migration beyond `rebuild`.
+- Alternative chunking strategies beyond the fixed-size overlapping window.
 - Non-semantic ranking (recency, kind weighting), and chunk merge or deduplication.
 - Deterministic context assembly at routing time (retrieval is pull-only).
 
@@ -59,9 +61,17 @@ Out of scope (deferred):
 - Ingestion is out-of-band via `rebuild`; it is never fired from loop event handling and
   cannot affect an event outcome. The Markdown corpus is a snapshot; `rebuild` is the
   update path.
-- Chunking splits each file into overlapping windows sized in tokens against the
-  embedding input limit; chunk size and overlap are index configuration, and backtrack
-  offsets are stored in characters.
+- Ingestion is two-phase: chunk rows are persisted first with `embedding` NULL, then
+  embedded in a separate step that targets `embedding IS NULL`, so it is resumable and
+  degrades gracefully when no provider is available. The MVP runs both phases inline in the
+  admin-triggered `rebuild` command; because phase two is an idempotent job unit, the scale
+  path is a durable job queue — a Postgres-backed one (`pg-boss` or `graphile-worker`)
+  reusing the existing database, rather than a Redis-backed `BullMQ` or a new service.
+- Chunking is a pluggable strategy, independent of the source adapter. The MVP strategy is
+  a fixed-size overlapping window (`fixedOverlap`, parametrized by window size and overlap,
+  sized in tokens against the embedding input limit); backtrack offsets are stored in
+  characters. New strategies (structural, semantic, recursive) register against the same
+  contract without touching sources or retrieval.
 - Embeddings extend the loop OpenAI-compatible provider contract (a profile with an
   `embeddingModel`, called at `/v1/embeddings`), so
   [openai-api-connection.plan.md](./openai-api-connection.plan.md) grows an embeddings
@@ -125,10 +135,13 @@ Out of scope (deferred):
   collection to ingest.
 - Embedding config: `embeddingProviderRef`, `embeddingModel`, `embeddingModelVersion`
   (the index owns its model).
-- Chunking config: `chunkSize` and `chunkOverlap`.
+- Chunking config: `chunkingStrategy` (TEXT), the strategy discriminator (MVP
+  `fixedOverlap`), and `chunking` (JSONB), its parameters — for `fixedOverlap`, the window
+  `size` and `overlap` — mirroring the `sourceType`/`source` split.
 - Behavior: the index object exposes `lookup(query, limit)` (filtered semantic retrieval)
-  and `rebuild` (full re-projection of the source). Source-specific enumerate, chunk, and
-  projection are a per-`sourceType` strategy the index delegates to.
+  and `rebuild` (full re-projection of the source). Enumerate and projection are a
+  per-`sourceType` adapter strategy; splitting projected text into chunks is a separate
+  per-`chunkingStrategy` strategy; the index delegates to both.
 - MVP: created when an admin opts a loop in, sourcing that loop's Markdown collection.
 
 `loopRagAttachment` (a loop's use of an index):
@@ -155,7 +168,9 @@ Out of scope (deferred):
 - `contentHash` (TEXT): hash of the source document, so `rebuild` skips unchanged
   documents.
 - `text` (TEXT): the chunk text that was embedded.
-- `embedding` (`vector(1536)`): the MVP model's dimension (`text-embedding-3-small`).
+- `embedding` (`vector(1536)`, nullable): the MVP model's dimension
+  (`text-embedding-3-small`). Chunk rows are written before embedding; a row is retrievable
+  only once embedded, so retrieval filters `embedding IS NOT NULL`.
 - Postgres indexes: btree `index` for isolation; no global ANN index (see
   [Storage](#storage-postgres-and-pgvector)).
 - Uniqueness: `(index, sourceRef, chunkIndex)` for idempotent upsert.
@@ -184,29 +199,51 @@ only in the component `schema.ts`, component at `src/components/rag/`.
 
 ## Chunking
 
-- Each document is split into windows sized in tokens against the embedding input limit,
-  with a fixed `chunkOverlap` between neighbors so a passage spanning a boundary stays
-  whole in at least one chunk.
-- Each chunk records `sourceRef` (file path), `chunkIndex`, and the
-  `startOffset`/`endOffset` character span it was cut from. The projection is the chunk's
-  redacted text; no LLM summarization.
-- Chunking is deterministic: the same document and parameters always produce the same
-  chunks and offsets, so `rebuild` is reproducible.
-- Because chunks overlap, retrieval can return two adjacent chunks for one passage; the
+Chunking is a pluggable strategy, independent of the source adapter and the embedding
+model. The strategy contract is a single method — `chunk(text): Chunk[]` — that takes a
+document's text and returns an ordered list of chunks, each a `{ text, startOffset,
+endOffset }`; the pipeline assigns `chunkIndex` by order and attaches the source lineage
+(`sourceRef`). Keeping it a separate strategy lets structural,
+semantic, or recursive splitters be added later without touching sources or retrieval. A
+strategy is selected by the `chunkingStrategy` discriminator with its params in `chunking`,
+mirroring the `sourceType`/`source` split; new strategies register against the same
+contract.
+
+- MVP strategy — `fixedOverlap`: a fixed-size sliding window over the document text.
+  Parameters: `size` (window length) and `overlap` (span shared with the neighbor), sized
+  in tokens against the embedding input limit; `overlap` keeps a passage that spans a
+  boundary whole in at least one chunk.
+- Offsets are recorded in characters even when windows are measured in tokens, so the
+  `startOffset`/`endOffset` backtrack maps to an exact source span. The projection is the
+  chunk's redacted text; no LLM summarization.
+- The strategy is deterministic: the same document and parameters always produce the same
+  chunks and offsets, so `rebuild` is reproducible and idempotent upsert is stable.
+- Because windows overlap, retrieval can return two adjacent chunks for one passage; the
   MVP returns both and defers merge or deduplication.
 
 ## Ingestion (rebuild)
 
 Ingestion is out-of-band and owned by the index; it is never fired from loop event
-handling. The adapter enumerates the source into documents, and the shared pipeline
-chunks, redacts, embeds with the index's model, and idempotently upserts.
+handling. It runs in two phases so chunking and embedding are decoupled:
+
+1. Chunk and persist. The adapter enumerates the source into documents, the chunking
+   strategy splits each into an ordered list of chunks, and the pipeline redacts and
+   upserts the chunk rows with `embedding` left NULL.
+2. Embed the missing. Each row with `embedding IS NULL` is put through the index's embedding
+   model and updated in place. A row becomes retrievable only once embedded.
 
 - `rebuild` walks the corpus, and for each document whose `contentHash` changed, re-chunks
-  and upserts its chunks; unchanged documents are skipped.
+  and upserts its chunks (phase 1), then embeds any unembedded rows (phase 2); unchanged
+  documents are skipped.
 - Idempotency: the `(index, sourceRef, chunkIndex)` unique key prevents double-insert under
-  retry and concurrent runs.
-- The corpus is a snapshot; live watching and incremental supersession are future.
-- Embedding failure: retry; the files remain the durable source, so nothing is lost.
+  retry and concurrent runs, and phase 2 is naturally resumable — it only ever targets
+  `embedding IS NULL`.
+- Graceful degradation: if no embedding-capable provider is available, phase 1 still
+  persists the chunks and phase 2 fills them in on a later run; retrieval meanwhile returns
+  only already-embedded rows.
+- The corpus is a snapshot; live watching and incremental supersession are future. The MVP
+  runs both phases inline in `rebuild`; see [Decisions](#decisions) for the queue scale
+  path.
 
 ## Retrieval (lookup tool)
 
@@ -215,8 +252,9 @@ chunks, redacts, embeds with the index's model, and idempotently upserts.
   reach the index.
 - Query: the persona supplies the query text and an optional bound within the attachment's
   `maxChunks`.
-- Filters (mandatory): `index` in the loop's enabled attached indexes. In the MVP that is
-  the single Markdown index attached to the loop.
+- Filters (mandatory): `index` in the loop's enabled attached indexes, and
+  `embedding IS NOT NULL` (unembedded chunks are not yet retrievable). In the MVP the index
+  scope is the single Markdown index attached to the loop.
 - Ranking: pure semantic similarity, with a stable tie-break by `sourceRef` then
   `chunkIndex`.
 - Output: a bounded, ordered list of chunk texts, each carrying its lineage (`filePath`,
@@ -267,7 +305,8 @@ chunks, redacts, embeds with the index's model, and idempotently upserts.
 Per [testing-standards.md](../../testing-standards.md):
 
 - Loop isolation: no cross-loop retrieval (security-critical).
-- Chunk lineage: `startOffset`/`endOffset` round-trip to the exact source span, including
+- Chunking strategy: the `fixedOverlap` window honors its `size`/`overlap` parameters, and
+  chunk lineage (`startOffset`/`endOffset`) round-trips to the exact source span, including
   across overlaps.
 - Idempotent `rebuild` under retry and concurrent runs; unchanged documents skipped by
   `contentHash`.
@@ -283,8 +322,9 @@ Per [testing-standards.md](../../testing-standards.md):
 3. Define the component `schema.ts` (Zod and types), the source-adapter strategy, and
    `ragIndex` / `loopRagAttachment` CRUD with loop-admin authorization; on opt-in, create
    the Markdown index and attach it to the loop.
-4. Implement the Markdown adapter: enumerate the file collection, chunk with overlap and
-   offset lineage, and feed the shared redact/embed/idempotent-upsert pipeline behind
+4. Implement the Markdown adapter (enumerate and project the file collection) and the
+   `fixedOverlap` chunking strategy (windowed split with offset lineage) behind the
+   strategy contract, feeding the shared redact/embed/idempotent-upsert pipeline under
    `rebuild`.
 5. Implement the lookup tool: mandatory index-scope filter, pure semantic ranking, bounded
    chunk output with citation, and tool-execution recording and snapshot.

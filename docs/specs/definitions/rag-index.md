@@ -2,7 +2,7 @@
 
 ## Summary
 
-A RAG index gives Athena's personas retrievable access to a body of knowledge that
+A RAG index gives Athena's personas access to a body of knowledge that
 exceeds their context window: it holds that knowledge as embedded, chunked entries and,
 on request, returns the most relevant slice to the persona that asks. The index is a
 standalone entity that a loop attaches, and a persona consumes it as a lookup tool
@@ -32,8 +32,9 @@ orchestration code.
 ## Index model and sources
 
 An index owns its data source, embedding model, and chunking, ingestion, and rebuild
-procedures. A source adapter turns one source type into indexable chunks; adapters are
-pluggable, and a Markdown file collection is the only one in the MVP. Event and
+procedures. A source adapter turns one source type into ingestible documents that a
+chunking strategy then splits; adapters are pluggable, and a Markdown file collection is
+the only one in the MVP. Event and
 conversation sources — including a loop's own history — are future adapters over the
 same abstraction. A loop-to-index attachment makes an index available to a loop and
 carries that loop's consumption settings for it.
@@ -57,30 +58,37 @@ it is derived:
 
 ## Chunking and lineage
 
-A source document is split into overlapping chunks, each embedded independently and each
-carrying a backtrack to its exact origin:
+Splitting a document into chunks is a pluggable **chunking strategy**, independent of the
+source adapter: the adapter yields a document's text, and the strategy cuts that text into
+an ordered list of chunks. Keeping the two concerns orthogonal lets any chunking strategy
+compose with any source, and lets the splitting approach evolve — structural, semantic, or
+recursive — without touching the sources or the retrieval engine.
 
-- Chunks are sized to the embedding input and overlap their neighbors, so a passage
-  split across a boundary still appears whole in at least one chunk.
-- Each chunk records its lineage — for the Markdown source, the file path and the
-  character span (`startOffset`, `endOffset`) it was cut from, plus its ordinal in the
-  file. Lineage makes every retrieved chunk traceable to its source location and citable
-  back to it.
-- Ingestion is idempotent on a chunk's stable identity, so re-running it never
-  double-inserts.
+A chunk is text plus a backtrack to its exact origin. Whatever the strategy, each chunk
+records its lineage — for the Markdown source, the file path and the character span
+(`startOffset`, `endOffset`) it was cut from, plus its ordinal in the document. Lineage
+makes every retrieved chunk traceable to its source location and citable back to it, and
+ingestion is idempotent on that identity, so re-running it never double-inserts.
 
-Because chunks overlap, a single relevant passage can surface as two adjacent chunks;
-the MVP returns both (recurrence is itself a signal) and defers merge or deduplication.
+The MVP strategy is a **fixed-size overlapping window**, parametrized by a window size and
+a neighbor overlap: consecutive windows share a configurable span, so a passage split
+across a boundary still appears whole in at least one chunk. Both parameters are index
+configuration (see [Index configuration](#index-configuration)). Because windows overlap,
+a single passage can surface as two adjacent chunks; the MVP returns both (recurrence is
+itself a signal) and defers merge or deduplication.
 
 ## Ingestion and rebuild
 
 Ingestion is out-of-band: it is never fired from within loop event handling, so it
-cannot affect any event outcome. An adapter normalizes its source into chunks that the
-shared pipeline redacts, embeds, and idempotently upserts.
+cannot affect any event outcome. It runs in two decoupled phases: the chunking strategy
+splits each document and the pipeline upserts the chunks, then each chunk still missing an
+embedding is put through the model. A chunk is written before its embedding and becomes
+retrievable only once embedded, so ingestion degrades gracefully when the embedding
+provider is unavailable — the chunks persist and are embedded on a later run.
 
 - `rebuild` re-projects the whole source: it walks the corpus, chunks each document,
-  embeds, and upserts. A per-document content hash lets `rebuild` skip unchanged
-  documents cheaply.
+  upserts the chunks, and embeds those still missing an embedding. A per-document content
+  hash lets `rebuild` skip unchanged documents cheaply.
 - The Markdown source is treated as a snapshot: `rebuild` is the update path, and the
   index is eventually consistent with the files. Live file-watching and incremental
   supersession are a future capability.
@@ -123,7 +131,8 @@ attachment. Changes are audited (actor, timestamp, prior and new value), consist
 
 - `source`: the corpus the index projects; for the Markdown adapter, the file collection
   to ingest.
-- `chunking`: chunk size and overlap.
+- `chunking`: the chunking strategy and its parameters; the MVP strategy is a fixed-size
+  overlapping window, parametrized by a window size and a neighbor overlap.
 - `embedding`: `providerRef`, `model`, and `modelVersion`. The MVP pins a concrete model
   and dimension; see
   [rag-index.plan.md](../implementation-plans/rag-index.plan.md).
