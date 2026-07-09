@@ -53,16 +53,11 @@ jobs:
       - name: Stage the app into app/
         run: ./scripts/stage-app.sh
 
-      - name: Setup LXD
-        uses: canonical/setup-lxd@main
-
-      - name: Setup Rockcraft
-        run: sudo snap install rockcraft --channel latest/edge --classic
-
       - name: Pack rock
+        uses: canonical/craft-actions/rockcraft-pack@v1
         env:
+          ROCKCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS: "true"
           VITE_API_BASE_URL: "/api"
-        run: rockcraft pack -v
 
       - name: Upload rock artifact
         uses: actions/upload-artifact@v4
@@ -95,19 +90,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup LXD
-        uses: canonical/setup-lxd@main
-
-      - name: Setup Charmcraft
-        run: sudo snap install charmcraft --channel latest/edge --classic
-
-      - name: Fetch charm libs
-        working-directory: charm
-        run: charmcraft fetch-libs
-
       - name: Pack charm
-        working-directory: charm
-        run: charmcraft pack -v
+        uses: canonical/craft-actions/charmcraft-pack@v1
+        with:
+          path: charm
+        env:
+          CHARMCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS: "true"
 
       - name: Upload charm artifact
         uses: actions/upload-artifact@v4
