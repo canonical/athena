@@ -33,6 +33,15 @@ requires:
 
 config:
   options:
+    athena-port:
+      type: int
+      default: 8080
+      description: >
+        Application listen port, injected as APP_ATHENA_PORT. This must match the
+        port the workload serves on (the expressjs-framework default is 8080).
+        It is injected under the APP_ATHENA_ prefix so Athena's env accessor
+        resolves it before the Kubernetes-injected `ATHENA_PORT` service-link
+        variable (which holds a `tcp://host:port` URL and is not a number).
     allowed-origins:
       type: string
       default: "http://athena.localhost"
@@ -73,3 +82,8 @@ config:
       description: >
         Credential encryption configuration. Create a Juju user secret containing
         the key `encryption-key`, which is injected as APP_CREDENTIAL_ENCRYPTION_KEY.
+    secret:
+      type: secret
+      description: >
+        Session signing secret. Create a Juju user secret containing the key
+        `key`, which is injected as APP_SECRET_KEY.
