@@ -9,6 +9,9 @@ coverage/
 .nyc_output/
 testing/results/
 
+# Ephemeral rock/charm build staging (assembled by scripts/stage-app.sh)
+/app/
+
 # Environment and local overrides
 .env
 .env.*
