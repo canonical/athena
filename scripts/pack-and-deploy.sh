@@ -25,10 +25,7 @@ export CHARMCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS=true
 export VITE_API_BASE_URL="${VITE_API_BASE_URL:-/api}"
 
 REGISTRY="localhost:32000"
-# Use a unique image tag per local build so Kubernetes always pulls the freshly
-# built image. Reusing a fixed tag (e.g. the app version) makes the kubelet serve
-# the cached layers under IfNotPresent, so code changes would not take effect.
-# This only affects local deploys; the release pipeline tags by version.
+# Use a unique image tag per local build so Kubernetes always pulls the freshly built img
 IMAGE_TAG="${IMAGE_TAG:-${APP_VERSION}-local-$(date +%Y%m%d%H%M%S)}"
 IMAGE="${REGISTRY}/${ROCK_NAME}:${IMAGE_TAG}"
 
