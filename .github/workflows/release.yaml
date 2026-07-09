@@ -54,7 +54,7 @@ jobs:
         run: ./scripts/stage-app.sh
 
       - name: Pack rock
-        uses: canonical/craft-actions/rockcraft-pack@v1
+        uses: canonical/craft-actions/rockcraft-pack@main
         env:
           ROCKCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS: "true"
           VITE_API_BASE_URL: "/api"
@@ -91,7 +91,7 @@ jobs:
           persist-credentials: false
 
       - name: Pack charm
-        uses: canonical/craft-actions/charmcraft-pack@v1
+        uses: canonical/craft-actions/charmcraft-pack@main
         with:
           path: charm
         env:
