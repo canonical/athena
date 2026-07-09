@@ -91,7 +91,7 @@ jobs:
           persist-credentials: false
 
       - name: Pack charm
-        uses: canonical/craft-actions/charmcraft-pack@main
+        uses: canonical/craft-actions/charmcraft/pack@main
         with:
           path: charm
         env:
