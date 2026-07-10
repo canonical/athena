@@ -33,6 +33,14 @@ requires:
 
 config:
   options:
+    node-env:
+      type: string
+      default: "production"
+      description: >
+        Node runtime environment, injected as APP_NODE_ENV. Athena's env accessor
+        resolves the APP_ prefixed value before the framework-injected bare
+        NODE_ENV, so this overrides it. Set to "development" for local testing to
+        allow insecure (http) OIDC discovery; keep "production" otherwise.
     athena-port:
       type: int
       default: 8080
