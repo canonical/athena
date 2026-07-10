@@ -32,4 +32,4 @@ class AthenaCharm(paas_charm.expressjs.Charm):
 
 
 if __name__ == "__main__":
-    ops.main(AthenaCharm)
+    ops.main(AthenaCharm) 
