@@ -9,7 +9,8 @@
 # juju controller, lxd, rockcraft, charmcraft.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# This script lives in charm/tests/manual/, so the repo root is three levels up.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
 # Derived variables.
