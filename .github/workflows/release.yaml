@@ -1,17 +1,14 @@
 name: Release
 
 on:
+  schedule:
+    # Nightly at 03:00 UTC. Only releases if commits warrant one.
+    - cron: "0 3 * * *"
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Run without pushing the rock to GHCR or publishing a release"
-        required: false
-        type: boolean
-        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   ROCKCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS: "true"
@@ -20,26 +17,66 @@ env:
 permissions: {}
 
 jobs:
-  prepare-release:
-    name: Determine version
+  # Job A: derive the next version from conventional commits (dry run) and,
+  # if a release is warranted, stamp it into the project's version files.
+  prepare-version:
+    name: Prepare version
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+      new_release_git_tag: ${{ steps.semantic.outputs.new_release_git_tag }}
+      files_updated: ${{ steps.stamp.outputs.files_updated }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Read version
-        id: version
-        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+      - name: Determine next version (dry run)
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          dry_run: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-rock:
+      - name: Stamp version into files
+        id: stamp
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          set +e
+          ./scripts/update-version.sh "${{ steps.semantic.outputs.new_release_version }}"
+          code=$?
+          set -e
+          if [ "$code" = "0" ]; then
+            echo "files_updated=true" >> "$GITHUB_OUTPUT"
+          elif [ "$code" = "2" ]; then
+            echo "files_updated=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "update-version.sh failed with exit code $code"
+            exit 1
+          fi
+
+      - name: Upload updated version files
+        if: steps.semantic.outputs.new_release_published == 'true' && steps.stamp.outputs.files_updated == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-files
+          path: |
+            package.json
+            rockcraft.yaml
+            charm/src/charm.py
+          if-no-files-found: error
+
+  # Job B: build the rock at the computed version (parallel with Job C).
+  rockcraft-pack:
     name: Build rock
-    needs: prepare-release
+    needs: prepare-version
+    if: needs.prepare-version.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,6 +86,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: Apply computed version
+        if: needs.prepare-version.outputs.files_updated == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-files
 
       - name: Stage the app into app/
         run: ./scripts/stage-app.sh
@@ -62,13 +105,13 @@ jobs:
       - name: Upload rock artifact
         uses: actions/upload-artifact@v4
         with:
-          name: athena-rock-v${{ needs.prepare-release.outputs.version }}
+          name: athena-rock-${{ needs.prepare-version.outputs.new_release_git_tag }}
           path: "*.rock"
+          if-no-files-found: error
 
       - name: Push rock to GHCR
-        if: inputs.dry_run != true
         run: |
-          VERSION="${{ needs.prepare-release.outputs.version }}"
+          VERSION="${{ needs.prepare-version.outputs.new_release_version }}"
           OWNER="${{ github.repository_owner }}"
           ROCK_FILE="$(ls *.rock)"
           for TAG in "v${VERSION}" latest; do
@@ -78,9 +121,11 @@ jobs:
               --dest-creds "${OWNER}:${{ secrets.GITHUB_TOKEN }}"
           done
 
-  build-charm:
+  # Job C: build the charm at the computed version (parallel with Job B).
+  charmcraft-pack:
     name: Build charm
-    needs: prepare-release
+    needs: prepare-version
+    if: needs.prepare-version.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -89,6 +134,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: Apply computed version
+        if: needs.prepare-version.outputs.files_updated == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-files
 
       - name: Pack charm
         uses: canonical/craft-actions/charmcraft/pack@main
@@ -100,40 +151,61 @@ jobs:
       - name: Upload charm artifact
         uses: actions/upload-artifact@v4
         with:
-          name: athena-charm-v${{ needs.prepare-release.outputs.version }}
+          name: athena-charm-${{ needs.prepare-version.outputs.new_release_git_tag }}
           path: charm/*.charm
+          if-no-files-found: error
 
+  # Job D: publish the GitHub release with the built artifacts attached, then
+  # commit the stamped version files back to the release branch.
   release:
     name: Release
-    needs: [prepare-release, build-rock, build-charm]
-    if: inputs.dry_run != true
+    needs: [prepare-version, rockcraft-pack, charmcraft-pack]
+    if: needs.prepare-version.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          fetch-depth: 0
+          # Credentials are needed to push the version-file commit back.
+          persist-credentials: true
 
       - name: Download rock artifact
         uses: actions/download-artifact@v4
         with:
-          name: athena-rock-v${{ needs.prepare-release.outputs.version }}
+          name: athena-rock-${{ needs.prepare-version.outputs.new_release_git_tag }}
 
       - name: Download charm artifact
         uses: actions/download-artifact@v4
         with:
-          name: athena-charm-v${{ needs.prepare-release.outputs.version }}
+          name: athena-charm-${{ needs.prepare-version.outputs.new_release_git_tag }}
 
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+      - name: Publish release
+        uses: cycjimmy/semantic-release-action@v4
         with:
-          tag_name: athena@v${{ needs.prepare-release.outputs.version }}
-          name: athena v${{ needs.prepare-release.outputs.version }}
-          body: |
-            Athena rock and charm v${{ needs.prepare-release.outputs.version }}.
-            Rock image: `ghcr.io/${{ github.repository_owner }}/athena:v${{ needs.prepare-release.outputs.version }}`
-          files: |
-            *.rock
-            *.charm
+          dry_run: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download updated version files
+        if: needs.prepare-version.outputs.files_updated == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-files
+
+      - name: Commit version bump to main
+        if: needs.prepare-version.outputs.files_updated == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json rockcraft.yaml charm/src/charm.py
+          if git diff --cached --quiet; then
+            echo "No version changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(release): ${{ needs.prepare-version.outputs.new_release_version }} [skip ci]"
+          git push origin HEAD:main
