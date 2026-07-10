@@ -22,6 +22,8 @@ CHARM_NAME="$(grep '^name:' charm/charmcraft.yaml | head -1 | cut -d':' -f2 | xa
 
 export ROCKCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS=true
 export CHARMCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS=true
+
+trap 'rm -rf "${REPO_ROOT}/app"' EXIT
 # Baked into the Vite frontend bundle at build time.
 export VITE_API_BASE_URL="${VITE_API_BASE_URL:-/api}"
 
@@ -35,6 +37,7 @@ echo "== Staging app ============================================"
 
 echo "== Packing rock ==========================================="
 rockcraft pack
+rm -rf app
 
 echo "== Pushing rock to ${REGISTRY} ============================"
 ROCK_FILE="$(ls -t "${ROCK_NAME}"_*.rock | head -1)"
