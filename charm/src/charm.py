@@ -12,6 +12,8 @@ import paas_charm.expressjs
 
 logger = logging.getLogger(__name__)
 
+VERSION = "0.0.1"
+
 
 class AthenaCharm(paas_charm.expressjs.Charm):
     """Athena ExpressJS charm service."""
@@ -23,6 +25,10 @@ class AthenaCharm(paas_charm.expressjs.Charm):
             args: passthrough to the paas_charm ExpressJS charm base.
         """
         super().__init__(*args)
+        self.framework.observe(self.on.start, self._on_start)
+
+    def _on_start(self, event: ops.StartEvent) -> None:
+        self.unit.set_workload_version(VERSION)
 
 
 if __name__ == "__main__":
