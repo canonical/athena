@@ -16,7 +16,7 @@ cd "$REPO_ROOT"
 # Derived variables.
 APP_VERSION="$(jq -r .version package.json)"
 APP_MODEL_NAME="athena"
-APP_NAME="athena"
+APP_NAME="athena-app"
 ROCK_NAME="$(grep '^name:' rockcraft.yaml | head -1 | cut -d':' -f2 | xargs)"
 CHARM_NAME="$(grep '^name:' charm/charmcraft.yaml | head -1 | cut -d':' -f2 | xargs)"
 

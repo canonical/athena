@@ -25,6 +25,18 @@ description: |
 extensions:
   - expressjs-framework
 
+charm-libs:
+  - lib: traefik_k8s.ingress
+    version: "2"
+  - lib: tempo_coordinator_k8s.tracing
+    version: "0"
+  - lib: smtp_integrator.smtp
+    version: "0"
+  - lib: openfga_k8s.openfga
+    version: "1"
+  - lib: hydra.oauth
+    version: "0"
+
 requires:
   postgresql:
     interface: postgresql_client
@@ -33,43 +45,35 @@ requires:
 
 config:
   options:
-    node-env:
-      type: string
-      default: "production"
-      description: >
-        Node runtime environment, injected as APP_NODE_ENV. Athena's env accessor
-        resolves the APP_ prefixed value before the framework-injected bare
-        NODE_ENV, so this overrides it. Set to "development" for local testing to
-        allow insecure (http) OIDC discovery; keep "production" otherwise.
-    athena-port:
-      type: int
-      default: 8080
-      description: >
-        Application listen port, injected as APP_ATHENA_PORT. This must match the
-        port the workload serves on (the expressjs-framework default is 8080).
-        It is injected under the APP_ATHENA_ prefix so Athena's env accessor
-        resolves it before the Kubernetes-injected `ATHENA_PORT` service-link
-        variable (which holds a `tcp://host:port` URL and is not a number).
     allowed-origins:
       type: string
       default: "http://athena.localhost"
       description: >
         Comma-separated list of allowed CORS origins. Injected as APP_ALLOWED_ORIGINS.
+    sentry:
+      type: secret
+      description: |
+        Sentry configuration used by Athena services.
+        Secret can include:
+        - dsn # Sentry DSN for Athena
+        - environment # Sentry environment name, for example staging or production
+        - traces-sample-rate # Trace sampling rate between 0 and 1, defaults to 0.1
+      required: false
+    pg-pool-max:
+      description: Maximum number of clients in the PostgreSQL pool
+      type: int
+      default: 1
+      required: false
+    pg-pool-idle-timeout-ms:
+      description: Idle timeout for PostgreSQL pool clients in milliseconds
+      type: int
+      default: 60000
+      required: false
     frontend-base-url:
       type: string
       default: "http://athena.localhost"
       description: >
         Public base URL of the Athena frontend. Injected as APP_FRONTEND_BASE_URL.
-    oidc-discovery-url:
-      type: string
-      default: "http://dex.localhost/dex/.well-known/openid-configuration"
-      description: >
-        OIDC discovery document URL. Injected as APP_OIDC_DISCOVERY_URL.
-    oidc-client-id:
-      type: string
-      default: "athena"
-      description: >
-        OIDC client id. Injected as APP_OIDC_CLIENT_ID.
     oauth-callback-url:
       type: string
       default: "http://athena.localhost/api/authentication/callback"
@@ -83,15 +87,11 @@ config:
     oidc:
       type: secret
       description: >
-        OIDC secret configuration. Create a Juju user secret containing the key
-        `client-secret`, which is injected as APP_OIDC_CLIENT_SECRET.
+        OIDC secret configuration. Create a Juju user secret containing the keys
+        `discovery-url`, `client-id`, and `client-secret`, which are injected as
+        APP_OIDC_DISCOVERY_URL, APP_OIDC_CLIENT_ID, and APP_OIDC_CLIENT_SECRET.
     credential:
       type: secret
       description: >
         Credential encryption configuration. Create a Juju user secret containing
         the key `encryption-key`, which is injected as APP_CREDENTIAL_ENCRYPTION_KEY.
-    secret:
-      type: secret
-      description: >
-        Session signing secret. Create a Juju user secret containing the key
-        `key`, which is injected as APP_SECRET_KEY.

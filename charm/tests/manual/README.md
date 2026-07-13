@@ -3,9 +3,10 @@
 This guide walks through standing up a local Kubernetes environment and manually
 exercising the Athena charm end to end: provisioning a Multipass VM, bootstrapping
 MicroK8s with Juju, packing and deploying the charm with
-[pack-and-deploy.sh](./pack-and-deploy.sh), integrating PostgreSQL, wiring up
-ingress, applying the [dex.yaml](./dex.yaml) OIDC provider, and forwarding traffic
-so the app is reachable from the host at `http://athena.localhost`.
+[pack-and-deploy.sh](./pack-and-deploy.sh), integrating PostgreSQL, applying the
+database migrations, wiring up ingress, applying the [dex.yaml](./dex.yaml) OIDC
+provider, and forwarding traffic so the app is reachable from the host at
+`http://athena.localhost`.
 
 The published hostname for the app is **`athena.localhost`**, and the OIDC provider
 is served at **`dex.localhost`**. Inside the cluster these resolve to the MicroK8s
@@ -83,7 +84,15 @@ juju add-model athena
 
 From the mounted repository root, run the deploy helper. It stages the app, packs
 the rock, pushes it to the MicroK8s registry, packs the charm, and deploys (or
-refreshes) the `athena` application.
+refreshes) the `athena-app` application.
+
+> The Juju **application** is named `athena-app`, not `athena`. This is
+> deliberate: Kubernetes injects a service-link variable named after the app's
+> Service (`ATHENA_PORT=tcp://…:65535`), and an app literally named `athena`
+> would produce `ATHENA_PORT`, which Athena's env accessor mistakes for its
+> listen port. Naming the app `athena-app` yields `ATHENA_APP_PORT` instead,
+> which the accessor ignores, so it falls through to the correct bare `PORT`.
+> The **model** and **namespace** remain `athena`.
 
 ```bash
 cd /home/ubuntu/athena
@@ -99,31 +108,84 @@ juju status --watch 2s
 The app will report **blocked** until PostgreSQL is integrated and the required
 secrets are configured — that is expected and handled next.
 
-## 6. Integrate PostgreSQL
+## 6. Integrate PostgreSQL and apply migrations
 
 ```bash
 juju deploy postgresql-k8s --channel 14/stable --trust
-juju integrate athena postgresql-k8s
+juju integrate athena-app postgresql-k8s
+```
+
+Wait for the relation to settle (`juju status --relations`).
+
+### Apply the database schema
+
+The charm does **not** run migrations automatically — the workload image ships no
+migration hook — so the `athena-app` database starts empty. Without the schema,
+login fails with a 500 (`relation "session" does not exist`). Apply
+[migrate.sql](../../../migrations/pg/migrate.sql) manually against the app
+database, **as the app's own DB role** so the tables are owned and granted
+correctly.
+
+First read the connection details the charm injected into the workload:
+
+```bash
+sudo microk8s kubectl exec -n athena athena-app-0 -c app -- pebble plan \
+  | grep -E 'POSTGRESQL_DB_(NAME|USERNAME|PASSWORD)'
+```
+
+That prints the database name (`athena-app`), the app role (a dynamic name such
+as `relation_id_4`), and its password. Copy the migration files into the
+PostgreSQL pod and run `migrate.sql`, passing that role as `APP_ROLE_NAME` (the
+Compose stack uses `athena`, but the charm's relation user differs):
+
+```bash
+cd /home/ubuntu/athena
+DB_NAME=athena-app
+DB_ROLE=relation_id_4        # from POSTGRESQL_DB_USERNAME above
+DB_PASS=<password>           # from POSTGRESQL_DB_PASSWORD above
+
+sudo microk8s kubectl cp migrations/pg athena/postgresql-k8s-0:/tmp/pgmig -c postgresql
+sudo microk8s kubectl exec -n athena postgresql-k8s-0 -c postgresql -- bash -lc "
+  cd /tmp/pgmig &&
+  PGPASSWORD=$DB_PASS psql -h postgresql-k8s-primary.athena.svc.cluster.local \
+    -U $DB_ROLE -d $DB_NAME -v ON_ERROR_STOP=1 -v APP_ROLE_NAME=$DB_ROLE -f migrate.sql
+"
+sudo microk8s kubectl exec -n athena postgresql-k8s-0 -c postgresql -- rm -rf /tmp/pgmig
+```
+
+Confirm the tables were created:
+
+```bash
+sudo microk8s kubectl exec -n athena postgresql-k8s-0 -c postgresql -- bash -lc "
+  PGPASSWORD=$DB_PASS psql -h postgresql-k8s-primary.athena.svc.cluster.local \
+    -U $DB_ROLE -d $DB_NAME -c '\dt'
+"
 ```
 
 ## 7. Provide the required secrets
 
-The charm needs three Juju user secrets. Create them, grant them to `athena`, and
-point the matching config options at them.
+The charm needs two Juju user secrets — one for OIDC and one for credential
+encryption. Create them, grant them to `athena-app`, and point the matching
+config options at them. (The session signing key is generated automatically by
+the expressjs-framework, so no session secret is required.)
+
+The `oidc` secret carries all three OIDC values as separate keys, which the
+framework injects as `APP_OIDC_DISCOVERY_URL`, `APP_OIDC_CLIENT_ID`, and
+`APP_OIDC_CLIENT_SECRET`.
 
 ```bash
-OIDC_URI=$(juju add-secret athena-oidc client-secret=super-secret-value)
+OIDC_URI=$(juju add-secret athena-oidc \
+  discovery-url=http://dex.localhost/dex/.well-known/openid-configuration \
+  client-id=athena \
+  client-secret=super-secret-value)
 CRED_URI=$(juju add-secret athena-credential encryption-key=local-encryption-key)
-SESSION_URI=$(juju add-secret athena-session key=local-session-secret)
 
-juju grant-secret athena-oidc athena
-juju grant-secret athena-credential athena
-juju grant-secret athena-session athena
+juju grant-secret athena-oidc athena-app
+juju grant-secret athena-credential athena-app
 
-juju config athena \
+juju config athena-app \
   oidc="$OIDC_URI" \
-  credential="$CRED_URI" \
-  secret="$SESSION_URI"
+  credential="$CRED_URI"
 ```
 
 The secret client-secret value (`super-secret-value`) must match the `athena`
@@ -131,13 +193,23 @@ static client secret in [dex.yaml](./dex.yaml).
 
 ## 8. Allow insecure OIDC for local testing
 
-The expressjs-framework extension sets `NODE_ENV=production`, which blocks OIDC
-discovery over plain HTTP. Override it so the local Dex (served over `http://`)
-is accepted:
+The expressjs-framework sets `NODE_ENV=production`, which makes Athena refuse OIDC
+discovery over plain HTTP ([authentication.controller.ts](../../../src/components/authentication/authentication.controller.ts))
+and mark the session cookie secure-only ([define-middlewares.ts](../../../src/components/base/define-middlewares.ts)) —
+both break the local `http://` Dex/ingress setup.
+
+The charm intentionally exposes **no `node-env` option** (production charms run
+over HTTPS, where `production` is correct), so for local testing inject a
+development override straight into the workload. Athena's env accessor resolves
+the `APP_`-prefixed value ahead of the framework's bare `NODE_ENV`:
 
 ```bash
-juju config athena node-env=development
+microk8s kubectl set env statefulset/athena-app -n athena APP_NODE_ENV=development
+microk8s kubectl rollout status statefulset/athena-app -n athena
 ```
+
+> This persists across Juju reconciles. If you later change the app's Juju config
+> (which rewrites the pod spec) and the override disappears, just re-run it.
 
 ## 9. Set up ingress
 
@@ -146,20 +218,20 @@ MicroK8s `ingress` addon (nginx) serves the resulting Kubernetes Ingress resourc
 
 ```bash
 juju deploy nginx-ingress-integrator --channel latest/stable --trust
-juju integrate athena nginx-ingress-integrator
+juju integrate athena-app nginx-ingress-integrator
 juju config nginx-ingress-integrator service-hostname=athena.localhost
 ```
 
 ### Serve the app at the site root
 
 The `nginx-ingress-integrator` publishes the app under a path prefix derived from
-the Juju model and app names — `/athena-athena/` — stripping the prefix before it
-reaches the workload. Athena's frontend, however, is built with a **root** base
+the Juju model and app names — `/athena-athena-app/` — stripping the prefix before
+it reaches the workload. Athena's frontend, however, is built with a **root** base
 path (its assets load from `/assets/...`) and its OIDC callback is **root**
 (`/api/authentication/callback`). Under the prefix the HTML loads but every asset
 and the login callback 404, so the app is unusable at `http://athena.localhost/`.
 
-Add a second Ingress that routes the site root straight to the `athena` app
+Add a second Ingress that routes the site root straight to the `athena-app` app
 service (which serves the whole app at root on port 8080) so the frontend, assets,
 and OIDC callback all resolve:
 
@@ -182,7 +254,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: athena
+            name: athena-app
             port:
               number: 8080
 EOF
@@ -228,7 +300,7 @@ Restart CoreDNS and the Athena pod so discovery picks up the new records:
 
 ```bash
 microk8s kubectl -n kube-system rollout restart deploy/coredns
-juju status --watch 2s   # wait for athena to reach active
+juju status --watch 2s   # wait for athena-app to reach active
 ```
 
 Confirm the whole model is active:
@@ -251,8 +323,7 @@ forward into the VM.
 multipass info <vm-name> | grep IPv4   # e.g. 10.86.41.98
 ```
 
-**b. Forward loopback:80 into the VM.** On the machine where your browser runs
-(the host, or WSL if that is where you browse), run a `socat` forwarder from
+**b. Forward loopback:80 into the VM.** On the host, run a `socat` forwarder from
 loopback port 80 to the VM's ingress, and leave it running in its own terminal:
 
 ```bash
@@ -294,15 +365,19 @@ multipass delete athena && multipass purge
 
 - **OIDC "fetch failed":** the pod cannot resolve `dex.localhost`. Recheck the
   CoreDNS `hosts` block (step 11) and confirm `NODE_IP` is the current node IP.
-- **App stuck blocked:** confirm PostgreSQL is integrated and all three secrets are
+- **App stuck blocked:** confirm PostgreSQL is integrated and both secrets are
   granted and configured (`juju status --relations`, `juju show-secret ...`).
+- **500 after login / `relation "session" does not exist`:** the database schema
+  was never created. The charm runs no migrations, so you must apply
+  [migrate.sql](../../../migrations/pg/migrate.sql) manually (step 6). Re-run that
+  step, ensuring `APP_ROLE_NAME` matches the app's `POSTGRESQL_DB_USERNAME`.
 - **`curl athena.localhost` hits `127.0.0.1` and fails / `/etc/hosts` is ignored:**
   this is expected — `*.localhost` always resolves to loopback (step 12). Start the
   loopback `socat` forwarder; do not try to map the name to the VM IP in
   `/etc/hosts`. Confirm the forwarder is up with `ss -tlnp | grep ':80'`. To test
   the VM path independently, force resolution:
   `curl --resolve athena.localhost:80:<VM_IP> http://athena.localhost/`.
-- **Page loads but assets/login 404 (served under `/athena-athena/`):** the
+- **Page loads but assets/login 404 (served under `/athena-athena-app/`):** the
   `nginx-ingress-integrator` publishes the app under a `/<model>-<app>` prefix,
   which breaks the root-anchored frontend and OIDC callback. Apply the `athena-root`
   Ingress from step 9. Verify with `microk8s kubectl -n athena get ingress`.
