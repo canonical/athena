@@ -207,5 +207,6 @@ jobs:
             echo "No version changes to commit."
             exit 0
           fi
+          
           git commit -m "chore(release): ${{ needs.prepare-version.outputs.new_release_version }} [skip ci]"
           git push origin HEAD:main
