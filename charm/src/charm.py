@@ -12,7 +12,7 @@ import paas_charm.expressjs
 
 logger = logging.getLogger(__name__)
 
-VERSION = "0.0.1"
+VERSION = "1.1.3"
 
 
 class AthenaCharm(paas_charm.expressjs.Charm):
