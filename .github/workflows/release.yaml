@@ -167,12 +167,20 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.GIT_APP_ID }}
+          private-key: ${{ secrets.GIT_APP_PRIVATE_KEY }}
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           # Credentials are needed to push the version-file commit back.
           persist-credentials: true
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Download rock artifact
         uses: actions/download-artifact@v4
@@ -199,9 +207,11 @@ jobs:
 
       - name: Commit version bump to main
         if: needs.prepare-version.outputs.files_updated == 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "mario-release-bot[bot]"
+          git config user.email "302174267+mario-release-bot[bot]@users.noreply.github.com"
           git add package.json rockcraft.yaml charm/src/charm.py
           if git diff --cached --quiet; then
             echo "No version changes to commit."
