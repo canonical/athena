@@ -34,7 +34,7 @@ ITEMS=(
 
 echo "Staging Athena application into ./${APP_DIR} ..."
 
-# Start from a clean app/ so the script is idempotent.
+
 rm -rf "${APP_DIR}"
 mkdir -p "${APP_DIR}"
 
@@ -46,9 +46,7 @@ for item in "${ITEMS[@]}"; do
   fi
 done
 
-# Place the database migrations and the migration hook where paas_charm expects
-# them inside the rock (/app/migrations and /app/migrate.sh).
+
 cp -a --no-preserve=ownership migrations "${APP_DIR}/migrations"
-install -m 0755 scripts/migrate.sh "${APP_DIR}/migrate.sh"
 
 echo "Done. Staged $(du -sh "${APP_DIR}" | cut -f1) into ./${APP_DIR}"

@@ -44,12 +44,11 @@ parts:
       cp -r node_modules/. ${CRAFT_PART_INSTALL}/lib/node_modules/athena/node_modules
       craftctl default
 
-      # Copy the built output, the migrations and the migration hook.
+      # Copy the built output and the migrations. 
       mkdir -p ${CRAFT_PART_INSTALL}/lib/node_modules/athena/dist
       cp -r dist/. ${CRAFT_PART_INSTALL}/lib/node_modules/athena/dist
       mkdir -p ${CRAFT_PART_INSTALL}/lib/node_modules/athena/migrations
       cp -r migrations/. ${CRAFT_PART_INSTALL}/lib/node_modules/athena/migrations
-      install -m 0755 migrate.sh ${CRAFT_PART_INSTALL}/lib/node_modules/athena/migrate.sh
 
       # The package is scoped (@canonical/athena), so `craftctl default` stages
       # package.json under lib/node_modules/@canonical/athena. The runtime dir
