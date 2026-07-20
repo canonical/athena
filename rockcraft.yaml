@@ -2,7 +2,7 @@ name: athena
 # see https://documentation.ubuntu.com/rockcraft/en/latest/explanation/bases/
 # for more information about bases and using 'bare' bases for chiselled rocks
 base: ubuntu@24.04
-version: "0.0.1"
+version: "1.0.0"
 summary: Multi-agent orchestration service.
 
 description: |
@@ -13,66 +13,57 @@ description: |
 platforms:
   amd64:
 
-# to ensure the expressjs-framework extension works properly, your ExpressJS
-# application should be inside the app directory and the "start" script defined
-# in the package.json's scripts section.
+# The ExpressJS application is assembled into ./app at build time by
+# scripts/stage-app.sh (run on CI runners and before a local `rockcraft pack`).
+# The repository itself stays flat; ./app is git-ignored and never committed.
 extensions:
   - expressjs-framework
 
 parts:
-  libraries:
-    plugin: npm
-    stage-packages:
-      - ca-certificates_data
-    build-environment:
-      - UV_USE_IO_URING: "0"
-    source-type: local
-    source: libraries/
-    npm-include-node: false
-    build-snaps:
-      - node/24/stable
-    override-build: |
-      # Libraries are pre-built by the GitHub action, just copy the tarballs
-      ls -la *.tgz 2>/dev/null || echo "No tarballs found - ensure they are built by the GitHub action"
   expressjs-framework/install-app:
-    after: [libraries]
     npm-include-node: true
     npm-node-version: "24"
+    build-snaps:
+      - node/24/stable
+    build-environment:
+      # Baked into the Vite frontend bundle at build time.
+      - VITE_API_BASE_URL: "/api"
+      - UV_USE_IO_URING: "0"
     override-build: |
       rm -rf node_modules
       rm -rf dist
 
-      mkdir -p libraries
-      cp /root/parts/libraries/build/*.tgz ./libraries/
-
-      # Define the libraries to bundle (NOTE: Order matters - libraries with dependencies must come after their dependencies)
-      libraries=(
-        utilities
-        zod-utils
-        janus-client
-        authorization
-        portal-navigation
-        coverage-tools
-        testing-tools
-      )
-      tarballs=()
-      for library in "${libraries[@]}"; do
-        tarballs+=("./libraries/portal-${library}-0.0.1.tgz")
-        npm pkg set bundledDependencies[]="@portal/${library}"
-      done
-      npm install --save "${tarballs[@]}" npm-run-all --include=dev
-      npm run build:fe
+      # Install all dependencies (incl. dev) and build the back and front ends.
+      npm ci --include=dev
       npm run build:be
+      npm run build:fe
       npm prune --omit=dev
+
+      # Stage the production node_modules into the directory the extension links to /app.
       mkdir -p ${CRAFT_PART_INSTALL}/lib/node_modules/athena/node_modules
       cp -r node_modules/. ${CRAFT_PART_INSTALL}/lib/node_modules/athena/node_modules
       craftctl default
 
-      # We need to copy the built files to the install directory
+      # Copy the built output and the migrations. 
       mkdir -p ${CRAFT_PART_INSTALL}/lib/node_modules/athena/dist
       cp -r dist/. ${CRAFT_PART_INSTALL}/lib/node_modules/athena/dist
+      mkdir -p ${CRAFT_PART_INSTALL}/lib/node_modules/athena/migrations
+      cp -r migrations/. ${CRAFT_PART_INSTALL}/lib/node_modules/athena/migrations
+
+      # The package is scoped (@canonical/athena), so `craftctl default` stages
+      # package.json under lib/node_modules/@canonical/athena. The runtime dir
+      # linked to /app is the unscoped path, so copy package.json there too;
+      # `npm start` (the service command) reads it from /app.
+      cp package.json ${CRAFT_PART_INSTALL}/lib/node_modules/athena/package.json
+
       npm config set script-shell=bash --location project
       cp ${CRAFT_PART_BUILD}/.npmrc ${CRAFT_PART_INSTALL}/lib/node_modules/athena/.npmrc
       chown -R 584792:584792 ${CRAFT_PART_INSTALL}/lib/node_modules/athena
       ln -s /lib/node_modules/athena ${CRAFT_PART_INSTALL}/app
       chown -R 584792:584792 ${CRAFT_PART_INSTALL}/app
+
+  # Extra runtime package needed to run the SQL migrations.
+  runtime-debs:
+    plugin: nil
+    stage-packages:
+      - postgresql-client

@@ -1,0 +1,227 @@
+name: Release
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ROCKCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS: "true"
+  CHARMCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS: "true"
+
+permissions: {}
+
+jobs:
+  # Job A: derive the next version from conventional commits (dry run) and,
+  # if a release is warranted, stamp it into the project's version files.
+  prepare-version:
+    name: Prepare version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+      new_release_git_tag: ${{ steps.semantic.outputs.new_release_git_tag }}
+      files_updated: ${{ steps.stamp.outputs.files_updated }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Determine next version (dry run)
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          dry_run: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stamp version into files
+        id: stamp
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          set +e
+          ./scripts/update-version.sh "${{ steps.semantic.outputs.new_release_version }}"
+          code=$?
+          set -e
+          if [ "$code" = "0" ]; then
+            echo "files_updated=true" >> "$GITHUB_OUTPUT"
+          elif [ "$code" = "2" ]; then
+            echo "files_updated=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "update-version.sh failed with exit code $code"
+            exit 1
+          fi
+
+      - name: Upload updated version files
+        if: steps.semantic.outputs.new_release_published == 'true' && steps.stamp.outputs.files_updated == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-files
+          path: |
+            package.json
+            rockcraft.yaml
+            charm/src/charm.py
+          if-no-files-found: error
+
+  # Job B: build the rock at the computed version (parallel with Job C).
+  rockcraft-pack:
+    name: Build rock
+    needs: prepare-version
+    if: needs.prepare-version.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Apply computed version
+        if: needs.prepare-version.outputs.files_updated == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-files
+
+      - name: Stage the app into app/
+        run: ./scripts/stage-app.sh
+
+      - name: Pack rock
+        uses: canonical/craft-actions/rockcraft-pack@main
+        env:
+          ROCKCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS: "true"
+          VITE_API_BASE_URL: "/api"
+
+      - name: Upload rock artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: athena-rock-${{ needs.prepare-version.outputs.new_release_git_tag }}
+          path: "*.rock"
+          if-no-files-found: error
+
+      - name: Push rock to GHCR
+        run: |
+          VERSION="${{ needs.prepare-version.outputs.new_release_version }}"
+          OWNER="${{ github.repository_owner }}"
+          ROCK_FILE="$(ls *.rock)"
+          for TAG in "v${VERSION}" latest; do
+            rockcraft.skopeo --insecure-policy copy \
+              "oci-archive:${ROCK_FILE}" \
+              "docker://ghcr.io/${OWNER}/athena:${TAG}" \
+              --dest-creds "${OWNER}:${{ secrets.GITHUB_TOKEN }}"
+          done
+
+  # Job C: build the charm at the computed version (parallel with Job B).
+  charmcraft-pack:
+    name: Build charm
+    needs: prepare-version
+    if: needs.prepare-version.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Apply computed version
+        if: needs.prepare-version.outputs.files_updated == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-files
+
+      - name: Pack charm
+        uses: canonical/craft-actions/charmcraft/pack@main
+        with:
+          path: charm
+        env:
+          CHARMCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS: "true"
+
+      - name: Upload charm artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: athena-charm-${{ needs.prepare-version.outputs.new_release_git_tag }}
+          path: charm/*.charm
+          if-no-files-found: error
+
+  # Job D: publish the GitHub release with the built artifacts attached, then
+  # commit the stamped version files back to the release branch.
+  release:
+    name: Release
+    needs: [prepare-version, rockcraft-pack, charmcraft-pack]
+    if: needs.prepare-version.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Generate GitHub App token
+        id: github-app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ secrets.GIT_APP_ID }}
+          private-key: ${{ secrets.GIT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.repository }}
+          permission-contents: write
+          permission-issues: read
+          permission-pull-requests: read
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ steps.github-app-token.outputs.token }}
+
+      - name: Download rock artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: athena-rock-${{ needs.prepare-version.outputs.new_release_git_tag }}
+
+      - name: Download charm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: athena-charm-${{ needs.prepare-version.outputs.new_release_git_tag }}
+
+      - name: Publish release
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          dry_run: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download updated version files
+        if: needs.prepare-version.outputs.files_updated == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-files
+
+      - name: Commit version bump to main
+        if: needs.prepare-version.outputs.files_updated == 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.github-app-token.outputs.token }}
+          GIT_APP_BOT_LOGIN: ${{ secrets.GIT_APP_BOT_LOGIN }}
+          GIT_APP_BOT_ID: ${{ secrets.GIT_APP_BOT_ID }}
+        run: |
+          git config --global user.name "${GIT_APP_BOT_LOGIN}"
+          git config --global user.email "${GIT_APP_BOT_ID}+${GIT_APP_BOT_LOGIN}@users.noreply.github.com"
+          git add package.json rockcraft.yaml charm/src/charm.py
+          if git diff --cached --quiet; then
+            echo "No version changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(release): ${{ needs.prepare-version.outputs.new_release_version }} [skip ci]"
+          git push origin HEAD:main
