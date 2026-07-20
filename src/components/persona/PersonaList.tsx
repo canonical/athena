@@ -1,6 +1,7 @@
 import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { useCurrentUser } from "@components/authentication/authentication.query.js";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { isPersonaOwner, PersonaEditor, personaEditorKey } from "./PersonaEditor.js";
@@ -21,7 +22,8 @@ type PersonaListProps = {
 export function PersonaList({ editor, personaId }: PersonaListProps) {
   const navigate = useNavigate();
   const currentUser = useCurrentUser();
-  const { state: personaListState, reload: reloadPersonaList } = usePersonaListAll();
+  const queryClient = useQueryClient();
+  const { state: personaListState } = usePersonaListAll();
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
   const selectedPersona = personaListState.status === `success` && personaId ? (personaListState.personas.find((persona) => persona.id === personaId) ?? null) : null;
@@ -45,14 +47,15 @@ export function PersonaList({ editor, personaId }: PersonaListProps) {
     setFeedback(null);
   };
 
-  const handleEditorSuccess = (message: string) => {
+  const handleEditorSuccess = async (message: string) => {
     setFeedback({
       severity: NotificationSeverity.INFORMATION,
       title: editor === `edit` ? `Persona updated` : `Persona created`,
       message,
     });
+    await queryClient.refetchQueries({ queryKey: [`personas`] });
+    await queryClient.refetchQueries({ queryKey: [`currentUser`] });
     closeDrawer();
-    reloadPersonaList();
   };
 
   const isOwner = (persona: PersonaRecord): boolean => isPersonaOwner(persona, currentUser);

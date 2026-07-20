@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchHarnessById, fetchHarnessList, fetchLoopHarnessList } from "./harness.client.js";
 import type { Harness, LoopHarness } from "./harness.schema.js";
 
@@ -7,103 +7,49 @@ export type HarnessState = { status: "loading" } | { status: "error"; message: s
 export type LoopHarnessListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; harnesses: LoopHarness[] };
 
 export const useHarnessList = () => {
-  const [state, setState] = useState<HarnessListState>({ status: `loading` });
-  const [reloadToken, setReloadToken] = useState(0);
+  const queryClient = useQueryClient();
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`harnesses`],
+    queryFn: fetchHarnessList,
+  });
 
-  useEffect(() => {
-    let active = true;
+  const state: HarnessListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, harnesses: data };
 
-    setState({ status: `loading` });
-
-    fetchHarnessList()
-      .then((harnesses) => {
-        if (active) {
-          setState({ status: `success`, harnesses });
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          const message = error instanceof Error ? error.message : String(error);
-          setState({ status: `error`, message });
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [reloadToken]);
-
-  const reload = useCallback(() => {
-    setReloadToken((value) => value + 1);
-  }, []);
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: [`harnesses`] });
+  };
 
   return { state, reload };
 };
 
 export const useHarnessById = (harnessId: string) => {
-  const [state, setState] = useState<HarnessState>({ status: `loading` });
-  const [reloadToken, setReloadToken] = useState(0);
+  const queryClient = useQueryClient();
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`harnesses`, harnessId],
+    queryFn: () => fetchHarnessById(harnessId),
+  });
 
-  useEffect(() => {
-    let active = true;
+  const state: HarnessState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, harness: data };
 
-    setState({ status: `loading` });
-
-    fetchHarnessById(harnessId)
-      .then((harness) => {
-        if (active) {
-          setState({ status: `success`, harness });
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          const message = error instanceof Error ? error.message : String(error);
-          setState({ status: `error`, message });
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [harnessId, reloadToken]);
-
-  const reload = useCallback(() => {
-    setReloadToken((value) => value + 1);
-  }, []);
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: [`harnesses`, harnessId] });
+  };
 
   return { state, reload };
 };
 
 export const useLoopHarnessList = (loopId: string) => {
-  const [state, setState] = useState<LoopHarnessListState>({ status: `loading` });
-  const [reloadToken, setReloadToken] = useState(0);
+  const queryClient = useQueryClient();
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`loopHarnesses`, loopId],
+    queryFn: () => fetchLoopHarnessList(loopId),
+  });
 
-  useEffect(() => {
-    let active = true;
+  const state: LoopHarnessListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, harnesses: data };
 
-    setState({ status: `loading` });
-
-    fetchLoopHarnessList(loopId)
-      .then((harnesses) => {
-        if (active) {
-          setState({ status: `success`, harnesses });
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          const message = error instanceof Error ? error.message : String(error);
-          setState({ status: `error`, message });
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [loopId, reloadToken]);
-
-  const reload = useCallback(() => {
-    setReloadToken((value) => value + 1);
-  }, []);
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: [`loopHarnesses`, loopId] });
+  };
 
   return { state, reload };
 };

@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@canonical/react-components": "4.6.2",
+    "@tanstack/react-query": "5.101.3",
     "@tanstack/react-router": "1.170.17",
     "cookie-session": "^2.1.1",
     "cors": "^2.8.6",
