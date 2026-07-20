@@ -19,6 +19,9 @@ summary: Multi-agent orchestration service.
 description: |
   Multi-agent orchestration service.
 
+# The expressjs-framework extension provides the workload container ("app"), the
+# "app-image" OCI resource, the ingress and logging relations, metrics endpoints,
+# secret storage, and the data_platform_libs / traefik / observability charm libs.
 extensions:
   - expressjs-framework
 
@@ -35,10 +38,6 @@ charm-libs:
     version: "0"
 
 requires:
-  ingress:
-    interface: ingress
-    optional: true
-    limit: 1
   postgresql:
     interface: postgresql_client
     optional: false
@@ -46,20 +45,11 @@ requires:
 
 config:
   options:
-    path:
-      description: Path prefix for ingress to the application
-      type: string
-      default: "/"
-      required: true
-    host:
-      description: Hostname for Athena ingress
-      type: string
-      default: "athena.localhost"
-      required: true
     allowed-origins:
-      description: A Comma-separated list of allowed CORS origins. Defaults to the hostname.
       type: string
-      required: false
+      default: "http://athena.localhost"
+      description: >
+        Comma-separated list of allowed CORS origins. Injected as APP_ALLOWED_ORIGINS.
     sentry:
       type: secret
       description: |
@@ -79,3 +69,29 @@ config:
       type: int
       default: 60000
       required: false
+    frontend-base-url:
+      type: string
+      default: "http://athena.localhost"
+      description: >
+        Public base URL of the Athena frontend. Injected as APP_FRONTEND_BASE_URL.
+    oauth-callback-url:
+      type: string
+      default: "http://athena.localhost/api/authentication/callback"
+      description: >
+        OAuth callback URL. Injected as APP_OAUTH_CALLBACK_URL.
+    session-max-age:
+      type: int
+      description: >
+        Session lifetime in milliseconds. Injected as APP_SESSION_MAX_AGE.
+        Defaults to the application's built-in value when unset.
+    oidc:
+      type: secret
+      description: >
+        OIDC secret configuration. Create a Juju user secret containing the keys
+        `discovery-url`, `client-id`, and `client-secret`, which are injected as
+        APP_OIDC_DISCOVERY_URL, APP_OIDC_CLIENT_ID, and APP_OIDC_CLIENT_SECRET.
+    credential:
+      type: secret
+      description: >
+        Credential encryption configuration. Create a Juju user secret containing
+        the key `encryption-key`, which is injected as APP_CREDENTIAL_ENCRYPTION_KEY.
