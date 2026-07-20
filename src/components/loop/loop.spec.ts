@@ -58,6 +58,7 @@ test(`loop list allows navigating to loop detail page`, async ({ page }) => {
   await expect(page.getByRole(`tab`, { name: `Details` })).toBeVisible();
   await expect(page.getByRole(`tab`, { name: `Personas` })).toBeVisible();
   await expect(page.getByRole(`tab`, { name: `Providers` })).toBeVisible();
+  await expect(page.getByRole(`tab`, { name: `Harnesses` })).toBeVisible();
 });
 
 test(`loop detail page tabs are deep-linkable`, async ({ page }) => {
@@ -76,6 +77,12 @@ test(`loop detail page tabs are deep-linkable`, async ({ page }) => {
   await expect(page.getByRole(`heading`, { name: `Assigned providers` })).toBeVisible();
   await expect(page.getByRole(`heading`, { name: `Provider selection algorithm` })).toBeVisible();
   await expect(page.getByRole(`heading`, { name: `Assign an existing provider` })).toBeVisible();
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=harnesses`);
+  await expect(page.getByRole(`tab`, { name: `Harnesses` })).toHaveAttribute(`aria-selected`, `true`);
+  await expect(page.getByRole(`heading`, { name: `Assigned harnesses` })).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Harness selection algorithm` })).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Assign an existing harness` })).toBeVisible();
 });
 
 test(`providers tab keeps assign-provider section visible even when provider list is empty`, async ({ page }) => {

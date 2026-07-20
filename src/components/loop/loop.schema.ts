@@ -56,7 +56,7 @@ export type Feedback = {
   message: string;
 };
 
-export type Tab = "details" | "personas" | "providers";
+export type Tab = "details" | "personas" | "providers" | "harnesses";
 
 export type LoopProps = {
   loopId: string;
@@ -83,6 +83,11 @@ export type LoopPersonasProps = {
 };
 
 export type LoopProvidersProps = {
+  loopId: string;
+  onFeedback: (feedback: Feedback | null) => void;
+};
+
+export type LoopHarnessesProps = {
   loopId: string;
   onFeedback: (feedback: Feedback | null) => void;
 };
