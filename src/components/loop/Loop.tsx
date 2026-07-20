@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { usePersonaList } from "../persona/persona.query.js";
 import { LoopDetails } from "./LoopDetails.js";
+import { LoopHarnesses } from "./LoopHarnesses.js";
 import { LoopPersonas } from "./LoopPersonas.js";
 import { LoopProviders } from "./LoopProviders.js";
 import { useLoop } from "./loop.query.js";
@@ -82,12 +83,18 @@ export function Loop({ loopId, tab, editor, personaId }: LoopProps) {
                 Providers
               </button>
             </li>
+            <li className="p-tabs__item" role="presentation">
+              <button aria-selected={tab === `harnesses`} className={`p-tabs__link${tab === `harnesses` ? ` is-active` : ``}`} onClick={() => setTab(`harnesses`)} role="tab" type="button">
+                Harnesses
+              </button>
+            </li>
           </ul>
         </div>
       </nav>
       {tab === `details` ? <LoopDetails loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} onFeedback={setFeedback} onSaved={reloadLoop} /> : null}
       {tab === `personas` ? <LoopPersonas editor={editor} loopId={loopId} onFeedback={setFeedback} personaId={personaId} personaListState={personaListState} reloadPersonaList={reloadPersonaList} /> : null}
       {tab === `providers` ? <LoopProviders loopId={loopId} onFeedback={setFeedback} /> : null}
+      {tab === `harnesses` ? <LoopHarnesses loopId={loopId} onFeedback={setFeedback} /> : null}
     </section>
   );
 }

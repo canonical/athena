@@ -7,7 +7,7 @@ import { lazy, Suspense } from "react";
 import athenaLogo from "./athena-logo.svg";
 import favicon from "./favicon.png";
 import { primarySideNavigationItems, SideNavigationLink, useAccountSideNavigationItems } from "./SideNavigation.js";
-import type { AuthenticationSearch, LoopDetailSearch, LoopListSearch, PersonaListSearch, ProviderListSearch } from "./shell.schema.js";
+import type { AuthenticationSearch, HarnessListSearch, LoopDetailSearch, LoopListSearch, PersonaListSearch, ProviderListSearch } from "./shell.schema.js";
 import "./shell.scss";
 
 const rootPath = `/`;
@@ -17,6 +17,7 @@ const loopBasePath = `/loop`;
 const eventBasePath = `/event`;
 const personaBasePath = `/persona`;
 const providerBasePath = `/provider`;
+const harnessBasePath = `/harness`;
 
 const loopListRoutePath = `list`;
 const loopDetailRoutePath = `$loopId`;
@@ -25,6 +26,8 @@ const personaListRoutePath = `list`;
 const personaDetailRoutePath = `$personaId`;
 const providerListRoutePath = `list`;
 const providerDetailRoutePath = `$providerId`;
+const harnessListRoutePath = `list`;
+const harnessDetailRoutePath = `$harnessId`;
 
 const parseCreateFlag = (value: unknown): true | undefined => (value === true || value === `true` ? true : undefined);
 
@@ -45,10 +48,15 @@ const parseProviderListSearch = (search: Record<string, unknown>): ProviderListS
 });
 
 const parseLoopDetailSearch = (search: Record<string, unknown>): LoopDetailSearch => ({
-  tab: search.tab === `personas` || search.tab === `providers` ? search.tab : `details`,
+  tab: search.tab === `personas` || search.tab === `providers` || search.tab === `harnesses` ? search.tab : `details`,
   create: parseCreateFlag(search.create),
   edit: typeof search.edit === `string` ? search.edit : undefined,
   clone: parseCreateFlag(search.clone),
+});
+
+const parseHarnessListSearch = (search: Record<string, unknown>): HarnessListSearch => ({
+  create: parseCreateFlag(search.create),
+  edit: typeof search.edit === `string` ? search.edit : undefined,
 });
 
 const LazyAuthenticationView = lazy(async () => {
@@ -139,6 +147,24 @@ const LazyProvider = lazy(async () => {
   const module = await import("@components/provider/Provider.js");
 
   return { default: module.Provider };
+});
+
+const LazyHarnessList = lazy(async () => {
+  const module = await import("@components/harness/HarnessList.js");
+
+  return { default: module.HarnessList };
+});
+
+const LazyHarnessLayout = lazy(async () => {
+  const module = await import("@components/harness/HarnessLayout.js");
+
+  return { default: module.HarnessLayout };
+});
+
+const LazyHarness = lazy(async () => {
+  const module = await import("@components/harness/Harness.js");
+
+  return { default: module.Harness };
 });
 
 function ShellLayout() {
@@ -279,6 +305,17 @@ function ProviderListRouteView() {
   );
 }
 
+function HarnessListRouteView() {
+  const { create, edit } = harnessRoute.useSearch();
+  const editor = create ? `create` : edit ? `edit` : undefined;
+
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyHarnessList editor={editor} harnessId={edit} />
+    </Suspense>
+  );
+}
+
 function PersonaLayoutRouteView() {
   return (
     <Suspense fallback={<RouteLoadingView />}>
@@ -291,6 +328,24 @@ function ProviderLayoutRouteView() {
   return (
     <Suspense fallback={<RouteLoadingView />}>
       <LazyProviderLayout />
+    </Suspense>
+  );
+}
+
+function HarnessLayoutRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyHarnessLayout />
+    </Suspense>
+  );
+}
+
+function HarnessDetailView() {
+  const { harnessId } = harnessDetailRoute.useParams();
+
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyHarness harnessId={harnessId} />
     </Suspense>
   );
 }
@@ -440,6 +495,25 @@ const providerDetailRoute = createRoute({
   component: ProviderDetailView,
 });
 
+const harnessLayoutRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: harnessBasePath,
+  component: HarnessLayoutRouteView,
+});
+
+const harnessRoute = createRoute({
+  getParentRoute: () => harnessLayoutRoute,
+  path: harnessListRoutePath,
+  validateSearch: parseHarnessListSearch,
+  component: HarnessListRouteView,
+});
+
+const harnessDetailRoute = createRoute({
+  getParentRoute: () => harnessLayoutRoute,
+  path: harnessDetailRoutePath,
+  component: HarnessDetailView,
+});
+
 const routeTree = rootRoute.addChildren([
   authenticationRoute,
   authenticationSignOutRoute,
@@ -449,6 +523,7 @@ const routeTree = rootRoute.addChildren([
     eventLayoutRoute.addChildren([eventRoute]),
     personaLayoutRoute.addChildren([personaRoute, personaDetailRoute]),
     providerLayoutRoute.addChildren([providerRoute, providerDetailRoute]),
+    harnessLayoutRoute.addChildren([harnessRoute, harnessDetailRoute]),
   ]),
 ]);
 

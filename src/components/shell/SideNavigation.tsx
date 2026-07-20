@@ -34,8 +34,8 @@ export const primarySideNavigationItems: SideNavigationProps["items"] = [
       },
       {
         icon: "settings",
-        label: "Definitions",
-        nonInteractive: true,
+        label: "Harnesses",
+        href: `/harness/list`,
       },
     ],
   },
