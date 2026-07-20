@@ -1,13 +1,15 @@
 import { Button, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
 import { updateProviderSelectionPolicy } from "@components/loop/loop.client.js";
 import { useProviderSelectionPolicy } from "@components/loop/loop.query.js";
-import { loopSelectionAlgorithms } from "@components/loop/loop.schema.js";
+import type { loopSelectionAlgorithms } from "@components/loop/loop.schema.js";
 import { assignProviderToLoop, removeProviderFromLoop } from "@components/provider/provider.client.js";
 import { useLoopProviderList, useProviderList } from "@components/provider/provider.query.js";
 import type { LoopProvider } from "@components/provider/provider.schema.js";
 import { useFormik } from "formik";
 import { useState } from "react";
 import type { LoopProvidersProps } from "./loop.schema.js";
+
+const mvpSelectionAlgorithm = `highest-credit-absolute` as const;
 
 const algorithmLabels: Record<(typeof loopSelectionAlgorithms)[number], string> = {
   "round-robin": `Round robin`,
@@ -18,6 +20,8 @@ const algorithmLabels: Record<(typeof loopSelectionAlgorithms)[number], string> 
   "priority-failover": `Priority failover`,
   "health-aware-cooldown": `Health-aware cooldown`,
 };
+
+const mvpAlgorithmOptions = [{ value: mvpSelectionAlgorithm, label: algorithmLabels[mvpSelectionAlgorithm] }];
 
 const formatTimestamp = (value: Date | string | null) => (value ? new Date(value).toLocaleString() : `-`);
 
@@ -65,7 +69,7 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
   const policyFormik = useFormik<{ openRouterSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number] }>({
     enableReinitialize: true,
     initialValues: {
-      openRouterSelectionAlgorithm: providerSelectionPolicyState.status === `success` ? providerSelectionPolicyState.policy.openRouterSelectionAlgorithm : `round-robin`,
+      openRouterSelectionAlgorithm: mvpSelectionAlgorithm,
     },
     onSubmit: async (values, helpers) => {
       onFeedback(null);
@@ -153,14 +157,7 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
         ) : null}
         {providerSelectionPolicyState.status === `success` ? (
           <form onSubmit={policyFormik.handleSubmit}>
-            <Select
-              id="loop-provider-selection-algorithm"
-              label="Algorithm"
-              name="openRouterSelectionAlgorithm"
-              onChange={policyFormik.handleChange}
-              options={loopSelectionAlgorithms.map((algorithm) => ({ value: algorithm, label: algorithmLabels[algorithm] }))}
-              value={policyFormik.values.openRouterSelectionAlgorithm}
-            />
+            <Select id="loop-provider-selection-algorithm" label="Algorithm" name="openRouterSelectionAlgorithm" onChange={policyFormik.handleChange} options={mvpAlgorithmOptions} value={policyFormik.values.openRouterSelectionAlgorithm} />
             <div className="u-align--right">
               <Button appearance="base" disabled={policyFormik.isSubmitting} type="submit">
                 {policyFormik.isSubmitting ? `Saving...` : `Save algorithm`}

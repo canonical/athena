@@ -76,7 +76,7 @@ test(`loop providers tab supports assign remove and algorithm save`, async ({ pa
   await expect(page.getByRole(`gridcell`, { name: providerName, exact: true }).first()).toBeVisible();
   await expect(page.getByRole(`gridcell`, { name: `dev.user@canonical.com`, exact: true }).first()).toBeVisible();
 
-  await page.getByLabel(`Algorithm`).selectOption(`weighted-round-robin`);
+  await page.getByLabel(`Algorithm`).selectOption(`highest-credit-absolute`);
   await page.getByRole(`button`, { name: `Save algorithm` }).click();
   await expect(page.getByText(`Provider selection algorithm has been updated.`)).toBeVisible();
 

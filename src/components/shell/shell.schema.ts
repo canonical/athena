@@ -3,7 +3,7 @@ export type AuthenticationSearch = {
 };
 
 export type LoopDetailSearch = {
-  tab?: `details` | `personas` | `providers`;
+  tab?: `details` | `personas` | `providers` | `harnesses`;
   create?: true;
   edit?: string;
   clone?: true;
@@ -21,6 +21,11 @@ export type PersonaListSearch = {
 };
 
 export type ProviderListSearch = {
+  create?: true;
+  edit?: string;
+};
+
+export type HarnessListSearch = {
   create?: true;
   edit?: string;
 };
