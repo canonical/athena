@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchLoop, fetchLoopList, fetchProviderSelectionPolicy } from "./loop.client.js";
 import type { Loop, ProviderSelectionPolicy } from "./loop.schema.js";
 
@@ -9,102 +9,49 @@ export type LoopState = { status: "loading" } | { status: "error"; message: stri
 export type ProviderSelectionPolicyState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; policy: ProviderSelectionPolicy };
 
 export const useLoopList = () => {
-  const [state, setState] = useState<LoopListState>({ status: `loading` });
-  const [reloadToken, setReloadToken] = useState(0);
+  const queryClient = useQueryClient();
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`loops`],
+    queryFn: fetchLoopList,
+  });
 
-  useEffect(() => {
-    let active = true;
+  const state: LoopListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, loops: data };
 
-    fetchLoopList()
-      .then((loops) => {
-        if (active) {
-          setState({ status: `success`, loops });
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          const message = error instanceof Error ? error.message : String(error);
-          setState({ status: `error`, message });
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [reloadToken]);
-
-  const reload = useCallback(() => {
-    setState({ status: `loading` });
-    setReloadToken((value) => value + 1);
-  }, []);
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: [`loops`] });
+  };
 
   return { state, reload };
 };
 
 export const useLoop = (loopId: string) => {
-  const [state, setState] = useState<LoopState>({ status: `loading` });
-  const [reloadToken, setReloadToken] = useState(0);
+  const queryClient = useQueryClient();
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`loops`, loopId],
+    queryFn: () => fetchLoop(loopId),
+  });
 
-  useEffect(() => {
-    let active = true;
+  const state: LoopState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, loop: data };
 
-    setState({ status: `loading` });
-
-    fetchLoop(loopId)
-      .then((loop) => {
-        if (active) {
-          setState({ status: `success`, loop });
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          const message = error instanceof Error ? error.message : String(error);
-          setState({ status: `error`, message });
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [loopId, reloadToken]);
-
-  const reload = useCallback(() => {
-    setReloadToken((value) => value + 1);
-  }, []);
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: [`loops`, loopId] });
+  };
 
   return { state, reload };
 };
 
 export const useProviderSelectionPolicy = (loopId: string) => {
-  const [state, setState] = useState<ProviderSelectionPolicyState>({ status: `loading` });
-  const [reloadToken, setReloadToken] = useState(0);
+  const queryClient = useQueryClient();
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`loopProviderSelectionPolicy`, loopId],
+    queryFn: () => fetchProviderSelectionPolicy(loopId),
+  });
 
-  useEffect(() => {
-    let active = true;
+  const state: ProviderSelectionPolicyState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, policy: data };
 
-    setState({ status: `loading` });
-
-    fetchProviderSelectionPolicy(loopId)
-      .then((policy) => {
-        if (active) {
-          setState({ status: `success`, policy });
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          const message = error instanceof Error ? error.message : String(error);
-          setState({ status: `error`, message });
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [loopId, reloadToken]);
-
-  const reload = useCallback(() => {
-    setReloadToken((value) => value + 1);
-  }, []);
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: [`loopProviderSelectionPolicy`, loopId] });
+  };
 
   return { state, reload };
 };

@@ -1,33 +1,23 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchAuthenticationProfile } from "./authentication.client.js";
 import type { User } from "./session.schema.js";
 
 export type CurrentUserState = User | null;
 
 export const useCurrentUser = (): CurrentUserState => {
-  const [user, setUser] = useState<CurrentUserState>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    const load = async () => {
+  const { data } = useQuery({
+    queryKey: [`currentUser`],
+    queryFn: async () => {
       try {
         const payload = await fetchAuthenticationProfile();
-
-        if (active && payload.isAuthenticated && payload.user) {
-          setUser(payload.user);
-        }
+        return payload.isAuthenticated && payload.user ? payload.user : null;
       } catch {
         // silently ignore — owner comparison will treat all personas as unowned
+        return null;
       }
-    };
+    },
+    initialData: null,
+  });
 
-    void load();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  return user;
+  return data;
 };
