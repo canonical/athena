@@ -2,7 +2,7 @@ name: athena
 # see https://documentation.ubuntu.com/rockcraft/en/latest/explanation/bases/
 # for more information about bases and using 'bare' bases for chiselled rocks
 base: ubuntu@24.04
-version: "1.0.0"
+version: "1.1.0"
 summary: Multi-agent orchestration service.
 
 description: |
