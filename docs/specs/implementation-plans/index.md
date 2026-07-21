@@ -33,6 +33,10 @@ Implementation order:
 5. System event
 6. Manual override event
 
+### RAG Index (depends on provider/embeddings contract)
+
+- [ ] Deliver [rag-index.plan.md](./rag-index.plan.md): a general retrieval-index abstraction with a Markdown-file-collection adapter as the example source — overlapping chunking with file-and-offset lineage, pull retrieval through a per-index lookup tool gated by the tool allow/deny list, pure semantic ranking, single fixed embedding model, Postgres with pgvector, strictly per-loop. Embeds via the OpenAI-compatible provider contract (`text-embedding-3-small`, 1536).
+
 ### Phase 0: Foundations
 
 - [ ] Finalize webhook secret storage model for verifiable HMAC (replace hash-only wording with envelope-encryption/KMS style key management).

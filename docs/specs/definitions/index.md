@@ -8,6 +8,7 @@ Normative definition files for Athena orchestration rules and constraints.
 - [handoff.definition.md](./handoff.definition.md)
 - [interaction.protocol.md](./interaction.protocol.md)
 - [llm-harness.md](./llm-harness.md)
+- [rag-index.md](./rag-index.md)
 - [nfr.md](./nfr.md)
 - [persona.md](./persona.md)
 - [responsibility.rules.md](./responsibility.rules.md)
