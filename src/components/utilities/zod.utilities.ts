@@ -6,6 +6,8 @@ const trimToNull = (value: unknown): string | null => (typeof value === `string`
 
 export const requiredString = (message: string) => preprocess(trimToUndefined, string(message));
 
+export const optionalString = preprocess(trimToUndefined, string().optional());
+
 export const normalizedString = preprocess(trimToUndefined, string().optional());
 
 export const nullableString = preprocess(trimToNull, string().nullable());

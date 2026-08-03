@@ -7,16 +7,18 @@ import { lazy, Suspense } from "react";
 import athenaLogo from "./athena-logo.svg";
 import favicon from "./favicon.png";
 import { primarySideNavigationItems, SideNavigationLink, useAccountSideNavigationItems } from "./SideNavigation.js";
-import type { AuthenticationSearch, LoopDetailSearch, LoopListSearch, PersonaListSearch, ProviderDetailSearch, ProviderListSearch, RunnerListSearch } from "./shell.schema.js";
+import type { AuthenticationSearch, ConnectionListSearch, LoopDetailSearch, LoopListSearch, PersonaListSearch, ProviderDetailSearch, ProviderListSearch, RunnerListSearch, WorkgraphListSearch } from "./shell.schema.js";
 import "./shell.scss";
 
 const rootPath = `/`;
 const authenticationPath = `/authentication`;
 const authenticationSignOutPath = `/authentication/sign-out`;
 const loopBasePath = `/loop`;
+const connectionBasePath = `/connection`;
 const personaBasePath = `/persona`;
 const providerBasePath = `/provider`;
 const runnerBasePath = `/runner`;
+const workgraphBasePath = `/workgraph`;
 
 const loopListRoutePath = `list`;
 const loopDetailRoutePath = `$loopId`;
@@ -26,6 +28,8 @@ const providerListRoutePath = `list`;
 const providerDetailRoutePath = `$providerId`;
 const runnerListRoutePath = `list`;
 const runnerDetailRoutePath = `$runnerId`;
+const workgraphListRoutePath = `list`;
+const workgraphDetailRoutePath = `$workgraphId`;
 
 const parseCreateFlag = (value: unknown): true | undefined => (value === true || value === `true` ? true : undefined);
 
@@ -51,13 +55,24 @@ const parseProviderDetailSearch = (search: Record<string, unknown>): ProviderDet
 });
 
 const parseLoopDetailSearch = (search: Record<string, unknown>): LoopDetailSearch => ({
-  tab: search.tab === `dashboard` || search.tab === `details` || search.tab === `personas` || search.tab === `providers` || search.tab === `runners` ? search.tab : `dashboard`,
+  tab: search.tab === `dashboard` || search.tab === `details` || search.tab === `personas` || search.tab === `providers` || search.tab === `runners` || search.tab === `workgraphs` ? search.tab : `dashboard`,
   create: parseCreateFlag(search.create),
   edit: typeof search.edit === `string` ? search.edit : undefined,
   clone: parseCreateFlag(search.clone),
 });
 
 const parseRunnerListSearch = (search: Record<string, unknown>): RunnerListSearch => ({
+  create: parseCreateFlag(search.create),
+  edit: typeof search.edit === `string` ? search.edit : undefined,
+});
+
+const parseConnectionListSearch = (search: Record<string, unknown>): ConnectionListSearch => ({
+  tab: search.tab === `workgraphs` || search.tab === `repositories` ? search.tab : `workgraphs`,
+  create: parseCreateFlag(search.create),
+  edit: typeof search.edit === `string` ? search.edit : undefined,
+});
+
+const parseWorkgraphListSearch = (search: Record<string, unknown>): WorkgraphListSearch => ({
   create: parseCreateFlag(search.create),
   edit: typeof search.edit === `string` ? search.edit : undefined,
 });
@@ -156,6 +171,30 @@ const LazyRunner = lazy(async () => {
   const module = await import("@components/runner/Runner.js");
 
   return { default: module.Runner };
+});
+
+const LazyConnections = lazy(async () => {
+  const module = await import("@components/connection/Connections.js");
+
+  return { default: module.Connections };
+});
+
+const LazyWorkgraphList = lazy(async () => {
+  const module = await import("@components/workgraph/WorkgraphList.js");
+
+  return { default: module.WorkgraphList };
+});
+
+const LazyWorkgraphLayout = lazy(async () => {
+  const module = await import("@components/workgraph/WorkgraphLayout.js");
+
+  return { default: module.WorkgraphLayout };
+});
+
+const LazyWorkgraph = lazy(async () => {
+  const module = await import("@components/workgraph/Workgraph.js");
+
+  return { default: module.Workgraph };
 });
 
 function ShellLayout() {
@@ -342,6 +381,45 @@ function RunnerDetailView() {
   );
 }
 
+function ConnectionRouteView() {
+  const { tab, create, edit } = connectionRoute.useSearch();
+
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyConnections tab={tab ?? `workgraphs`} create={create} edit={edit} />
+    </Suspense>
+  );
+}
+
+function WorkgraphListRouteView() {
+  const { create, edit } = workgraphRoute.useSearch();
+  const editor = create ? `create` : edit ? `edit` : undefined;
+
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyWorkgraphList editor={editor} workgraphId={edit} />
+    </Suspense>
+  );
+}
+
+function WorkgraphLayoutRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyWorkgraphLayout />
+    </Suspense>
+  );
+}
+
+function WorkgraphDetailView() {
+  const { workgraphId } = workgraphDetailRoute.useParams();
+
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyWorkgraph workgraphId={workgraphId} />
+    </Suspense>
+  );
+}
+
 function LoopLayoutRouteView() {
   return (
     <Suspense fallback={<RouteLoadingView />}>
@@ -421,6 +499,13 @@ const loopDetailRoute = createRoute({
   component: LoopDetailView,
 });
 
+const connectionRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: connectionBasePath,
+  validateSearch: parseConnectionListSearch,
+  component: ConnectionRouteView,
+});
+
 const personaLayoutRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: personaBasePath,
@@ -479,15 +564,36 @@ const runnerDetailRoute = createRoute({
   component: RunnerDetailView,
 });
 
+const workgraphLayoutRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: workgraphBasePath,
+  component: WorkgraphLayoutRouteView,
+});
+
+const workgraphRoute = createRoute({
+  getParentRoute: () => workgraphLayoutRoute,
+  path: workgraphListRoutePath,
+  validateSearch: parseWorkgraphListSearch,
+  component: WorkgraphListRouteView,
+});
+
+const workgraphDetailRoute = createRoute({
+  getParentRoute: () => workgraphLayoutRoute,
+  path: workgraphDetailRoutePath,
+  component: WorkgraphDetailView,
+});
+
 const routeTree = rootRoute.addChildren([
   authenticationRoute,
   authenticationSignOutRoute,
   protectedRoute.addChildren([
     overviewRoute,
+    connectionRoute,
     loopLayoutRoute.addChildren([loopListRoute, loopDetailRoute]),
     personaLayoutRoute.addChildren([personaRoute, personaDetailRoute]),
     providerLayoutRoute.addChildren([providerRoute, providerDetailRoute]),
     runnerLayoutRoute.addChildren([runnerRoute, runnerDetailRoute]),
+    workgraphLayoutRoute.addChildren([workgraphRoute, workgraphDetailRoute]),
   ]),
 ]);
 

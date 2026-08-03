@@ -82,7 +82,7 @@ export type Feedback = {
   message: string;
 };
 
-export const loopTabs = [`dashboard`, `details`, `personas`, `providers`, `runners`] as const;
+export const loopTabs = [`dashboard`, `details`, `personas`, `providers`, `runners`, `workgraphs`] as const;
 export const loopTabSchema = z.enum(loopTabs);
 
 export type Tab = z.infer<typeof loopTabSchema>;
@@ -117,6 +117,11 @@ export type LoopProvidersProps = {
 };
 
 export type LoopRunnersProps = {
+  loopId: string;
+  onFeedback: (feedback: Feedback | null) => void;
+};
+
+export type LoopWorkgraphsProps = {
   loopId: string;
   onFeedback: (feedback: Feedback | null) => void;
 };

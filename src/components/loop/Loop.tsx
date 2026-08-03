@@ -36,6 +36,12 @@ const LazyLoopRunners = lazy(async () => {
   return { default: module.LoopRunners };
 });
 
+const LazyLoopWorkgraphs = lazy(async () => {
+  const module = await import("./LoopWorkgraphs.js");
+
+  return { default: module.LoopWorkgraphs };
+});
+
 export function Loop({ loopId, tab, editor, personaId }: LoopProps) {
   const { state: loopState, reload: reloadLoop } = useLoop(loopId);
   const { state: personaListState, reload: reloadPersonaList } = usePersonaList(loopId);
@@ -116,6 +122,11 @@ export function Loop({ loopId, tab, editor, personaId }: LoopProps) {
                 Runners
               </button>
             </li>
+            <li className="p-tabs__item" role="presentation">
+              <button aria-selected={tab === `workgraphs`} className={`p-tabs__link${tab === `workgraphs` ? ` is-active` : ``}`} onClick={() => setTab(`workgraphs`)} role="tab" type="button">
+                Workgraphs
+              </button>
+            </li>
           </ul>
         </div>
       </nav>
@@ -142,6 +153,11 @@ export function Loop({ loopId, tab, editor, personaId }: LoopProps) {
       {tab === `runners` ? (
         <Suspense fallback={<div>Loading runners...</div>}>
           <LazyLoopRunners loopId={loopId} onFeedback={setFeedback} />
+        </Suspense>
+      ) : null}
+      {tab === `workgraphs` ? (
+        <Suspense fallback={<div>Loading workgraphs...</div>}>
+          <LazyLoopWorkgraphs loopId={loopId} onFeedback={setFeedback} />
         </Suspense>
       ) : null}
     </section>

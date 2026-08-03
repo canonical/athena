@@ -47,3 +47,12 @@ body {
   position: sticky;
   top: 0;
 }
+
+.toast-animate {
+  z-index: 1200;
+}
+
+.toast-notification,
+.toast-notification-list {
+  z-index: 1201;
+}

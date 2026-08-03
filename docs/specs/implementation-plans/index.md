@@ -23,6 +23,7 @@ This index is the entry point for implementation planning artifacts.
 - [ ] Define loop provider/harness availability behavior (pause, resume, check frequency, and deterministic recovery rules).
 - [ ] Define loop-level validation contract for LLM/harness outputs (Zod schema versioning and failure handling).
 - [ ] Define loop-level audit contract (required tasks, actor/context fields, retention, and redaction policy).
+- [ ] Deliver [workgraph-jira-poc.plan.md](./workgraph-jira-poc.plan.md): Workgraph definition and loop assignment model with Jira-only selectable type for POC.
 
 Implementation order:
 

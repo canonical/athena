@@ -7,6 +7,7 @@ This file is a brief index of repository documentation for coding agents.
 Read these documents before making changes:
 
 - [README](./README.md): project scope, runtime overview, and developer workflows.
+- [Workgraph concept](./docs/workgraph.md): canonical concept for external project hierarchy ingestion, refinement rules, and Workgraph/runtime boundaries.
 - [Task processing](./docs/task-processing.md): queue lifecycle, blocked reroute flow, and routed dispatch behavior.
 - [Task lifecycle](./docs/task-lifecycle.md): authoritative phase and status model for tasks.
 - [Coding standards](./docs/coding-standards.md): canonical source layout and file move conventions.

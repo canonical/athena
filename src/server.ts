@@ -12,6 +12,7 @@ import { staticRouter } from "@components/static/static.router.js";
 import { statusRouter } from "@components/status/status.router.js";
 import { startTaskProcessor } from "@components/task/task.processor.js";
 import { taskRouter } from "@components/task/task.router.js";
+import { workgraphRouter } from "@components/workgraph/workgraph.router.js";
 import express, { type Request, type Response } from "express";
 
 const app = express();
@@ -36,6 +37,7 @@ app.use(`${apiRoot}/loop`, loopRouter);
 app.use(`${apiRoot}/persona`, personaRouter);
 app.use(`${apiRoot}/runner`, runnerRouter);
 app.use(`${apiRoot}/provider`, providerRouter);
+app.use(`${apiRoot}/workgraph`, workgraphRouter);
 app.use(staticRouter);
 
 app.use((_request: Request, response: Response) => {

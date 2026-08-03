@@ -28,6 +28,11 @@ export const primarySideNavigationItems: SideNavigationProps["items"] = [
         href: `/provider/list`,
       },
       {
+        icon: "repository",
+        label: "Connections",
+        href: `/connection`,
+      },
+      {
         icon: "settings",
         label: "Runners",
         href: `/runner/list`,

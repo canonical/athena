@@ -2,6 +2,7 @@ import { fetchLoop } from "@components/loop/loop.client.js";
 import { fetchPersonaById } from "@components/persona/persona.client.js";
 import { fetchProviderById } from "@components/provider/provider.client.js";
 import { fetchRunnerById } from "@components/runner/runner.client.js";
+import { fetchWorkgraphById } from "@components/workgraph/workgraph.client.js";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
@@ -19,8 +20,10 @@ const entityLabels: Record<string, { list: string; detail: string }> = {
   task: { list: `Tasks`, detail: `Task` },
   runner: { list: `Runners`, detail: `Runner` },
   loop: { list: `Loops`, detail: `Loop` },
+  connection: { list: `Connections`, detail: `Connections` },
   persona: { list: `Personas`, detail: `Persona` },
   provider: { list: `Providers`, detail: `Provider` },
+  workgraph: { list: `Workgraphs`, detail: `Workgraph` },
 };
 
 const detailLabelResolvers: Partial<Record<string, (id: string) => Promise<string>>> = {
@@ -28,6 +31,7 @@ const detailLabelResolvers: Partial<Record<string, (id: string) => Promise<strin
   loop: async (id) => (await fetchLoop(id)).name,
   persona: async (id) => (await fetchPersonaById(id)).displayName,
   provider: async (id) => (await fetchProviderById(id)).displayName,
+  workgraph: async (id) => (await fetchWorkgraphById(id)).name,
 };
 
 const defaultLabel = (segment: string): string => {
