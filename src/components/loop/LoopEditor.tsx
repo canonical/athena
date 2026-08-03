@@ -1,4 +1,4 @@
-import { Button, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Button, NotificationSeverity, useToastNotification } from "@canonical/react-components";
 import { useFormik } from "formik";
 import { createLoop, updateLoop } from "./loop.client.js";
 import type { Feedback, Loop } from "./loop.schema.js";
@@ -16,6 +16,7 @@ type LoopFormValues = {
 
 export function LoopEditor({ loop, onSuccess }: LoopEditorProps) {
   const isEdit = Boolean(loop);
+  const toastNotify = useToastNotification();
 
   const formik = useFormik<LoopFormValues>({
     enableReinitialize: true,
@@ -48,7 +49,7 @@ export function LoopEditor({ loop, onSuccess }: LoopEditorProps) {
       const parseResult = (isEdit ? loopUpdateSchema : loopInsertSchema).safeParse(values);
 
       if (!parseResult.success) {
-        helpers.setStatus(parseResult.error.issues[0]?.message ?? `Invalid input.`);
+        toastNotify.failure(isEdit ? `Unable to update loop` : `Unable to create loop`, new Error(parseResult.error.issues[0]?.message ?? `Invalid input.`));
         return;
       }
 
@@ -58,22 +59,17 @@ export function LoopEditor({ loop, onSuccess }: LoopEditorProps) {
         onSuccess({
           severity: NotificationSeverity.INFORMATION,
           title: isEdit ? `Loop updated` : `Loop created`,
-          message: isEdit ? `${savedLoop.name} has been updated.` : `${savedLoop.name} is ready to receive events.`,
+          message: isEdit ? `${savedLoop.name} has been updated.` : `${savedLoop.name} is ready to receive tasks.`,
         });
       } catch (submitError) {
         const message = submitError instanceof Error ? submitError.message : String(submitError);
-        helpers.setStatus(message);
+        toastNotify.failure(isEdit ? `Unable to update loop` : `Unable to create loop`, submitError instanceof Error ? submitError : new Error(message));
       }
     },
   });
 
   return (
     <form onSubmit={formik.handleSubmit}>
-      {typeof formik.status === `string` ? (
-        <Notification severity={NotificationSeverity.NEGATIVE} title={isEdit ? `Unable to update loop` : `Unable to create loop`}>
-          {formik.status}
-        </Notification>
-      ) : null}
       <label htmlFor="loop-editor-name">Loop name</label>
       <input id="loop-editor-name" name="name" onBlur={formik.handleBlur} onChange={formik.handleChange} required type="text" value={formik.values.name} />
       {formik.touched.name && formik.errors.name ? <p className="p-form-validation is-error">{formik.errors.name}</p> : null}

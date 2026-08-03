@@ -1,5 +1,5 @@
 import { getApiUrl } from "@components/config/frontend.client.js";
-import { authenticatedFetch } from "./authenticated-fetch.client.js";
+import { authenticatedJsonGet } from "./authenticated-fetch.client.js";
 import type { AuthenticationProfile } from "./authentication.schema.js";
 
 export const authenticationApiPaths = {
@@ -12,7 +12,7 @@ export const authenticationApiPaths = {
 export const getAuthenticationLoginPath = (returnTo: string) => `${authenticationApiPaths.login}?returnTo=${encodeURIComponent(returnTo)}`;
 
 export const fetchAuthenticationProfile = async (): Promise<AuthenticationProfile> => {
-  const response = await authenticatedFetch(authenticationApiPaths.profile, { redirectOnUnauthenticated: false });
+  const response = await authenticatedJsonGet(authenticationApiPaths.profile, { redirectOnUnauthenticated: false });
 
   if (!response.ok) {
     throw new Error(`Authentication profile request failed with status ${response.status}`);

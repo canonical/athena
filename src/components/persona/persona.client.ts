@@ -1,14 +1,16 @@
-import { authenticatedFetch } from "@components/authentication/authenticated-fetch.client.js";
+import { authenticatedJsonDelete, authenticatedJsonGet, authenticatedJsonPost, authenticatedJsonPut } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
-import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
+import type { Persona, PersonaWritable } from "./persona.schema.js";
 
 export const personaApiPaths = {
   catalog: getApiUrl(`/persona/catalog`),
-  globalList: getApiUrl(`/persona-list`),
+  ownedList: getApiUrl(`/persona`),
+  create: getApiUrl(`/persona`),
+  delete: getApiUrl(`/persona`),
   globalById: (personaId: string) => getApiUrl(`/persona/${personaId}`),
-  list: (loopId: string) => getApiUrl(`/loop/${loopId}/persona-list`),
-  loopAssignments: (loopId: string) => getApiUrl(`/persona-list?loop=${loopId}`),
-  loopPersonaById: (loopId: string, personaId: string) => getApiUrl(`/loop/${loopId}/persona/${personaId}`),
+  list: (loopId: string) => getApiUrl(`/persona/loop/${loopId}/list`),
+  assign: getApiUrl(`/persona/assign`),
+  unassign: getApiUrl(`/persona/unassign`),
 } as const;
 
 const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
@@ -21,7 +23,7 @@ const readErrorMessage = async (response: Response, fallback: string): Promise<s
 };
 
 export const fetchPersonaCatalog = async (): Promise<Persona[]> => {
-  const response = await authenticatedFetch(personaApiPaths.catalog);
+  const response = await authenticatedJsonGet(personaApiPaths.catalog);
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Persona catalog request failed with status ${response.status}`));
@@ -31,7 +33,7 @@ export const fetchPersonaCatalog = async (): Promise<Persona[]> => {
 };
 
 export const fetchPersonaList = async (): Promise<Persona[]> => {
-  const response = await authenticatedFetch(personaApiPaths.globalList);
+  const response = await authenticatedJsonGet(personaApiPaths.ownedList);
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Personas request failed with status ${response.status}`));
@@ -41,7 +43,7 @@ export const fetchPersonaList = async (): Promise<Persona[]> => {
 };
 
 export const fetchPersonaById = async (personaId: string): Promise<Persona> => {
-  const response = await authenticatedFetch(personaApiPaths.globalById(personaId));
+  const response = await authenticatedJsonGet(personaApiPaths.globalById(personaId));
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Persona request failed with status ${response.status}`));
@@ -51,7 +53,7 @@ export const fetchPersonaById = async (personaId: string): Promise<Persona> => {
 };
 
 export const fetchLoopPersonaList = async (loopId: string): Promise<Persona[]> => {
-  const response = await authenticatedFetch(personaApiPaths.list(loopId));
+  const response = await authenticatedJsonGet(personaApiPaths.list(loopId));
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Personas request failed with status ${response.status}`));
@@ -60,12 +62,8 @@ export const fetchLoopPersonaList = async (loopId: string): Promise<Persona[]> =
   return response.json() as Promise<Persona[]>;
 };
 
-export const createPersona = async (payload: PersonaInsert): Promise<Persona> => {
-  const response = await authenticatedFetch(personaApiPaths.globalList, {
-    method: `POST`,
-    headers: { "Content-Type": `application/json` },
-    body: JSON.stringify(payload),
-  });
+export const createPersona = async (payload: PersonaWritable): Promise<Persona> => {
+  const response = await authenticatedJsonPost(personaApiPaths.create, payload);
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Persona creation failed with status ${response.status}`));
@@ -74,12 +72,16 @@ export const createPersona = async (payload: PersonaInsert): Promise<Persona> =>
   return response.json() as Promise<Persona>;
 };
 
-export const updatePersona = async (personaId: string, payload: PersonaUpdate): Promise<Persona> => {
-  const response = await authenticatedFetch(personaApiPaths.globalById(personaId), {
-    method: `PUT`,
-    headers: { "Content-Type": `application/json` },
-    body: JSON.stringify(payload),
-  });
+export const deletePersona = async (personaId: string): Promise<void> => {
+  const response = await authenticatedJsonDelete(personaApiPaths.delete, { body: { persona: personaId } });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Persona deletion failed with status ${response.status}`));
+  }
+};
+
+export const updatePersona = async (personaId: string, payload: PersonaWritable): Promise<Persona> => {
+  const response = await authenticatedJsonPut(personaApiPaths.globalById(personaId), payload);
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Persona update failed with status ${response.status}`));
@@ -89,23 +91,17 @@ export const updatePersona = async (personaId: string, payload: PersonaUpdate): 
 };
 
 export const assignPersonaToLoop = async (loopId: string, personaId: string): Promise<void> => {
-  const response = await authenticatedFetch(personaApiPaths.loopAssignments(loopId), {
-    method: `POST`,
-    headers: { "Content-Type": `application/json` },
-    body: JSON.stringify({ personaId }),
-  });
+  const response = await authenticatedJsonPost(personaApiPaths.assign, { loop: loopId, persona: personaId });
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Persona assignment failed with status ${response.status}`));
   }
 };
 
-export const deletePersona = async (loopId: string, personaId: string): Promise<void> => {
-  const response = await authenticatedFetch(personaApiPaths.loopPersonaById(loopId, personaId), {
-    method: `DELETE`,
-  });
+export const unassignPersonaFromLoop = async (loopId: string, personaId: string): Promise<void> => {
+  const response = await authenticatedJsonDelete(personaApiPaths.unassign, { body: { loop: loopId, persona: personaId } });
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, `Persona deletion failed with status ${response.status}`));
+    throw new Error(await readErrorMessage(response, `Persona unassignment failed with status ${response.status}`));
   }
 };

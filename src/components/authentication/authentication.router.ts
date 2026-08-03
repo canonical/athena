@@ -13,9 +13,11 @@ import {
 } from "@components/authentication/authentication.controller.js";
 import { getSession, getSessionId } from "@components/authentication/session.js";
 import { config } from "@components/config/config.js";
-import { type NextFunction, type Request, type Response, Router } from "express";
+import { defineRoutes } from "@components/express/express.router.js";
+import { type Request, Router } from "express";
 
 export const authenticationRouter = Router();
+const route = defineRoutes(authenticationRouter);
 
 const frontendOrigin = new URL(config.frontend.baseUrl).origin;
 
@@ -33,26 +35,28 @@ const isAllowedLogoutOrigin = (req: Request): boolean => {
   }
 };
 
-authenticationRouter.get(`/authentication/login`, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const returnTo = normalizeReturnTo(req.query.returnTo);
+route({
+  method: `get`,
+  route: `/login`,
+  handler: async ({ request, response, next }) => {
+    const returnTo = normalizeReturnTo(request.query.returnTo);
 
-    if (await getAuthenticatedUser(getSessionId(req))) {
-      res.redirect(resolveFrontendReturnTo(returnTo));
+    if (await getAuthenticatedUser(getSessionId(request))) {
+      response.redirect(resolveFrontendReturnTo(returnTo));
       return;
     }
 
-    storeReturnTo(getSession(req), returnTo);
+    storeReturnTo(getSession(request), returnTo);
 
     await ensureOidcStrategy();
-    passport.authenticate(`oidc`)(req, res, next);
-  } catch (error) {
-    next(error);
-  }
+    passport.authenticate(`oidc`)(request, response, next);
+  },
 });
 
-authenticationRouter.get(`/authentication/callback`, async (req: Request, res: Response, next: NextFunction) => {
-  try {
+route({
+  method: `get`,
+  route: `/callback`,
+  handler: async ({ request, response, next }) => {
     await ensureOidcStrategy();
 
     passport.authenticate(`oidc`, (error: unknown, user: Express.User | false) => {
@@ -61,41 +65,40 @@ authenticationRouter.get(`/authentication/callback`, async (req: Request, res: R
       }
 
       if (!user) {
-        return res.redirect(`${req.baseUrl}/authentication/login`);
+        return response.redirect(`${request.baseUrl}/login`);
       }
 
-      const session = getSession(req);
+      const session = getSession(request);
 
       void storeAuthenticatedUser(session, user)
         .then(() => {
-          res.redirect(consumeReturnTo(session));
+          response.redirect(consumeReturnTo(session));
         })
         .catch(next);
-    })(req, res, next);
-  } catch (error) {
-    next(error);
-  }
+    })(request, response, next);
+  },
 });
 
-authenticationRouter.post(`/authentication/logout`, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!isAllowedLogoutOrigin(req)) {
-      res.sendStatus(403);
+route({
+  method: `post`,
+  route: `/logout`,
+  handler: async ({ request, fail, respond }) => {
+    if (!isAllowedLogoutOrigin(request)) {
+      fail({ status: 403, message: `Forbidden.` });
       return;
     }
 
-    await deleteAuthenticationSession(getSessionId(req));
-    req.session = clearSession();
-    res.sendStatus(204);
-  } catch (error) {
-    next(error);
-  }
+    await deleteAuthenticationSession(getSessionId(request));
+    request.session = clearSession();
+    respond({ status: 204 });
+  },
 });
 
-authenticationRouter.get(`/authentication/profile`, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    res.json(buildProfileResponse(await getAuthenticatedUser(getSessionId(req))));
-  } catch (error) {
-    next(error);
-  }
+route({
+  method: `get`,
+  route: `/profile`,
+  handler: async ({ request, respond }) => {
+    const profile = buildProfileResponse(await getAuthenticatedUser(getSessionId(request)));
+    respond({ status: 200, data: profile });
+  },
 });

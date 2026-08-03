@@ -1,19 +1,47 @@
 import { Notification, NotificationSeverity } from "@canonical/react-components";
+import { useFeedbackToast } from "@components/base/toast.js";
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { usePersonaList } from "../persona/persona.query.js";
-import { LoopDetails } from "./LoopDetails.js";
-import { LoopHarnesses } from "./LoopHarnesses.js";
-import { LoopPersonas } from "./LoopPersonas.js";
-import { LoopProviders } from "./LoopProviders.js";
 import { useLoop } from "./loop.query.js";
 import type { Feedback, LoopProps, Tab } from "./loop.schema.js";
+
+const LazyLoopDashboard = lazy(async () => {
+  const module = await import("./LoopDashboard.js");
+
+  return { default: module.LoopDashboard };
+});
+
+const LazyLoopDetails = lazy(async () => {
+  const module = await import("./LoopDetails.js");
+
+  return { default: module.LoopDetails };
+});
+
+const LazyLoopPersonas = lazy(async () => {
+  const module = await import("./LoopPersonas.js");
+
+  return { default: module.LoopPersonas };
+});
+
+const LazyLoopProviders = lazy(async () => {
+  const module = await import("./LoopProviders.js");
+
+  return { default: module.LoopProviders };
+});
+
+const LazyLoopRunners = lazy(async () => {
+  const module = await import("./LoopRunners.js");
+
+  return { default: module.LoopRunners };
+});
 
 export function Loop({ loopId, tab, editor, personaId }: LoopProps) {
   const { state: loopState, reload: reloadLoop } = useLoop(loopId);
   const { state: personaListState, reload: reloadPersonaList } = usePersonaList(loopId);
   const navigate = useNavigate();
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  useFeedbackToast(feedback, setFeedback);
 
   const loop = loopState.status === `success` ? loopState.loop : null;
 
@@ -60,14 +88,14 @@ export function Loop({ loopId, tab, editor, personaId }: LoopProps) {
           {routingPausedMessage}
         </Notification>
       ) : null}
-      {feedback ? (
-        <Notification severity={feedback.severity} title={feedback.title}>
-          {feedback.message}
-        </Notification>
-      ) : null}
       <nav aria-label="Loop sections" className="p-tabs">
         <div role="tablist">
           <ul className="p-tabs__list">
+            <li className="p-tabs__item" role="presentation">
+              <button aria-selected={tab === `dashboard`} className={`p-tabs__link${tab === `dashboard` ? ` is-active` : ``}`} onClick={() => setTab(`dashboard`)} role="tab" type="button">
+                Dashboard
+              </button>
+            </li>
             <li className="p-tabs__item" role="presentation">
               <button aria-selected={tab === `details`} className={`p-tabs__link${tab === `details` ? ` is-active` : ``}`} onClick={() => setTab(`details`)} role="tab" type="button">
                 Details
@@ -84,17 +112,38 @@ export function Loop({ loopId, tab, editor, personaId }: LoopProps) {
               </button>
             </li>
             <li className="p-tabs__item" role="presentation">
-              <button aria-selected={tab === `harnesses`} className={`p-tabs__link${tab === `harnesses` ? ` is-active` : ``}`} onClick={() => setTab(`harnesses`)} role="tab" type="button">
-                Harnesses
+              <button aria-selected={tab === `runners`} className={`p-tabs__link${tab === `runners` ? ` is-active` : ``}`} onClick={() => setTab(`runners`)} role="tab" type="button">
+                Runners
               </button>
             </li>
           </ul>
         </div>
       </nav>
-      {tab === `details` ? <LoopDetails loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} onFeedback={setFeedback} onSaved={reloadLoop} /> : null}
-      {tab === `personas` ? <LoopPersonas editor={editor} loopId={loopId} onFeedback={setFeedback} personaId={personaId} personaListState={personaListState} reloadPersonaList={reloadPersonaList} /> : null}
-      {tab === `providers` ? <LoopProviders loopId={loopId} onFeedback={setFeedback} /> : null}
-      {tab === `harnesses` ? <LoopHarnesses loopId={loopId} onFeedback={setFeedback} /> : null}
+      {tab === `dashboard` ? (
+        <Suspense fallback={<div>Loading dashboard...</div>}>
+          <LazyLoopDashboard loopId={loopId} />
+        </Suspense>
+      ) : null}
+      {tab === `details` ? (
+        <Suspense fallback={<div>Loading details...</div>}>
+          <LazyLoopDetails loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} onFeedback={setFeedback} onSaved={reloadLoop} />
+        </Suspense>
+      ) : null}
+      {tab === `personas` ? (
+        <Suspense fallback={<div>Loading personas...</div>}>
+          <LazyLoopPersonas editor={editor} loopId={loopId} onFeedback={setFeedback} personaId={personaId} personaListState={personaListState} reloadPersonaList={reloadPersonaList} />
+        </Suspense>
+      ) : null}
+      {tab === `providers` ? (
+        <Suspense fallback={<div>Loading providers...</div>}>
+          <LazyLoopProviders loopId={loopId} onFeedback={setFeedback} />
+        </Suspense>
+      ) : null}
+      {tab === `runners` ? (
+        <Suspense fallback={<div>Loading runners...</div>}>
+          <LazyLoopRunners loopId={loopId} onFeedback={setFeedback} />
+        </Suspense>
+      ) : null}
     </section>
   );
 }

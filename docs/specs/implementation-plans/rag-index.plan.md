@@ -37,7 +37,7 @@ In scope:
 
 Out of scope (deferred):
 
-- Event and conversation adapters (including loop-history memory) and event-timeline
+- Task and conversation adapters (including loop-history memory) and task-timeline
   as-of ordering.
 - Live file-watching and incremental supersession; the MVP rebuilds a snapshot.
 - Cross-loop attachment (sharing an index across loops) and its authorization.
@@ -56,10 +56,10 @@ Out of scope (deferred):
   [tool-usage.md](../definitions/tool-usage.md). This is the whole of RAG access control;
   there is no separate per-persona RAG flag.
 - Retrieval is pull-only and its result is snapshotted into the tool execution record, so
-  replay reuses it. The Markdown source carries no event-timeline position, so retrieval
+  replay reuses it. The Markdown source carries no task-timeline position, so retrieval
   applies no as-of filter (a future ordered source would).
-- Ingestion is out-of-band via `rebuild`; it is never fired from loop event handling and
-  cannot affect an event outcome. The Markdown corpus is a snapshot; `rebuild` is the
+- Ingestion is out-of-band via `rebuild`; it is never fired from loop task handling and
+  cannot affect a task outcome. The Markdown corpus is a snapshot; `rebuild` is the
   update path.
 - Ingestion is two-phase: chunk rows are persisted first with `embedding` NULL, then
   embedded in a separate step that targets `embedding IS NULL`, so it is resumable and
@@ -223,7 +223,7 @@ contract.
 
 ## Ingestion (rebuild)
 
-Ingestion is out-of-band and owned by the index; it is never fired from loop event
+Ingestion is out-of-band and owned by the index; it is never fired from loop task
 handling. It runs in two phases so chunking and embedding are decoupled:
 
 1. Chunk and persist. The adapter enumerates the source into documents, the chunking
@@ -271,7 +271,7 @@ handling. It runs in two phases so chunking and embedding are decoupled:
 - The returned chunk list is snapshotted on the tool execution so replay stays exact across
   rebuilds or embedding-model changes, and so a future move to approximate search does not
   change replayed decisions.
-- The Markdown source has no event-timeline position, so retrieval applies no as-of filter;
+- The Markdown source has no task-timeline position, so retrieval applies no as-of filter;
   a future ordered source would reintroduce as-of.
 
 ## Security and isolation
@@ -341,7 +341,7 @@ Per [testing-standards.md](../../testing-standards.md):
 3. Replaying the tool execution reuses the snapshot and never re-queries.
 4. Retrieval never crosses loop boundaries.
 5. Embedding or provider unavailability degrades to no context without changing ownership or
-   closing events.
+   closing tasks.
 6. `rebuild` is idempotent under retry and concurrent runs, skipping unchanged documents.
 
 ## Related specs

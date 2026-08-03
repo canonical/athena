@@ -67,45 +67,55 @@ test(`loop personas tab shows role and supports add and remove`, async ({ page }
   await expect(page.getByText(`${displayName} has been removed from this loop.`)).toBeVisible();
 });
 
-test(`persona detail page supports assign to loop`, async ({ page }) => {
+test(`loop personas tab can assign catalog personas to loop`, async ({ page }) => {
   await authenticate(page);
 
-  const loop = await createLoop(page, `Persona detail assignment loop ${Date.now()}`);
-  const displayName = `Detail assign IC ${Date.now()}`;
+  const loop = await createLoop(page, `Loop catalog personas flow ${Date.now()}`);
 
+  // Navigate to loop personas tab
+  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=personas`);
+  await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
+
+  // Open assign drawer
+  await page.getByRole(`button`, { name: `Assign persona` }).click();
+
+  // Get the persona dropdown and select first option (should be from catalog since no owned personas assigned)
+  const personaOptions = await page.locator(`#assign-persona-select option`).count();
+  if (personaOptions <= 1) {
+    throw new Error(`No personas available to assign (only placeholder option found)`);
+  }
+
+  // Select first available persona from dropdown
+  const personaSelect = page.getByLabel(`Persona`);
+  const options = await personaSelect.locator(`option`).allTextContents();
+  const firstPersonaLabel = options.find((opt) => opt !== `— Select a persona —`);
+
+  if (!firstPersonaLabel) {
+    throw new Error(`No personas found in dropdown`);
+  }
+
+  await personaSelect.selectOption({ label: firstPersonaLabel });
+  await page.getByRole(`button`, { name: `Assign` }).click();
+
+  // Verify success
+  await expect(page.getByText(`Persona has been assigned to this loop.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: firstPersonaLabel, exact: true }).first()).toBeVisible();
+});
+
+test(`persona list shows edit actions for owned personas only`, async ({ page }) => {
+  await authenticate(page);
   await openPersonaList(page);
+
+  const displayName = `Owned IC ${Date.now()}`;
   await page.getByRole(`button`, { name: `Create persona` }).click();
   await page.getByLabel(`Display name`).fill(displayName);
   await page.getByLabel(`Role`).fill(`Engineer`);
-  await page.getByLabel(`Personality`).fill(`A persona assigned from detail view.`);
+  await page.getByLabel(`Personality`).fill(`Owned persona for list filtering check.`);
   await page.getByRole(`button`, { name: `Add persona` }).click();
 
-  await page.getByRole(`link`, { name: displayName, exact: true }).first().click();
-  await expect(page.getByText(`Persona details`)).toBeVisible();
-  await expect(page.getByRole(`heading`, { name: `Assign to loop` })).toBeVisible();
-
-  await page.getByLabel(`Loop`).selectOption({ label: loop.name });
-  await page.getByRole(`button`, { name: `Assign to loop` }).click();
-
-  await expect(page.getByText(`has been assigned to ${loop.name}`)).toBeVisible();
-});
-
-test(`persona list supports clone and edit flow for non-owned personas`, async ({ page }) => {
-  await authenticate(page);
-  await openPersonaList(page);
-
-  const cloneButton = page.getByRole(`button`, { name: /Clone & Edit / }).first();
-  await expect(cloneButton).toBeVisible();
-
-  await cloneButton.click();
-  await expect(page.getByRole(`dialog`).getByRole(`button`, { name: `Clone persona` })).toBeVisible();
-
-  const clonedName = `Cloned persona ${Date.now()}`;
-  await page.getByLabel(`Display name`).fill(clonedName);
-  await page.getByRole(`button`, { name: `Clone persona` }).click();
-
-  await expect(page.getByText(`${clonedName} has been created.`)).toBeVisible();
-  await expect(page.getByRole(`gridcell`, { name: clonedName, exact: true }).first()).toBeVisible();
+  await expect(page.getByText(`${displayName} has been created.`)).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Edit ${displayName}` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: /Clone & Edit / })).toHaveCount(0);
 });
 
 test(`persona list edit drawer shows not found message for unknown persona id`, async ({ page }) => {
@@ -114,4 +124,67 @@ test(`persona list edit drawer shows not found message for unknown persona id`, 
 
   await expect(page.getByText(`Persona not found`)).toBeVisible();
   await expect(page.getByText(`The selected persona no longer exists.`)).toBeVisible();
+});
+
+test(`persona list has two tabs: My Personas and Persona Catalog with deep linking`, async ({ page }) => {
+  await authenticate(page);
+  await openPersonaList(page);
+
+  // Verify default tab is "My Personas"
+  await expect(page.getByRole(`tab`, { name: `My Personas` })).toHaveAttribute(`aria-selected`, `true`);
+  await expect(page.getByRole(`heading`, { name: `My Personas` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Create persona` })).toBeVisible();
+
+  // Navigate to Persona Catalog tab
+  await page.getByRole(`tab`, { name: `Persona Catalog` }).click();
+  await expect(page.getByRole(`tab`, { name: `Persona Catalog` })).toHaveAttribute(`aria-selected`, `true`);
+  await expect(page.getByRole(`heading`, { name: `Persona Catalog` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Create persona` })).not.toBeVisible();
+
+  // Test deep linking to Persona Catalog tab
+  await page.goto(`http://athena.localhost/persona/list?tab=catalog`);
+  await expect(page.getByRole(`tab`, { name: `Persona Catalog` })).toHaveAttribute(`aria-selected`, `true`);
+  await expect(page.getByRole(`heading`, { name: `Persona Catalog` })).toBeVisible();
+
+  // Test deep linking to My Personas tab
+  await page.goto(`http://athena.localhost/persona/list?tab=my-personas`);
+  await expect(page.getByRole(`tab`, { name: `My Personas` })).toHaveAttribute(`aria-selected`, `true`);
+  await expect(page.getByRole(`heading`, { name: `My Personas` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Create persona` })).toBeVisible();
+});
+
+test(`persona catalog allows cloning a persona with name only`, async ({ page }) => {
+  await authenticate(page);
+  await openPersonaList(page);
+
+  // Navigate to Persona Catalog tab
+  await page.getByRole(`tab`, { name: `Persona Catalog` }).click();
+  await expect(page.getByRole(`heading`, { name: `Persona Catalog` })).toBeVisible();
+
+  // Get first persona name from the catalog
+  const firstPersonaLink = page.locator(`a`).first();
+  const personaName = await firstPersonaLink.textContent();
+  if (!personaName) {
+    throw new Error(`No personas in catalog`);
+  }
+
+  // Click Clone button for first persona
+  await page.getByRole(`button`, { name: new RegExp(`Clone ${personaName.split(`(`)[0].trim()}`) }).click();
+
+  // Fill in clone name
+  const clonedName = `${personaName.split(`(`)[0].trim()} Clone ${Date.now()}`;
+  await page.getByLabel(`Persona name`).fill(clonedName);
+
+  // Submit clone form
+  await page.getByRole(`button`, { name: `Clone` }).click();
+
+  // Verify success notification
+  await expect(page.getByText(`Persona cloned`)).toBeVisible();
+  await expect(page.getByText(`${clonedName} has been created.`)).toBeVisible();
+
+  // Verify switched to My Personas tab
+  await expect(page.getByRole(`tab`, { name: `My Personas` })).toHaveAttribute(`aria-selected`, `true`);
+
+  // Verify cloned persona appears in the list
+  await expect(page.getByRole(`link`, { name: clonedName })).toBeVisible();
 });

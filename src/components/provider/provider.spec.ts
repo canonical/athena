@@ -33,14 +33,15 @@ test(`providers page supports create edit and delete`, async ({ page }) => {
 
   await createProviderViaUi(page, displayName);
 
-  await page.getByRole(`button`, { name: `Edit ${displayName}` }).click();
+  await page.getByRole(`button`, { name: `Edit definition` }).first().click();
   await page.getByLabel(`Display name`).fill(updatedName);
   await page.getByRole(`button`, { name: `Save provider` }).click();
 
   await expect(page.getByText(`${updatedName} has been updated.`)).toBeVisible();
   await expect(page.getByRole(`gridcell`, { name: updatedName, exact: true }).first()).toBeVisible();
 
-  await page.getByRole(`button`, { name: `Delete ${updatedName}` }).click();
+  await page.getByRole(`button`, { name: `Edit definition` }).first().click();
+  await page.locator(`form`).first().getByRole(`button`, { name: `Delete provider` }).click();
   await expect(page.getByText(`${updatedName} has been deleted.`)).toBeVisible();
   await expect(page.getByRole(`gridcell`, { name: updatedName, exact: true })).toHaveCount(0);
 });
@@ -90,19 +91,49 @@ test(`provider detail page renders expected fields`, async ({ page }) => {
   const displayName = `Detail provider ${Date.now()}`;
   await createProviderViaUi(page, displayName);
 
-  await page.getByRole(`button`, { name: `Edit ${displayName}` }).click();
-  await expect(page).toHaveURL(/\/provider\/list\?edit=/);
-  const currentUrl = page.url();
-  const providerId = new URL(currentUrl).searchParams.get(`edit`);
-
-  expect(providerId).toBeTruthy();
-  await page.goto(`http://athena.localhost/provider/${providerId}`);
+  await page.getByRole(`link`, { name: displayName, exact: true }).click();
 
   await expect(page.getByRole(`heading`, { name: displayName })).toBeVisible();
   await expect(page.getByRole(`heading`, { name: `Provider details` })).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Model settings` })).toBeVisible();
   await expect(page.getByText(`openrouter`, { exact: true })).toBeVisible();
   await expect(page.getByText(`https://openrouter.ai/api/v1`)).toBeVisible();
   await expect(page.getByText(`Credential configured`)).toBeVisible();
+});
+
+test(`provider detail supports enabled models and default model persistence`, async ({ page }) => {
+  await authenticate(page);
+
+  const displayName = `Model settings provider ${Date.now()}`;
+  await createProviderViaUi(page, displayName);
+
+  await page.getByRole(`link`, { name: displayName, exact: true }).click();
+
+  await page.route(`**/provider/*/models`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: `application/json`,
+      body: JSON.stringify({
+        models: [
+          { id: `openai/gpt-4.1-mini`, displayName: `GPT-4.1 Mini` },
+          { id: `openai/gpt-4.1`, displayName: `GPT-4.1` },
+          { id: `anthropic/claude-3.7-sonnet`, displayName: `Claude 3.7 Sonnet` },
+        ],
+      }),
+    });
+  });
+
+  await page.getByRole(`button`, { name: `Fetch models` }).click();
+  await expect(page.getByRole(`checkbox`, { name: `GPT-4.1 Mini` })).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Enable all` }).click();
+  await page.getByRole(`checkbox`, { name: `Claude 3.7 Sonnet` }).uncheck();
+  await page.getByLabel(`Default model`).selectOption(`openai/gpt-4.1`);
+  await page.getByRole(`button`, { name: `Save model settings` }).click();
+
+  await expect(page.getByText(`Provider model settings have been updated.`)).toBeVisible();
+  await expect(page.getByLabel(`Default model`)).toHaveValue(`openai/gpt-4.1`);
+  await expect(page.getByRole(`checkbox`, { name: `Claude 3.7 Sonnet` })).not.toBeChecked();
 });
 
 test(`provider detail with invalid id shows an error notification`, async ({ page }) => {

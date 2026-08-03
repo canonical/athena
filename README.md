@@ -29,6 +29,12 @@ Athena uses a co-located, flat component structure in [src/components](./src/com
 
 See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rules, including file move conventions.
 
+## Task processing
+
+Athena task queue lifecycle, rerouting, and dispatch behavior are documented in [docs/task-processing.md](./docs/task-processing.md).
+
+The authoritative task phase and status model (routing vs execution, per-phase statuses, queue claims, and blocked re-evaluation) is documented in [docs/task-lifecycle.md](./docs/task-lifecycle.md).
+
 ## PR publishing and updating standards
 
 Athena requires validation before creating and updating pull requests.
@@ -43,7 +49,7 @@ Athena development is local-spec-first.
 - Before implementation, agents gather scope, acceptance criteria, and dependency context from local specs.
 - Keep local specs synchronized with implementation and behavioral changes.
 - Personas are persisted per loop, with lifecycle constraints defined in [docs/specs/definitions/persona.md](./docs/specs/definitions/persona.md).
-- Jira is an optional external event source and only participates when a loop is configured to ingest Jira events.
+- Jira is an optional external task source and only participates when a loop is configured to ingest Jira events.
 
 See [AGENTS.md](./AGENTS.md) for agent workflow guidance.
 

@@ -1,158 +1,107 @@
-import type { AuthenticatedUser } from "@components/authentication/session.schema.js";
-import { isValidUuid } from "@components/utilities/validation.js";
-import { type Request, type Response, Router } from "express";
-import {
-  LoopForbiddenError,
-  LoopNotFoundError,
-  LoopValidationError,
-  loopCreate,
-  loopDelete,
-  loopGet,
-  loopList,
-  loopProviderSelectionPolicyGet,
-  loopProviderSelectionPolicyUpdate,
-  loopUpdate,
-  validateCreateLoopRequest,
-  validateProviderSelectionPolicyUpdateRequest,
-  validateUpdateLoopRequest,
-} from "./loop.controller.js";
+import { getAuthenticatedUserId } from "@components/authentication/session.js";
+import { defineRoutes } from "@components/express/express.router.js";
+import { uuid } from "@components/utilities/zod.utilities.js";
+import { Router } from "express";
+import { z } from "zod";
+import { loopCreate, loopDelete, loopGet, loopList, loopProviderSelectionPolicyGet, loopProviderSelectionPolicyUpdate, loopReadinessGet, loopUpdate } from "./loop.controller.js";
+import { loopInsertSchema, loopUpdateSchema, providerSelectionPolicyUpdateSchema } from "./loop.schema.js";
 
 export const loopRouter = Router();
+const route = defineRoutes(loopRouter);
 
-const sendLoopError = (error: unknown, response: Response): boolean => {
-  if (error instanceof LoopValidationError) {
-    response.status(400).json({ error: error.message });
-    return true;
-  }
-
-  if (error instanceof LoopNotFoundError) {
-    response.status(404).json({ error: error.message });
-    return true;
-  }
-
-  if (error instanceof LoopForbiddenError) {
-    response.status(403).json({ error: error.message });
-    return true;
-  }
-
-  return false;
-};
-
-const getLoopId = (request: Request, response: Response): string | undefined => {
-  const raw = request.params.loopId;
-  const loopId = Array.isArray(raw) ? (raw[0] ?? ``) : (raw ?? ``);
-
-  if (!isValidUuid(loopId)) {
-    response.status(400).json({ error: `loopId must be a valid UUID.` });
-    return undefined;
-  }
-
-  return loopId;
-};
-
-const getUserId = (response: Response): string => {
-  const user = response.locals.user as AuthenticatedUser | undefined;
-
-  if (!user) {
-    throw new Error(`Authenticated user not found in request context.`);
-  }
-
-  return user.id;
-};
-
-loopRouter.post(`/loop-list`, async (request: Request, response: Response) => {
-  try {
-    const loop = await loopCreate(validateCreateLoopRequest(request.body), getUserId(response));
-    response.status(201).json(loop);
-  } catch (error) {
-    if (!sendLoopError(error, response)) {
-      throw error;
-    }
-  }
+const loopParamsSchema = z.object({
+  loop: uuid(`loop must be a valid UUID.`),
 });
 
-loopRouter.get(`/loop-list`, async (_request: Request, response: Response) => {
-  response.status(200).json(await loopList(getUserId(response)));
+route({
+  method: `post`,
+  route: `/`,
+  validators: { body: loopInsertSchema },
+  handler: async ({ body, response, respond }) => {
+    const loop = await loopCreate(body, getAuthenticatedUserId(response));
+    respond({ status: 201, data: loop });
+  },
 });
 
-loopRouter.get(`/loop/:loopId`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    response.status(200).json(await loopGet(loopId, getUserId(response)));
-  } catch (error) {
-    if (!sendLoopError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `get`,
+  route: `/`,
+  handler: async ({ response, respond }) => {
+    const loops = await loopList(getAuthenticatedUserId(response));
+    respond({ status: 200, data: loops });
+  },
 });
 
-loopRouter.put(`/loop/:loopId`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    const loop = await loopUpdate(loopId, validateUpdateLoopRequest(request.body), getUserId(response));
-    response.status(200).json(loop);
-  } catch (error) {
-    if (!sendLoopError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `get`,
+  route: `/:loop`,
+  validators: {
+    params: loopParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const loop = await loopGet(params.loop, getAuthenticatedUserId(response));
+    respond({ status: 200, data: loop });
+  },
 });
 
-loopRouter.delete(`/loop/:loopId`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    await loopDelete(loopId, getUserId(response));
-    response.sendStatus(204);
-  } catch (error) {
-    if (!sendLoopError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `put`,
+  route: `/:loop`,
+  validators: {
+    params: loopParamsSchema,
+    body: loopUpdateSchema,
+  },
+  handler: async ({ params, body, response, respond }) => {
+    const loop = await loopUpdate(params.loop, body, getAuthenticatedUserId(response));
+    respond({ status: 200, data: loop });
+  },
 });
 
-loopRouter.get(`/loop/:loopId/provider-selection-policy`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    response.status(200).json(await loopProviderSelectionPolicyGet(loopId, getUserId(response)));
-  } catch (error) {
-    if (!sendLoopError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `delete`,
+  route: `/:loop`,
+  validators: {
+    params: loopParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    await loopDelete(params.loop, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
 });
 
-loopRouter.put(`/loop/:loopId/provider-selection-policy`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
+route({
+  method: `get`,
+  route: `/:loop/provider-selection-policy`,
+  validators: {
+    params: loopParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const policy = await loopProviderSelectionPolicyGet(params.loop, getAuthenticatedUserId(response));
+    respond({ status: 200, data: policy });
+  },
+});
 
-    if (!loopId) {
-      return;
-    }
+route({
+  method: `put`,
+  route: `/:loop/provider-selection-policy`,
+  validators: {
+    params: loopParamsSchema,
+    body: providerSelectionPolicyUpdateSchema,
+  },
+  handler: async ({ params, body, response, respond }) => {
+    const policy = await loopProviderSelectionPolicyUpdate(params.loop, getAuthenticatedUserId(response), body);
+    respond({ status: 200, data: policy });
+  },
+});
 
-    response.status(200).json(await loopProviderSelectionPolicyUpdate(loopId, getUserId(response), validateProviderSelectionPolicyUpdateRequest(request.body)));
-  } catch (error) {
-    if (!sendLoopError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `get`,
+  route: `/:loop/readiness`,
+  validators: {
+    params: loopParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const readiness = await loopReadinessGet(params.loop, getAuthenticatedUserId(response));
+    respond({ status: 200, data: readiness });
+  },
 });

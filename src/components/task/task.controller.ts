@@ -1,0 +1,1420 @@
+import { evaluateLoopReadiness } from "@components/loop/loop.readiness.js";
+import { queryLoopForUser, queryLoopReadinessCounts } from "@components/loop/loop.service.js";
+import { resolveLoopSelection, resolveLoopSelectionByAssignment } from "@components/loop/loop-selection.service.js";
+import { fetchOpenRouterChatCompletion, fetchOpenRouterModels, OpenRouterRequestError, parseOpenRouterFirstChoiceJsonObject, readOpenRouterAssistantText } from "@components/openrouter/openrouter.service.js";
+import type { Persona } from "@components/persona/persona.schema.js";
+import { queryLoopPersonaList } from "@components/persona/persona.service.js";
+import type { ProviderModel } from "@components/provider/provider.schema.js";
+import { buildProcessScopedOwner } from "@components/utilities/process-identity.js";
+import { v7 as uuidv7 } from "uuid";
+import { TaskAccessError, TaskClaimLostError, TaskConflictError, TaskValidationError } from "./task.errors.js";
+import { executeTaskTarget, type TaskExecutionResult } from "./task.execution.js";
+import { buildRoutingConversationContext, buildTaskOpenRouterSessionId } from "./task.history.js";
+import type { CreateTaskResponse, RouteDecision, RoutingLlmRouteDecision, RoutingProviderConnection, Task, TaskPayload, TaskRoutingMeta, TimelineEntry, TimelineEntryType, ValidatedCreateTaskRequest } from "./task.schema.js";
+import {
+  queryLoopLatestTask,
+  queryLoopsWithPoolNotReadyTasks,
+  queryLoopTaskList,
+  queryNextProcessableTask,
+  queryPromotePoolNotReadyTasksToQueued,
+  queryTaskById,
+  queryTaskCreate,
+  queryTaskList,
+  queryTaskPing,
+  queryTaskUpdate,
+} from "./task.service.js";
+
+const queueClaimOwner = buildProcessScopedOwner(`athena-worker`);
+const defaultAutonomyMaxIterations = 5;
+
+const normalizeString = (value: unknown): string | undefined => {
+  if (typeof value !== `string`) {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+
+  return normalized.length > 0 ? normalized : undefined;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
+
+const buildRoutingPersonaSystemPrompt = (routingPersona: Persona): string =>
+  [
+    `You are ${routingPersona.displayName}.`,
+    routingPersona.role ? `Role: ${routingPersona.role}.` : null,
+    `Personality guidance: ${routingPersona.personality}`,
+    `You are the routing persona for this loop and must produce strict JSON outputs only.`,
+    `Never include markdown, code fences, or text outside the requested JSON object.`,
+  ]
+    .filter(Boolean)
+    .join(`\n`);
+
+const makeTimelineEntry = (type: TimelineEntryType, actor: string, data: Record<string, unknown>): TimelineEntry => ({
+  id: uuidv7(),
+  timestamp: new Date().toISOString(),
+  type,
+  actor,
+  data,
+});
+
+const makeLlmCallTimelineEntry = (actor: string, data: Record<string, unknown>): TimelineEntry => makeTimelineEntry(`llm-call`, actor, data);
+
+const appendTimelineEntry = (payload: TaskPayload, entry: TimelineEntry): TaskPayload => {
+  const timeline = Array.isArray(payload.timeline) ? payload.timeline : [];
+
+  return {
+    ...payload,
+    timeline: [...timeline, entry],
+  };
+};
+
+const appendTimelineEntries = (payload: TaskPayload, entries: TimelineEntry[]): TaskPayload => entries.reduce((nextPayload, entry) => appendTimelineEntry(nextPayload, entry), payload);
+
+const withRoutingResponder = (payload: TaskPayload, routingPersona: Persona): TaskPayload => ({
+  ...payload,
+  routing: {
+    ...payload.routing,
+    selectedPersona: routingPersona.id,
+    selectedPersonaDisplayName: routingPersona.displayName,
+  },
+});
+
+type RoutingChoiceAttempt<T> = {
+  choice: T | null;
+  auditEntry: TimelineEntry;
+  error: Error | null;
+};
+
+type RoutingDecisionChoiceAttempt = RoutingChoiceAttempt<RoutingLlmRouteDecision> & {
+  conversationMode: string;
+};
+
+type RouteDecisionAttempt = {
+  routeDecision: RouteDecision | null;
+  llmTimelineEntries: TimelineEntry[];
+  conversationMode: string | null;
+  error: Error | null;
+};
+
+const getActiveRoutingPersona = (personas: Persona[]): Persona => {
+  const routingPersonas = personas.filter((persona) => persona.isRouting);
+
+  if (routingPersonas.length !== 1) {
+    throw new TaskValidationError(`This loop must have exactly one active routing persona.`);
+  }
+
+  return routingPersonas[0] as Persona;
+};
+
+const getExecutionCandidates = (personas: Persona[]): Persona[] => {
+  const executionCandidates = personas;
+
+  return executionCandidates;
+};
+
+const buildAvailableRoutingModels = (enabledModelIds: string[], models: ProviderModel[]): ProviderModel[] => {
+  const uniqueEnabledModelIds = Array.from(new Set(enabledModelIds.map((model) => model.trim()).filter((model) => model.length > 0)));
+  const catalog = new Map(models.map((model) => [model.id, model]));
+
+  return uniqueEnabledModelIds.map((modelId) => catalog.get(modelId) ?? { id: modelId, displayName: modelId });
+};
+
+const buildRoutingModelPromptCatalog = (models: ProviderModel[]): Array<Record<string, unknown>> =>
+  models.map((model) => ({
+    id: model.id,
+    displayName: model.displayName,
+    description: model.description,
+    contextLength: model.contextLength,
+    maxCompletionTokens: model.maxCompletionTokens,
+    modality: model.modality,
+    inputModalities: model.inputModalities,
+    outputModalities: model.outputModalities,
+    supportedParameters: model.supportedParameters,
+    pricing: {
+      prompt: model.promptPrice,
+      completion: model.completionPrice,
+      request: model.requestPrice,
+      image: model.imagePrice,
+    },
+    knowledgeCutoff: model.knowledgeCutoff,
+    reasoningSupported: model.reasoningSupported,
+    reasoningEfforts: model.reasoningEfforts,
+  }));
+
+const buildRoutingLlmMessages = (systemPrompt: string, userPrompt: string): Array<{ role: `system` | `user`; content: string }> => [
+  {
+    role: `system`,
+    content: systemPrompt,
+  },
+  {
+    role: `user`,
+    content: userPrompt,
+  },
+];
+
+const withLlmAuditValidationFailure = (entry: TimelineEntry, errorMessage: string): TimelineEntry => ({
+  ...entry,
+  data: {
+    ...entry.data,
+    status: `invalid-response`,
+    errorMessage,
+  },
+});
+
+const executeRoutingLlmCall = async (
+  connection: RoutingProviderConnection,
+  routingPersona: Persona,
+  taskId: string,
+  operation: string,
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<{ parsed: Record<string, unknown> | null; auditEntry: TimelineEntry; error: Error | null }> => {
+  const messages = buildRoutingLlmMessages(systemPrompt, userPrompt);
+
+  try {
+    const payload = await fetchOpenRouterChatCompletion(
+      {
+        baseUrl: connection.baseUrl,
+        apiKey: connection.apiKey,
+      },
+      {
+        model: connection.routingModel,
+        temperature: 0,
+        sessionId: buildTaskOpenRouterSessionId(taskId, `routing`),
+        operation,
+        messages,
+      },
+    );
+    const responseText = readOpenRouterAssistantText(payload.choices?.[0]?.message).trim();
+
+    try {
+      const parsed = parseOpenRouterFirstChoiceJsonObject(payload, `Routing persona response`);
+
+      return {
+        parsed,
+        auditEntry: makeLlmCallTimelineEntry(routingPersona.displayName, {
+          operation,
+          status: `completed`,
+          providerType: `openrouter`,
+          model: connection.routingModel,
+          messages,
+          responseText,
+          responsePayload: payload,
+          parsedResponse: parsed,
+        }),
+        error: null,
+      };
+    } catch (error) {
+      return {
+        parsed: null,
+        auditEntry: makeLlmCallTimelineEntry(routingPersona.displayName, {
+          operation,
+          status: `invalid-response`,
+          providerType: `openrouter`,
+          model: connection.routingModel,
+          messages,
+          responseText,
+          responsePayload: payload,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        }),
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
+  } catch (error) {
+    return {
+      parsed: null,
+      auditEntry: makeLlmCallTimelineEntry(routingPersona.displayName, {
+        operation,
+        status: `failed`,
+        providerType: `openrouter`,
+        model: connection.routingModel,
+        messages,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStatus: error instanceof OpenRouterRequestError ? error.status : undefined,
+        errorPayload: error instanceof OpenRouterRequestError ? error.payload : undefined,
+      }),
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+};
+
+const resolveProviderDefaultModel = async (loopId: string, targetId?: string | null): Promise<string> => {
+  if (targetId) {
+    const stickySelection = await resolveLoopSelectionByAssignment(loopId, `provider`, targetId);
+    const stickyDefaultModel = normalizeString(stickySelection.selected?.defaultModel);
+
+    if (stickyDefaultModel) {
+      return stickyDefaultModel;
+    }
+  }
+
+  const selection = await resolveLoopSelection(loopId, `provider`);
+  const selectedDefaultModel = normalizeString(selection.selected?.defaultModel);
+
+  if (!selectedDefaultModel) {
+    throw new TaskConflictError(`Provider defaultModel is required for routing decisions.`);
+  }
+
+  return selectedDefaultModel;
+};
+
+const resolveRoutingProviderConnection = async (loopId: string): Promise<RoutingProviderConnection> => {
+  const selection = await resolveLoopSelection(loopId, `provider`);
+  const selected = selection.selected;
+
+  if (selected?.definitionType !== `openrouter`) {
+    throw new TaskConflictError(`No eligible OpenRouter provider assignment is available for routing.`);
+  }
+
+  const routingModel = normalizeString(selected.defaultModel);
+
+  if (!routingModel) {
+    throw new TaskConflictError(`Provider defaultModel is required for routing persona decisions.`);
+  }
+
+  const availableModels = buildAvailableRoutingModels(
+    selected.enabledModels,
+    await fetchOpenRouterModels({
+      baseUrl: selected.baseUrl ?? `https://openrouter.ai/api/v1`,
+      apiKey: selected.secret,
+    }),
+  );
+
+  return {
+    baseUrl: selected.baseUrl ?? `https://openrouter.ai/api/v1`,
+    apiKey: selected.secret,
+    routingModel,
+    defaultModel: selected.defaultModel,
+    enabledModels: selected.enabledModels,
+    availableModels,
+  };
+};
+
+const resolveRouteDecisionByLlm = async (connection: RoutingProviderConnection, routingPersona: Persona, personas: Persona[], task: Task): Promise<RoutingDecisionChoiceAttempt> => {
+  const personasForPrompt = personas.map((persona) => ({
+    id: persona.id,
+    displayName: persona.displayName,
+    role: persona.role,
+    personality: persona.personality,
+    isRouting: persona.isRouting,
+  }));
+  const availableModels = buildAvailableRoutingModels(connection.enabledModels, connection.availableModels);
+  const availableModelIds = availableModels.map((model) => model.id);
+  const counts = await queryLoopReadinessCounts(task.loop);
+  const routingContext = buildRoutingConversationContext(task);
+  const systemPrompt = buildRoutingPersonaSystemPrompt(routingPersona);
+  const userPrompt = [
+    `Make exactly one routing decision for this task.`,
+    `Decide selectedPersona, selectedModel, and targetType together from the same conversation context.`,
+    `Use the requested outcome, accumulated context, available personas, available models, and execution pools to decide who should handle this next and whether it belongs on provider autonomy or an external runner.`,
+    `Assigned personas JSON: ${JSON.stringify(personasForPrompt)}`,
+    `Available models JSON: ${JSON.stringify(buildRoutingModelPromptCatalog(availableModels))}`,
+    `Available execution pool counts JSON: ${JSON.stringify({ provider: counts.activeProviderCount, runner: counts.activeRunnerCount })}`,
+    `Current task description: ${task.description ?? `none`}`,
+    `Current task context: ${task.context}`,
+    `Conversation mode: ${routingContext.mode}`,
+    `Conversation summary: ${routingContext.summary}`,
+    `Conversation transcript before latest user message:\n${routingContext.transcript}`,
+    `Latest user message: ${routingContext.latestUserMessage}`,
+    `Choose runner when the work should be performed by an external runner. Choose provider when it should be handled directly through provider autonomy.`,
+    `Choose a model from available models when provided.`,
+    `Respond with strict JSON: {"selectedPersona":"<persona-id>","selectedModel":"<model-id>","targetType":"<provider|runner>","routeReasonText":"<short reason>"}`,
+  ].join(`\n`);
+  const result = await executeRoutingLlmCall(connection, routingPersona, task.id, `routing-decision`, systemPrompt, userPrompt);
+
+  if (!result.parsed) {
+    return {
+      choice: null,
+      auditEntry: result.auditEntry,
+      conversationMode: routingContext.mode,
+      error: result.error,
+    };
+  }
+
+  const parsed = result.parsed;
+  const selectedPersona = normalizeString(parsed.selectedPersona);
+  const selectedModel = normalizeString(parsed.selectedModel);
+  const targetType = parsed.targetType === `provider` || parsed.targetType === `runner` ? parsed.targetType : null;
+  const routeReasonText = normalizeString(parsed.routeReasonText);
+
+  if (!selectedPersona) {
+    return {
+      choice: null,
+      auditEntry: withLlmAuditValidationFailure(result.auditEntry, `Routing persona response is missing selectedPersona.`),
+      conversationMode: routingContext.mode,
+      error: new TaskValidationError(`Routing persona response is missing selectedPersona.`),
+    };
+  }
+
+  if (!personas.some((persona) => persona.id === selectedPersona)) {
+    return {
+      choice: null,
+      auditEntry: withLlmAuditValidationFailure(result.auditEntry, `Routing persona selected an unknown persona.`),
+      conversationMode: routingContext.mode,
+      error: new TaskValidationError(`Routing persona selected an unknown persona.`),
+    };
+  }
+
+  if (!selectedModel) {
+    return {
+      choice: null,
+      auditEntry: withLlmAuditValidationFailure(result.auditEntry, `Routing persona response is missing selectedModel.`),
+      conversationMode: routingContext.mode,
+      error: new TaskValidationError(`Routing persona response is missing selectedModel.`),
+    };
+  }
+
+  if (availableModelIds.length > 0 && !availableModelIds.includes(selectedModel)) {
+    return {
+      choice: null,
+      auditEntry: withLlmAuditValidationFailure(result.auditEntry, `Routing persona selected a model that is not in enabledModels.`),
+      conversationMode: routingContext.mode,
+      error: new TaskValidationError(`Routing persona selected a model that is not in enabledModels.`),
+    };
+  }
+
+  if (!targetType) {
+    return {
+      choice: null,
+      auditEntry: withLlmAuditValidationFailure(result.auditEntry, `Routing persona response is missing targetType.`),
+      conversationMode: routingContext.mode,
+      error: new TaskValidationError(`Routing persona response is missing targetType.`),
+    };
+  }
+
+  return {
+    choice: {
+      selectedPersona,
+      selectedModel,
+      targetType,
+      routeReasonText: routeReasonText ?? `${routingPersona.displayName} selected persona ${selectedPersona}, model ${selectedModel}, and execution target ${targetType}.`,
+    },
+    auditEntry: result.auditEntry,
+    conversationMode: routingContext.mode,
+    error: null,
+  };
+};
+
+const resolveRouterDecisionForTask = async (task: Task, personas: Persona[], routingPersona: Persona): Promise<RouteDecisionAttempt> => {
+  const llmTimelineEntries: TimelineEntry[] = [];
+
+  try {
+    const candidates = getExecutionCandidates(personas);
+    const routingConnection = await resolveRoutingProviderConnection(task.loop);
+
+    if (candidates.length === 0) {
+      return {
+        routeDecision: null,
+        llmTimelineEntries,
+        conversationMode: null,
+        error: new TaskValidationError(`This loop has no active personas available for routing.`),
+      };
+    }
+
+    const llmRouteDecision = await resolveRouteDecisionByLlm(routingConnection, routingPersona, candidates, task);
+    llmTimelineEntries.push(llmRouteDecision.auditEntry);
+
+    if (!llmRouteDecision.choice) {
+      return {
+        routeDecision: null,
+        llmTimelineEntries,
+        conversationMode: llmRouteDecision.conversationMode,
+        error: llmRouteDecision.error,
+      };
+    }
+
+    const selected = candidates.find((persona) => persona.id === llmRouteDecision.choice?.selectedPersona) ?? candidates[0] ?? routingPersona;
+
+    return {
+      routeDecision: {
+        selectedPersona: selected.id,
+        selectedModel: llmRouteDecision.choice.selectedModel,
+        targetType: llmRouteDecision.choice.targetType,
+        routeReasonCode: `ROUTED_FROM_CONVERSATION_CONTEXT`,
+        routeReasonText: llmRouteDecision.choice.routeReasonText,
+      },
+      llmTimelineEntries,
+      conversationMode: llmRouteDecision.conversationMode,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      routeDecision: null,
+      llmTimelineEntries,
+      conversationMode: null,
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+};
+
+type TaskDefaults = { kind: Task[`kind`]; ownerMode: Task[`ownerMode`]; successCriteria: Task[`successCriteria`]; externalRefs: Task[`externalRefs`]; context: Task[`context`]; routing: TaskRoutingMeta };
+
+const buildTaskDefaults = (request: ValidatedCreateTaskRequest): TaskDefaults => ({
+  kind: `other`,
+  ownerMode: `mixed`,
+  successCriteria: [],
+  externalRefs: [],
+  context: `Task created from ${request.sourceType}. Routing decision queued.`,
+  routing: {
+    routeAttempts: 0,
+    lastRoutedAt: null,
+    lastRoutedByPersona: null,
+    lastRouteReasonCode: null,
+  },
+});
+
+const withRoutingMetadata = (current: TaskRoutingMeta, routedByPersonaId: string, routeReasonCode: string): TaskRoutingMeta => ({
+  routeAttempts: (current.routeAttempts ?? 0) + 1,
+  lastRoutedAt: new Date().toISOString(),
+  lastRoutedByPersona: routedByPersonaId,
+  lastRouteReasonCode: routeReasonCode,
+});
+
+type ResolvedExecutionTarget = {
+  targetType: `provider` | `runner` | null;
+  targetId: string | null;
+  definitionType: string | null;
+  secret: string | null;
+  baseUrl: string | null;
+  defaultModel: string | null;
+  enabledModels: string[];
+};
+
+const resolveExecutionTarget = async (loopId: string, preferredTargetType: `provider` | `runner`): Promise<ResolvedExecutionTarget> => {
+  const preferredSelection = await resolveLoopSelection(loopId, preferredTargetType);
+
+  if (preferredSelection.selected) {
+    return {
+      targetType: preferredTargetType,
+      targetId: preferredSelection.selected.assignmentId,
+      definitionType: preferredSelection.selected.definitionType,
+      secret: preferredSelection.selected.secret,
+      baseUrl: preferredSelection.selected.baseUrl,
+      defaultModel: preferredSelection.selected.defaultModel,
+      enabledModels: preferredSelection.selected.enabledModels,
+    };
+  }
+
+  return {
+    targetType: null,
+    targetId: null,
+    definitionType: null,
+    secret: null,
+    baseUrl: null,
+    defaultModel: null,
+    enabledModels: [],
+  };
+};
+
+const resolveStickyExecutionTarget = async (task: Task): Promise<ResolvedExecutionTarget> => {
+  if (!task.targetType || !task.targetId) {
+    return {
+      targetType: null,
+      targetId: null,
+      definitionType: null,
+      secret: null,
+      baseUrl: null,
+      defaultModel: null,
+      enabledModels: [],
+    };
+  }
+
+  const stickySelection = await resolveLoopSelectionByAssignment(task.loop, task.targetType, task.targetId);
+
+  if (!stickySelection.selected) {
+    return {
+      targetType: null,
+      targetId: null,
+      definitionType: null,
+      secret: null,
+      baseUrl: null,
+      defaultModel: null,
+      enabledModels: [],
+    };
+  }
+
+  return {
+    targetType: task.targetType,
+    targetId: stickySelection.selected.assignmentId,
+    definitionType: stickySelection.selected.definitionType,
+    secret: stickySelection.selected.secret,
+    baseUrl: stickySelection.selected.baseUrl,
+    defaultModel: stickySelection.selected.defaultModel,
+    enabledModels: stickySelection.selected.enabledModels,
+  };
+};
+
+const parsePayloadChannel = (payload: TaskPayload): string => {
+  if (!isRecord(payload)) {
+    return `chat-ui`;
+  }
+
+  return normalizeString(payload.channel) ?? `chat-ui`;
+};
+
+const assertActionAllowed = (task: Task, action: string): void => {
+  if (task.status === `completed`) {
+    throw new TaskConflictError(`Cannot ${action} because this task is already completed.`);
+  }
+
+  if (task.status === `processing`) {
+    throw new TaskConflictError(`Cannot ${action} because this task is currently processing.`);
+  }
+};
+
+const resolveActionTask = async (loopId: string, userId: string, taskId?: string): Promise<Task> => {
+  if (taskId) {
+    const task = await queryTaskById(taskId);
+
+    if (!task || task.loop !== loopId || task.sourceType !== `chat-ui`) {
+      throw new TaskValidationError(`Task not found for this loop.`);
+    }
+
+    return task;
+  }
+
+  const latestTask = await queryLoopLatestTask(loopId, userId);
+
+  if (!latestTask) {
+    throw new TaskValidationError(`No task found for this loop.`);
+  }
+
+  return latestTask;
+};
+
+const assertLoopReadyForChat = async (loopId: string): Promise<void> => {
+  const readiness = evaluateLoopReadiness(loopId, await queryLoopReadinessCounts(loopId));
+
+  if (!readiness.blocked) {
+    return;
+  }
+
+  const blockerMessages = readiness.blockers.map((blocker) => blocker.message).join(` `);
+  throw new TaskConflictError(`Loop is blocked. ${blockerMessages}`);
+};
+
+export const taskPromotePoolReadyTasks = async (): Promise<void> => {
+  const loops = await queryLoopsWithPoolNotReadyTasks();
+
+  for (const loopId of loops) {
+    const readiness = evaluateLoopReadiness(loopId, await queryLoopReadinessCounts(loopId));
+
+    if (!readiness.blocked) {
+      await queryPromotePoolNotReadyTasksToQueued(loopId);
+    }
+  }
+};
+
+const guardClaimedTaskLoopReadiness = async (task: Task, claimToken: string): Promise<boolean> => {
+  const readiness = evaluateLoopReadiness(task.loop, await queryLoopReadinessCounts(task.loop));
+
+  if (!readiness.blocked) {
+    return true;
+  }
+
+  const blockerMessages = readiness.blockers.map((blocker) => blocker.message).join(` `);
+
+  const payload = appendTimelineEntries(task.payload, [
+    makeTimelineEntry(`task-blocked`, `system`, {
+      blocker: `Loop readiness blocked processing.`,
+      details: blockerMessages,
+    }),
+    makeTimelineEntry(`waiting-user-input`, `system`, {
+      reason: `Loop readiness is currently blocked and requires operator action.`,
+    }),
+  ]);
+
+  await queryTaskUpdate({
+    id: task.id,
+    status: `pool-not-ready`,
+    blocker: `Pool not ready. ${blockerMessages}`,
+    payload,
+    context: `Pool not ready for processing. ${blockerMessages}`,
+    expectedClaimToken: claimToken,
+    clearClaim: true,
+  });
+
+  return false;
+};
+
+const readRoutingFailureMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+};
+
+const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task> => {
+  const loopPersonas = await queryLoopPersonaList(task.loop);
+  const activePersonas = loopPersonas.filter((persona) => persona.lifecycleStatus === `active`);
+  const routingPersona = getActiveRoutingPersona(activePersonas);
+
+  if (!task.selectedPersona || !task.payload.routing?.selectedModel) {
+    const failPayload = appendTimelineEntries(task.payload, [
+      makeTimelineEntry(`task-blocked`, `system`, {
+        blocker: `Queued execution task is missing routing metadata.`,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Task is missing routing metadata. Requires re-routing.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      payload: failPayload,
+      context: `Routing metadata missing on queued task.`,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
+  const selectedPersona = activePersonas.find((persona) => persona.id === task.selectedPersona);
+
+  if (!selectedPersona) {
+    const failPayload = appendTimelineEntries(task.payload, [
+      makeTimelineEntry(`task-blocked`, routingPersona.displayName, {
+        blocker: `Assigned persona is no longer active.`,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Persona became inactive. Requires re-routing.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      payload: failPayload,
+      context: `Assigned persona became inactive.`,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
+  const selectedModel = task.payload.routing.selectedModel;
+  const stickyTarget = await resolveStickyExecutionTarget(task);
+  const routedTargetType = task.targetType ?? task.payload.routing?.targetType ?? null;
+  const resolvedTarget =
+    stickyTarget.targetType && stickyTarget.targetId && stickyTarget.secret && stickyTarget.definitionType
+      ? stickyTarget
+      : routedTargetType
+        ? await resolveExecutionTarget(task.loop, routedTargetType)
+        : await resolveExecutionTarget(task.loop, `provider`);
+  const canExecuteTarget =
+    resolvedTarget.targetType === `provider`
+      ? Boolean(resolvedTarget.targetId && resolvedTarget.secret && resolvedTarget.definitionType)
+      : Boolean(resolvedTarget.targetType === `runner` && resolvedTarget.targetId && resolvedTarget.secret && resolvedTarget.definitionType);
+
+  const executionResult =
+    canExecuteTarget && resolvedTarget.targetType === `provider` && resolvedTarget.targetId && resolvedTarget.definitionType && resolvedTarget.secret
+      ? {
+          status: `requires-user-input` as const,
+          summary: `Provider execution deferred to autonomy loop.`,
+          output: `Provider execution deferred to autonomy loop.`,
+        }
+      : canExecuteTarget && resolvedTarget.targetType === `runner` && resolvedTarget.targetId && resolvedTarget.definitionType && resolvedTarget.secret
+        ? await executeTaskTarget(task, selectedPersona, {
+            targetType: `runner`,
+            targetId: resolvedTarget.targetId,
+            definitionType: resolvedTarget.definitionType,
+            secret: resolvedTarget.secret,
+            baseUrl: resolvedTarget.baseUrl,
+          })
+        : {
+            status: `blocked` as const,
+            summary: `No eligible execution target is currently available.`,
+            output: `No runner/provider assignment with required execution metadata is enabled for this loop and persona routing decision.`,
+            blocker: `No eligible execution target`,
+          };
+
+  const executeProviderAutonomyLoop = async (): Promise<{ result: TaskExecutionResult; attemptsUsed: number; llmTimelineEntries: TimelineEntry[] }> => {
+    const maxIterations = task.autonomyMaxIterations > 0 ? task.autonomyMaxIterations : defaultAutonomyMaxIterations;
+    let attemptsUsed = task.autonomyIterationCount;
+    let workingTask: Task = task;
+    let finalResult: TaskExecutionResult = executionResult;
+    const llmTimelineEntries: TimelineEntry[] = [];
+
+    while (attemptsUsed < maxIterations) {
+      const nextTask: Task = {
+        ...workingTask,
+        autonomyIterationCount: attemptsUsed,
+        autonomyMaxIterations: maxIterations,
+      };
+
+      finalResult = await executeTaskTarget(nextTask, selectedPersona, {
+        targetType: `provider`,
+        targetId: resolvedTarget.targetId as string,
+        definitionType: resolvedTarget.definitionType as string,
+        secret: resolvedTarget.secret as string,
+        baseUrl: resolvedTarget.baseUrl,
+        model: selectedModel as string,
+      });
+
+      llmTimelineEntries.push(...(finalResult.llmTimelineEntries ?? []));
+      attemptsUsed += 1;
+
+      if (finalResult.status === `blocked`) {
+        return { result: finalResult, attemptsUsed, llmTimelineEntries };
+      }
+
+      if (finalResult.achieved) {
+        return { result: { ...finalResult, status: `completed` }, attemptsUsed, llmTimelineEntries };
+      }
+
+      workingTask = {
+        ...workingTask,
+        context: finalResult.nextContext?.trim().length ? finalResult.nextContext : `${workingTask.context}\n\nPrevious iteration output:\n${finalResult.output}`,
+      };
+    }
+
+    return {
+      result: {
+        status: `requires-user-input`,
+        summary: `${selectedPersona.displayName} could not confirm objective completion after ${maxIterations} autonomous iterations.`,
+        output: finalResult.output,
+      },
+      attemptsUsed,
+      llmTimelineEntries,
+    };
+  };
+
+  const shouldRunProviderAutonomyLoop = canExecuteTarget && resolvedTarget.targetType === `provider` && Boolean(resolvedTarget.targetId && resolvedTarget.definitionType && resolvedTarget.secret);
+
+  const autonomyLoopResult = shouldRunProviderAutonomyLoop
+    ? await executeProviderAutonomyLoop()
+    : {
+        result: executionResult,
+        attemptsUsed: task.autonomyIterationCount,
+        llmTimelineEntries: executionResult.llmTimelineEntries ?? [],
+      };
+
+  const effectiveExecutionResult = autonomyLoopResult.result;
+  const autonomyIterationCount = shouldRunProviderAutonomyLoop ? autonomyLoopResult.attemptsUsed : task.autonomyIterationCount;
+
+  const updatedPayload = appendTimelineEntries(task.payload, [
+    makeTimelineEntry(`system-action-started`, selectedPersona.displayName, {
+      targetType: resolvedTarget.targetType,
+      targetId: resolvedTarget.targetId,
+      note: `Execution started by selected assignee.`,
+    }),
+    ...autonomyLoopResult.llmTimelineEntries,
+    makeTimelineEntry(`system-action-result`, selectedPersona.displayName, {
+      outcome: effectiveExecutionResult.status,
+      summary: effectiveExecutionResult.summary,
+      output: effectiveExecutionResult.output,
+      autonomyIterationCount,
+      autonomyMaxIterations: task.autonomyMaxIterations,
+    }),
+    makeTimelineEntry(`waiting-user-input`, selectedPersona.displayName, {
+      reason: effectiveExecutionResult.status === `blocked` ? `Execution encountered a blocker and needs user intervention.` : `Execution requires user response before continuing.`,
+    }),
+  ]);
+
+  const routeReasonCode = task.routeReasonCode ?? `ROUTED_FROM_FIRST_MESSAGE`;
+
+  return queryTaskUpdate({
+    id: task.id,
+    phase: effectiveExecutionResult.status === `completed` ? `done` : `execution`,
+    status: effectiveExecutionResult.status,
+    assignee: selectedPersona.id,
+    selectedPersona: selectedPersona.id,
+    targetType: resolvedTarget.targetType,
+    targetId: resolvedTarget.targetId,
+    blocker: effectiveExecutionResult.status === `blocked` ? (effectiveExecutionResult.blocker ?? `Execution blocked`) : null,
+    payload: updatedPayload,
+    routing: withRoutingMetadata(task.routing, routingPersona.id, routeReasonCode),
+    context:
+      effectiveExecutionResult.status === `blocked`
+        ? `${selectedPersona.displayName} execution blocked: ${effectiveExecutionResult.blocker ?? effectiveExecutionResult.summary}`
+        : `${selectedPersona.displayName} execution output: ${effectiveExecutionResult.output.slice(0, 300)}`,
+    completedAt: effectiveExecutionResult.status === `completed` ? new Date().toISOString() : null,
+    autonomyIterationCount,
+    autonomyMaxIterations: task.autonomyMaxIterations > 0 ? task.autonomyMaxIterations : defaultAutonomyMaxIterations,
+    expectedClaimToken: claimToken,
+    clearClaim: Boolean(claimToken),
+  });
+};
+
+const executeRoutingDecision = async (task: Task, claimToken?: string): Promise<Task> => {
+  const loopPersonas = await queryLoopPersonaList(task.loop);
+  const activePersonas = loopPersonas.filter((persona) => persona.lifecycleStatus === `active`);
+  const routingPersona = getActiveRoutingPersona(activePersonas);
+
+  const routeDecisionAttempt = await resolveRouterDecisionForTask(task, activePersonas, routingPersona);
+
+  if (!routeDecisionAttempt.routeDecision) {
+    const message = readRoutingFailureMessage(routeDecisionAttempt.error);
+    const failPayload = appendTimelineEntries(task.payload, [
+      ...routeDecisionAttempt.llmTimelineEntries,
+      makeTimelineEntry(`task-blocked`, routingPersona.displayName, {
+        blocker: `Routing decision failed.`,
+        details: message,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Routing decision failed and requires user review.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      blocker: `Routing decision failed: ${message}`,
+      payload: failPayload,
+      context: `Routing decision failed. ${message}`,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
+  const routeDecision = routeDecisionAttempt.routeDecision;
+  const selectedPersona = activePersonas.find((persona) => persona.id === routeDecision.selectedPersona);
+
+  if (!selectedPersona) {
+    const failPayload = appendTimelineEntries(task.payload, [
+      ...routeDecisionAttempt.llmTimelineEntries,
+      makeTimelineEntry(`task-blocked`, routingPersona.displayName, {
+        blocker: `Selected persona is no longer active.`,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Routing selected an inactive persona. Requires re-routing.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      payload: failPayload,
+      context: `Selected persona became inactive.`,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
+  const resolvedTarget = await resolveExecutionTarget(task.loop, routeDecision.targetType);
+
+  if (!resolvedTarget.targetType || !resolvedTarget.targetId) {
+    const failPayload = appendTimelineEntries(task.payload, [
+      ...routeDecisionAttempt.llmTimelineEntries,
+      makeTimelineEntry(`task-blocked`, routingPersona.displayName, {
+        blocker: `No eligible ${routeDecision.targetType} assignment is available for the routing decision.`,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Routing chose ${routeDecision.targetType}, but no eligible assignment is currently available.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      blocker: `No eligible ${routeDecision.targetType} assignment is available for routing.`,
+      payload: failPayload,
+      context: `Routing chose ${routeDecision.targetType}, but no eligible assignment is currently available.`,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
+  const decisionPayload = appendTimelineEntries(
+    {
+      ...task.payload,
+      routing: {
+        selectedPersona: selectedPersona.id,
+        selectedPersonaDisplayName: selectedPersona.displayName,
+        selectedModel: routeDecision.selectedModel,
+        targetType: routeDecision.targetType,
+        conversationMode: routeDecisionAttempt.conversationMode ?? undefined,
+        routeReasonCode: routeDecision.routeReasonCode,
+        routeReasonText: routeDecision.routeReasonText,
+      },
+    },
+    [
+      ...routeDecisionAttempt.llmTimelineEntries,
+      makeTimelineEntry(`routing-decision`, routingPersona.displayName, {
+        selectedPersona: selectedPersona.id,
+        selectedPersonaDisplayName: selectedPersona.displayName,
+        selectedModel: routeDecision.selectedModel,
+        routeReasonCode: routeDecision.routeReasonCode,
+        routeReasonText: routeDecision.routeReasonText,
+        conversationMode: routeDecisionAttempt.conversationMode,
+        targetType: resolvedTarget.targetType,
+        targetId: resolvedTarget.targetId,
+      }),
+    ],
+  );
+
+  return queryTaskUpdate({
+    id: task.id,
+    phase: `execution`,
+    status: `queued`,
+    assignee: selectedPersona.id,
+    selectedPersona: selectedPersona.id,
+    targetType: resolvedTarget.targetType,
+    targetId: resolvedTarget.targetId,
+    routeReasonCode: routeDecision.routeReasonCode,
+    routeReasonText: routeDecision.routeReasonText,
+    blocker: null,
+    payload: decisionPayload,
+    routing: withRoutingMetadata(task.routing, routingPersona.id, routeDecision.routeReasonCode),
+    context: `Routing decision made. Assigned to ${selectedPersona.displayName}, model ${routeDecision.selectedModel}, target ${routeDecision.targetType}.`,
+    expectedClaimToken: claimToken,
+    clearClaim: Boolean(claimToken),
+  });
+};
+
+const reEvaluateBlockedTask = async (task: Task, claimToken?: string): Promise<Task> => {
+  const loopPersonas = await queryLoopPersonaList(task.loop);
+  const activePersonas = loopPersonas.filter((persona) => persona.lifecycleStatus === `active`);
+  const routingPersona = getActiveRoutingPersona(activePersonas);
+
+  const routeDecisionAttempt = await resolveRouterDecisionForTask(task, activePersonas, routingPersona);
+
+  if (!routeDecisionAttempt.routeDecision) {
+    const message = readRoutingFailureMessage(routeDecisionAttempt.error);
+    const failPayload = appendTimelineEntries(task.payload, [
+      ...routeDecisionAttempt.llmTimelineEntries,
+      makeTimelineEntry(`routing-decision`, routingPersona.displayName, {
+        result: `routing-failed`,
+        details: message,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Re-evaluation failed. Requires user intervention.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      blocker: null,
+      payload: failPayload,
+      context: `Re-evaluation failed: ${message}`,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
+  const routeDecision = routeDecisionAttempt.routeDecision;
+  const selectedPersona = activePersonas.find((persona) => persona.id === routeDecision.selectedPersona);
+
+  if (!selectedPersona) {
+    const failPayload = appendTimelineEntries(task.payload, [
+      ...routeDecisionAttempt.llmTimelineEntries,
+      makeTimelineEntry(`routing-decision`, routingPersona.displayName, {
+        result: `persona-not-found`,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Selected persona is no longer active.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      payload: failPayload,
+      context: `Selected persona became inactive during re-evaluation.`,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
+  const resolvedTarget = await resolveExecutionTarget(task.loop, routeDecision.targetType);
+
+  if (!resolvedTarget.targetType || !resolvedTarget.targetId) {
+    const failPayload = appendTimelineEntries(task.payload, [
+      ...routeDecisionAttempt.llmTimelineEntries,
+      makeTimelineEntry(`routing-decision`, routingPersona.displayName, {
+        result: `target-unavailable`,
+        targetType: routeDecision.targetType,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Routing chose ${routeDecision.targetType}, but no eligible assignment is currently available.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      blocker: null,
+      payload: failPayload,
+      context: `Routing chose ${routeDecision.targetType}, but no eligible assignment is currently available.`,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
+  const reEvalPayload = appendTimelineEntries(
+    {
+      ...task.payload,
+      routing: {
+        selectedPersona: selectedPersona.id,
+        selectedPersonaDisplayName: selectedPersona.displayName,
+        selectedModel: routeDecision.selectedModel,
+        targetType: routeDecision.targetType,
+        conversationMode: routeDecisionAttempt.conversationMode ?? undefined,
+        routeReasonCode: routeDecision.routeReasonCode,
+        routeReasonText: routeDecision.routeReasonText,
+      },
+    },
+    [
+      ...routeDecisionAttempt.llmTimelineEntries,
+      makeTimelineEntry(`routing-decision`, routingPersona.displayName, {
+        selectedPersona: selectedPersona.id,
+        selectedPersonaDisplayName: selectedPersona.displayName,
+        selectedModel: routeDecision.selectedModel,
+        targetType: routeDecision.targetType,
+        conversationMode: routeDecisionAttempt.conversationMode,
+        routeReasonCode: routeDecision.routeReasonCode,
+        routeReasonText: routeDecision.routeReasonText,
+        note: `Re-routed from blocked state.`,
+      }),
+    ],
+  );
+
+  return queryTaskUpdate({
+    id: task.id,
+    phase: `execution`,
+    status: `queued`,
+    assignee: selectedPersona.id,
+    selectedPersona: selectedPersona.id,
+    targetType: resolvedTarget.targetType,
+    targetId: resolvedTarget.targetId,
+    routeReasonCode: routeDecision.routeReasonCode,
+    routeReasonText: routeDecision.routeReasonText,
+    blocker: null,
+    payload: reEvalPayload,
+    routing: withRoutingMetadata(task.routing, routingPersona.id, routeDecision.routeReasonCode),
+    context: `Re-routed from blocked state. Assigned to ${selectedPersona.displayName} on ${routeDecision.targetType}.`,
+    expectedClaimToken: claimToken,
+    clearClaim: Boolean(claimToken),
+  });
+};
+
+const taskProcessSingleQueuedTask = async (): Promise<{ routedProcessed: number; blockedRerouted: number }> => {
+  const nextTask = await queryNextProcessableTask(queueClaimOwner);
+
+  if (!nextTask) {
+    return { routedProcessed: 0, blockedRerouted: 0 };
+  }
+
+  const claimToken = nextTask.claimToken;
+
+  if (!claimToken) {
+    throw new TaskClaimLostError(`Missing claim token on claimed processing task.`);
+  }
+
+  let claimLost = false;
+  let heartbeatInFlight = false;
+
+  const heartbeatInterval = setInterval(() => {
+    if (heartbeatInFlight || claimLost) {
+      return;
+    }
+
+    heartbeatInFlight = true;
+
+    void queryTaskPing(nextTask.id, claimToken)
+      .then((isLeaseValid) => {
+        if (!isLeaseValid) {
+          claimLost = true;
+        }
+      })
+      .catch(() => {
+        claimLost = true;
+      })
+      .finally(() => {
+        heartbeatInFlight = false;
+      });
+  }, 10_000);
+
+  const assertClaimLease = (): void => {
+    if (claimLost) {
+      throw new TaskClaimLostError(`Claim token no longer matches for processing task.`);
+    }
+  };
+
+  try {
+    const sourceStatus = nextTask.processingSourceStatus;
+
+    assertClaimLease();
+
+    if (!(await guardClaimedTaskLoopReadiness(nextTask, claimToken))) {
+      return { routedProcessed: 0, blockedRerouted: 0 };
+    }
+
+    if (nextTask.phase === `routing` && sourceStatus === `active`) {
+      await executeRoutingDecision(nextTask, claimToken);
+      return { routedProcessed: 1, blockedRerouted: 0 };
+    }
+
+    if (nextTask.phase === `execution` && sourceStatus === `queued`) {
+      await dispatchRoutedTask(nextTask, claimToken);
+      return { routedProcessed: 1, blockedRerouted: 0 };
+    }
+
+    if (nextTask.phase === `execution` && sourceStatus === `blocked`) {
+      await reEvaluateBlockedTask(nextTask, claimToken);
+      return { routedProcessed: 0, blockedRerouted: 1 };
+    }
+
+    return { routedProcessed: 0, blockedRerouted: 0 };
+  } catch (error) {
+    if (error instanceof TaskClaimLostError) {
+      return { routedProcessed: 0, blockedRerouted: 0 };
+    }
+
+    throw error;
+  } finally {
+    clearInterval(heartbeatInterval);
+  }
+};
+
+export const taskProcessQueue = async (): Promise<{ routedProcessed: number; blockedRerouted: number }> => {
+  let routedProcessed = 0;
+  let blockedRerouted = 0;
+
+  while (true) {
+    const singleResult = await taskProcessSingleQueuedTask();
+
+    routedProcessed += singleResult.routedProcessed;
+    blockedRerouted += singleResult.blockedRerouted;
+
+    if (singleResult.routedProcessed === 0 && singleResult.blockedRerouted === 0) {
+      break;
+    }
+  }
+
+  return { routedProcessed, blockedRerouted };
+};
+
+const triggerQueueProcessing = (): void => {
+  void taskProcessQueue().catch(() => undefined);
+};
+
+export const taskCreate = async (request: ValidatedCreateTaskRequest, userId: string): Promise<CreateTaskResponse> => {
+  const loop = await queryLoopForUser(request.loop, userId);
+
+  if (!loop) {
+    throw new TaskAccessError(`Loop not found.`);
+  }
+
+  await assertLoopReadyForChat(request.loop);
+
+  if (request.resumeTaskId) {
+    const resumeTask = await queryTaskById(request.resumeTaskId);
+
+    if (!resumeTask || resumeTask.loop !== request.loop || resumeTask.sourceType !== `chat-ui`) {
+      throw new TaskAccessError(`Task not found.`);
+    }
+
+    if (resumeTask.status !== `requires-user-input`) {
+      throw new TaskConflictError(`Only tasks requiring user input can be continued.`);
+    }
+
+    if (resumeTask.phase === `routing`) {
+      const loopPersonas = await queryLoopPersonaList(request.loop);
+      const activePersonas = loopPersonas.filter((persona) => persona.lifecycleStatus === `active`);
+      const routingPersona = getActiveRoutingPersona(activePersonas);
+      const updatedPayload = appendTimelineEntries(withRoutingResponder(resumeTask.payload, routingPersona), [
+        makeTimelineEntry(`chat-session`, `chat-ui`, {
+          channel: parsePayloadChannel(resumeTask.payload),
+          turns: [{ speaker: `user`, message: request.description }],
+        }),
+      ]);
+
+      const updatedTask = await queryTaskUpdate({
+        id: resumeTask.id,
+        phase: `routing`,
+        status: `active`,
+        assignee: routingPersona.id,
+        selectedPersona: routingPersona.id,
+        blocker: null,
+        payload: updatedPayload,
+        context: `User provided routing input. Task queued for routing decision.`,
+      });
+
+      triggerQueueProcessing();
+
+      return { loop, tasks: [updatedTask] };
+    }
+
+    const updatedPayload = appendTimelineEntries(resumeTask.payload, [
+      makeTimelineEntry(`chat-session`, `chat-ui`, {
+        channel: parsePayloadChannel(resumeTask.payload),
+        turns: [{ speaker: `user`, message: request.description }],
+      }),
+    ]);
+    const updatedTask = await queryTaskUpdate({
+      id: resumeTask.id,
+      phase: `execution`,
+      status: `queued`,
+      blocker: null,
+      payload: updatedPayload,
+      context: `${resumeTask.context}\n\nHuman message:\n${request.description}`,
+    });
+
+    triggerQueueProcessing();
+
+    return {
+      loop,
+      tasks: [updatedTask],
+      routeDecision: resumeTask.selectedPersona
+        ? {
+            selectedPersona: resumeTask.selectedPersona,
+            selectedModel: resumeTask.payload.routing?.selectedModel ?? (await resolveProviderDefaultModel(resumeTask.loop, resumeTask.targetType === `provider` ? resumeTask.targetId : null)),
+            targetType: resumeTask.targetType ?? `provider`,
+            routeReasonCode: `REUSED_PREVIOUS_SELECTION`,
+            routeReasonText: `Continued with the currently assigned persona.`,
+          }
+        : undefined,
+    };
+  }
+
+  // New task — create in routing phase and queue routing decision immediately
+  const loopPersonas = await queryLoopPersonaList(request.loop);
+  const activePersonas = loopPersonas.filter((persona) => persona.lifecycleStatus === `active`);
+  const routingPersona = getActiveRoutingPersona(activePersonas);
+  const channel = parsePayloadChannel(request.payload);
+
+  const initialPayload = appendTimelineEntries(withRoutingResponder({ ...request.payload, channel, timeline: [] }, routingPersona), [
+    makeTimelineEntry(`task-created`, routingPersona.displayName, {
+      sourceType: request.sourceType,
+      description: request.description,
+    }),
+    makeTimelineEntry(`chat-session`, `chat-ui`, {
+      channel,
+      turns: [{ speaker: `user`, message: request.description }],
+    }),
+  ]);
+
+  const createdTask = await queryTaskCreate({
+    loop: request.loop,
+    phase: `routing`,
+    sourceType: request.sourceType,
+    sourceRef: normalizeString(request.sourceRef) ?? null,
+    status: `active`,
+    assignee: routingPersona.id,
+    selectedPersona: routingPersona.id,
+    targetType: null,
+    targetId: null,
+    routeReasonCode: null,
+    routeReasonText: null,
+    description: request.description,
+    ...buildTaskDefaults(request),
+    emittedByPersona: routingPersona.id,
+    blocker: null,
+    approvals: request.approvals,
+    payload: initialPayload,
+    completedAt: null,
+    autonomyIterationCount: 0,
+    autonomyMaxIterations: defaultAutonomyMaxIterations,
+  });
+
+  triggerQueueProcessing();
+
+  return { loop, tasks: [createdTask] };
+};
+
+export const taskMarkCompleted = async (loopId: string, userId: string, note?: string, taskId?: string): Promise<Task> => {
+  const loop = await queryLoopForUser(loopId, userId);
+
+  if (!loop) {
+    throw new TaskAccessError(`Loop not found.`);
+  }
+
+  const activeTask = await resolveActionTask(loopId, userId, taskId);
+
+  assertActionAllowed(activeTask, `mark complete`);
+
+  const payload = appendTimelineEntries(activeTask.payload, [
+    makeTimelineEntry(`task-completed`, `user`, {
+      note: normalizeString(note) ?? `Task marked complete by user.`,
+    }),
+  ]);
+
+  return queryTaskUpdate({
+    id: activeTask.id,
+    phase: `done`,
+    status: `completed`,
+    payload,
+    blocker: null,
+    completedAt: new Date().toISOString(),
+    context: normalizeString(note) ?? `Task marked complete by user approval.`,
+  });
+};
+
+export const taskMarkBlocked = async (loopId: string, userId: string, blocker: string, note?: string, taskId?: string): Promise<Task> => {
+  const loop = await queryLoopForUser(loopId, userId);
+
+  if (!loop) {
+    throw new TaskAccessError(`Loop not found.`);
+  }
+
+  const activeTask = await resolveActionTask(loopId, userId, taskId);
+
+  assertActionAllowed(activeTask, `mark blocked`);
+
+  const payload = appendTimelineEntries(activeTask.payload, [
+    makeTimelineEntry(`task-blocked`, `user`, {
+      blocker,
+      note: normalizeString(note) ?? `Task marked blocked by user.`,
+    }),
+  ]);
+
+  return queryTaskUpdate({
+    id: activeTask.id,
+    phase: `execution`,
+    status: `blocked`,
+    blocker,
+    payload,
+    context: normalizeString(note) ?? `Task blocked: ${blocker}`,
+  });
+};
+
+export const taskUpdateContext = async (loopId: string, userId: string, currentContext: string, note?: string, taskId?: string): Promise<Task> => {
+  const loop = await queryLoopForUser(loopId, userId);
+
+  if (!loop) {
+    throw new TaskAccessError(`Loop not found.`);
+  }
+
+  const activeTask = await resolveActionTask(loopId, userId, taskId);
+
+  assertActionAllowed(activeTask, `update context`);
+
+  const payload = appendTimelineEntries(activeTask.payload, [
+    makeTimelineEntry(`system-action-result`, `user`, {
+      action: `context-update`,
+      currentContext,
+      note: normalizeString(note) ?? `Context updated by user.`,
+    }),
+  ]);
+
+  return queryTaskUpdate({
+    id: activeTask.id,
+    payload,
+    context: currentContext,
+  });
+};
+
+export const taskListByLoop = async (userId: string, loopId?: string): Promise<Task[]> => {
+  if (!loopId) {
+    return queryTaskList(userId);
+  }
+
+  const loop = await queryLoopForUser(loopId, userId);
+
+  if (!loop) {
+    throw new TaskAccessError(`Loop not found.`);
+  }
+
+  return queryLoopTaskList(loopId, userId);
+};

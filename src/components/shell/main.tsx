@@ -1,3 +1,4 @@
+import { ToastNotificationProvider } from "@canonical/react-components";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
@@ -22,7 +23,9 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ToastNotificationProvider>
+        <RouterProvider router={router} />
+      </ToastNotificationProvider>
     </QueryClientProvider>
   </StrictMode>,
 );

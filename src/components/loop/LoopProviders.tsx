@@ -5,6 +5,7 @@ import type { loopSelectionAlgorithms } from "@components/loop/loop.schema.js";
 import { assignProviderToLoop, removeProviderFromLoop } from "@components/provider/provider.client.js";
 import { useLoopProviderList, useProviderList } from "@components/provider/provider.query.js";
 import type { LoopProvider } from "@components/provider/provider.schema.js";
+import { useQueryClient } from "@tanstack/react-query";
 import { useFormik } from "formik";
 import { useState } from "react";
 import type { LoopProvidersProps } from "./loop.schema.js";
@@ -26,6 +27,7 @@ const mvpAlgorithmOptions = [{ value: mvpSelectionAlgorithm, label: algorithmLab
 const formatTimestamp = (value: Date | string | null) => (value ? new Date(value).toLocaleString() : `-`);
 
 export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
+  const queryClient = useQueryClient();
   const { state: providerListState } = useProviderList();
   const { state: assignedProviderState, reload: reloadAssignedProviders } = useLoopProviderList(loopId);
   const { state: providerSelectionPolicyState, reload: reloadProviderSelectionPolicy } = useProviderSelectionPolicy(loopId);
@@ -54,6 +56,7 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
           message: `Provider has been assigned to this loop.`,
         });
         helpers.resetForm();
+        await queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
         reloadAssignedProviders();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -66,16 +69,16 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
     },
   });
 
-  const policyFormik = useFormik<{ openRouterSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number] }>({
+  const policyFormik = useFormik<{ providerSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number] }>({
     enableReinitialize: true,
     initialValues: {
-      openRouterSelectionAlgorithm: mvpSelectionAlgorithm,
+      providerSelectionAlgorithm: mvpSelectionAlgorithm,
     },
     onSubmit: async (values, helpers) => {
       onFeedback(null);
 
       try {
-        await updateProviderSelectionPolicy(loopId, { openRouterSelectionAlgorithm: values.openRouterSelectionAlgorithm });
+        await updateProviderSelectionPolicy(loopId, { providerSelectionAlgorithm: values.providerSelectionAlgorithm });
         onFeedback({
           severity: NotificationSeverity.INFORMATION,
           title: `Provider selection policy updated`,
@@ -105,6 +108,7 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
         title: `Provider removed`,
         message: `${provider.displayName} has been removed from this loop.`,
       });
+      await queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
       reloadAssignedProviders();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -157,7 +161,7 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
         ) : null}
         {providerSelectionPolicyState.status === `success` ? (
           <form onSubmit={policyFormik.handleSubmit}>
-            <Select id="loop-provider-selection-algorithm" label="Algorithm" name="openRouterSelectionAlgorithm" onChange={policyFormik.handleChange} options={mvpAlgorithmOptions} value={policyFormik.values.openRouterSelectionAlgorithm} />
+            <Select id="loop-provider-selection-algorithm" label="Algorithm" name="providerSelectionAlgorithm" onChange={policyFormik.handleChange} options={mvpAlgorithmOptions} value={policyFormik.values.providerSelectionAlgorithm} />
             <div className="u-align--right">
               <Button appearance="base" disabled={policyFormik.isSubmitting} type="submit">
                 {policyFormik.isSubmitting ? `Saving...` : `Save algorithm`}

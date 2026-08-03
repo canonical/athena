@@ -1,31 +1,46 @@
-export type AuthenticationSearch = {
-  returnTo?: string;
-};
+import { z } from "zod";
 
-export type LoopDetailSearch = {
-  tab?: `details` | `personas` | `providers` | `harnesses`;
-  create?: true;
-  edit?: string;
-  clone?: true;
-};
+export const authenticationSearchSchema = z.object({
+  returnTo: z.string().optional(),
+});
 
-export type LoopListSearch = {
-  create?: true;
-  edit?: string;
-};
+export const loopDetailSearchSchema = z.object({
+  tab: z.enum([`dashboard`, `details`, `personas`, `providers`, `runners`]).optional(),
+  create: z.literal(true).optional(),
+  edit: z.string().optional(),
+  clone: z.literal(true).optional(),
+});
 
-export type PersonaListSearch = {
-  create?: true;
-  edit?: string;
-  clone?: true;
-};
+export const loopListSearchSchema = z.object({
+  create: z.literal(true).optional(),
+  edit: z.string().optional(),
+});
 
-export type ProviderListSearch = {
-  create?: true;
-  edit?: string;
-};
+export const personaListSearchSchema = z.object({
+  tab: z.enum([`my-personas`, `catalog`]).optional(),
+  create: z.literal(true).optional(),
+  edit: z.string().optional(),
+  clone: z.literal(true).optional(),
+});
 
-export type HarnessListSearch = {
-  create?: true;
-  edit?: string;
-};
+export const providerListSearchSchema = z.object({
+  create: z.literal(true).optional(),
+  edit: z.string().optional(),
+});
+
+export const providerDetailSearchSchema = z.object({
+  tab: z.enum([`details`, `settings`]).optional(),
+});
+
+export const runnerListSearchSchema = z.object({
+  create: z.literal(true).optional(),
+  edit: z.string().optional(),
+});
+
+export type AuthenticationSearch = z.infer<typeof authenticationSearchSchema>;
+export type LoopDetailSearch = z.infer<typeof loopDetailSearchSchema>;
+export type LoopListSearch = z.infer<typeof loopListSearchSchema>;
+export type PersonaListSearch = z.infer<typeof personaListSearchSchema>;
+export type ProviderListSearch = z.infer<typeof providerListSearchSchema>;
+export type ProviderDetailSearch = z.infer<typeof providerDetailSearchSchema>;
+export type RunnerListSearch = z.infer<typeof runnerListSearchSchema>;

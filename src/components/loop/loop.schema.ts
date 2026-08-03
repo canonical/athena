@@ -1,41 +1,65 @@
 import type { NotificationSeverity } from "@canonical/react-components";
+import { isoDateTime, nullableString, requiredString, uuid } from "@components/utilities/zod.utilities.js";
 import { z } from "zod";
 import type { PersonaListState } from "../persona/persona.query.js";
 
-const requiredString = (message: string) => z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string(message));
-
 export const loopSelectionAlgorithms = [`round-robin`, `highest-credit-percentage`, `highest-credit-absolute`, `weighted-round-robin`, `least-recently-used`, `priority-failover`, `health-aware-cooldown`] as const;
 
-export const loopInsertSchema = z.object({
+export const loopSchema = z.object({
+  id: uuid(),
   name: requiredString("name is required."),
-  description: z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string().optional()),
+  description: nullableString,
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+});
+
+export type Loop = z.infer<typeof loopSchema>;
+
+export const loopInsertSchema = loopSchema.omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  description: nullableString,
 });
 
 export const loopUpdateSchema = loopInsertSchema;
 
 export const providerSelectionPolicyUpdateSchema = z.object({
-  openRouterSelectionAlgorithm: z.enum(loopSelectionAlgorithms).optional(),
-  copilotSelectionAlgorithm: z.enum(loopSelectionAlgorithms).optional(),
-  selectionCooldownWindowMs: z.int().min(1000).max(86_400_000).optional(),
+  providerSelectionAlgorithm: z.enum(loopSelectionAlgorithms).optional(),
+  runnerSelectionAlgorithm: z.enum(loopSelectionAlgorithms).optional(),
 });
 
-export type Loop = {
-  id: string;
-  name: string;
-  description: string | null;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-};
+export const providerSelectionPolicySchema = z.object({
+  loop: uuid(),
+  providerSelectionAlgorithm: z.enum(loopSelectionAlgorithms),
+  providerSelectionCursor: z.int(),
+  runnerSelectionAlgorithm: z.enum(loopSelectionAlgorithms),
+  runnerSelectionCursor: z.int(),
+  updatedAt: isoDateTime,
+});
 
-export type ProviderSelectionPolicy = {
-  loop: string;
-  openRouterSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number];
-  copilotSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number];
-  openRouterSelectionCursor: number;
-  copilotSelectionCursor: number;
-  selectionCooldownWindowMs: number;
-  updatedAt: Date | string;
-};
+export type ProviderSelectionPolicy = z.infer<typeof providerSelectionPolicySchema>;
+
+export const loopReadinessBlockerCodes = [
+  `NO_ACTIVE_ROUTING_PERSONA`,
+  `MULTIPLE_ACTIVE_ROUTING_PERSONAS`,
+  `NO_ACTIVE_EXECUTION_PERSONA`,
+  `NO_ACTIVE_PROVIDER`,
+  `NO_PROVIDER_MODEL_CONFIGURATION`,
+  `PROVIDER_MODEL_CONFIGURATION_INCOMPLETE`,
+  `NO_ACTIVE_RUNNER`,
+] as const;
+
+export const loopReadinessBlockerSchema = z.object({
+  code: z.enum(loopReadinessBlockerCodes),
+  message: z.string(),
+});
+
+export const loopReadinessSchema = z.object({
+  loop: uuid(),
+  blocked: z.boolean(),
+  blockers: z.array(loopReadinessBlockerSchema),
+});
+
+export type LoopReadiness = z.infer<typeof loopReadinessSchema>;
+export type LoopReadinessBlocker = z.infer<typeof loopReadinessBlockerSchema>;
 
 export type LoopInsert = z.infer<typeof loopInsertSchema>;
 
@@ -43,12 +67,14 @@ export type LoopUpdate = z.infer<typeof loopUpdateSchema>;
 
 export type ProviderSelectionPolicyUpdate = z.infer<typeof providerSelectionPolicyUpdateSchema>;
 
-export type LoopUser = {
-  loop: string;
-  user: string;
-  isAdmin: boolean;
-  createdAt: Date | string;
-};
+export const loopUserSchema = z.object({
+  loop: uuid(),
+  user: z.string(),
+  isAdmin: z.boolean(),
+  createdAt: isoDateTime,
+});
+
+export type LoopUser = z.infer<typeof loopUserSchema>;
 
 export type Feedback = {
   severity: (typeof NotificationSeverity)[keyof typeof NotificationSeverity];
@@ -56,7 +82,10 @@ export type Feedback = {
   message: string;
 };
 
-export type Tab = "details" | "personas" | "providers" | "harnesses";
+export const loopTabs = [`dashboard`, `details`, `personas`, `providers`, `runners`] as const;
+export const loopTabSchema = z.enum(loopTabs);
+
+export type Tab = z.infer<typeof loopTabSchema>;
 
 export type LoopProps = {
   loopId: string;
@@ -87,7 +116,7 @@ export type LoopProvidersProps = {
   onFeedback: (feedback: Feedback | null) => void;
 };
 
-export type LoopHarnessesProps = {
+export type LoopRunnersProps = {
   loopId: string;
   onFeedback: (feedback: Feedback | null) => void;
 };

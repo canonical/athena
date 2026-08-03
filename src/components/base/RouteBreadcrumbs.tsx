@@ -1,7 +1,7 @@
-import { fetchHarnessById } from "@components/harness/harness.client.js";
 import { fetchLoop } from "@components/loop/loop.client.js";
 import { fetchPersonaById } from "@components/persona/persona.client.js";
 import { fetchProviderById } from "@components/provider/provider.client.js";
+import { fetchRunnerById } from "@components/runner/runner.client.js";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
@@ -16,15 +16,15 @@ type RouteBreadcrumbsProps = {
 
 const entityLabels: Record<string, { list: string; detail: string }> = {
   authentication: { list: `Authentication`, detail: `Authentication` },
-  event: { list: `Events`, detail: `Event` },
-  harness: { list: `Harnesses`, detail: `Harness` },
+  task: { list: `Tasks`, detail: `Task` },
+  runner: { list: `Runners`, detail: `Runner` },
   loop: { list: `Loops`, detail: `Loop` },
   persona: { list: `Personas`, detail: `Persona` },
   provider: { list: `Providers`, detail: `Provider` },
 };
 
 const detailLabelResolvers: Partial<Record<string, (id: string) => Promise<string>>> = {
-  harness: async (id) => (await fetchHarnessById(id)).displayName,
+  runner: async (id) => (await fetchRunnerById(id)).displayName,
   loop: async (id) => (await fetchLoop(id)).name,
   persona: async (id) => (await fetchPersonaById(id)).displayName,
   provider: async (id) => (await fetchProviderById(id)).displayName,

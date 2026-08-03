@@ -1,40 +1,17 @@
-import type { Loop, LoopInsert, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
-import { loopInsertSchema, loopUpdateSchema, providerSelectionPolicyUpdateSchema } from "./loop.schema.js";
-import { queryLoopAdminMembership, queryLoopCreate, queryLoopDelete, queryLoopForUser, queryLoopList, queryLoopProviderSelectionPolicy, queryLoopProviderSelectionPolicyUpdate, queryLoopUpdate } from "./loop.service.js";
-
-export class LoopValidationError extends Error {}
-export class LoopNotFoundError extends Error {}
-export class LoopForbiddenError extends Error {}
-
-export const validateCreateLoopRequest = (value: unknown): LoopInsert => {
-  const result = loopInsertSchema.safeParse(value);
-
-  if (!result.success) {
-    throw new LoopValidationError(result.error.issues[0]?.message ?? "Invalid loop request.");
-  }
-
-  return result.data;
-};
-
-export const validateUpdateLoopRequest = (value: unknown): LoopUpdate => {
-  const result = loopUpdateSchema.safeParse(value);
-
-  if (!result.success) {
-    throw new LoopValidationError(result.error.issues[0]?.message ?? "Invalid loop request.");
-  }
-
-  return result.data;
-};
-
-export const validateProviderSelectionPolicyUpdateRequest = (value: unknown): ProviderSelectionPolicyUpdate => {
-  const result = providerSelectionPolicyUpdateSchema.safeParse(value);
-
-  if (!result.success) {
-    throw new LoopValidationError(result.error.issues[0]?.message ?? "Invalid provider selection policy request.");
-  }
-
-  return result.data;
-};
+import { LoopForbiddenError, LoopNotFoundError } from "./loop.errors.js";
+import { evaluateLoopReadiness } from "./loop.readiness.js";
+import type { Loop, LoopInsert, LoopReadiness, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
+import {
+  queryLoopAdminMembership,
+  queryLoopCreate,
+  queryLoopDelete,
+  queryLoopForUser,
+  queryLoopList,
+  queryLoopProviderSelectionPolicy,
+  queryLoopProviderSelectionPolicyUpdate,
+  queryLoopReadinessCounts,
+  queryLoopUpdate,
+} from "./loop.service.js";
 
 export const loopList = async (userId: string): Promise<Loop[]> => queryLoopList(userId);
 
@@ -92,4 +69,15 @@ export const loopProviderSelectionPolicyUpdate = async (loopId: string, userId: 
   }
 
   return policy;
+};
+
+export const loopReadinessGet = async (loopId: string, userId: string): Promise<LoopReadiness> => {
+  const loop = await queryLoopForUser(loopId, userId);
+
+  if (!loop) {
+    throw new LoopNotFoundError(`Loop not found.`);
+  }
+
+  const counts = await queryLoopReadinessCounts(loopId);
+  return evaluateLoopReadiness(loopId, counts);
 };

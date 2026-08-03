@@ -1,22 +1,21 @@
+import type { AppLogger } from "@components/logging/logging.schema.js";
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
-import { isValidUuid } from "@components/utilities/validation.js";
-import type { LoopProvider, LoopProviderAdminUpdate, LoopProviderInsert, Provider, ProviderInsert, ProviderUpdate } from "./provider.schema.js";
-import { loopProviderAdminUpdateSchema, loopProviderInsertSchema, providerInsertSchema, providerUpdateSchema } from "./provider.schema.js";
+import { fetchOpenRouterModels } from "@components/openrouter/openrouter.service.js";
+import { isValidUuid } from "@components/utilities/zod.utilities.js";
+import { ProviderForbiddenError, ProviderNotFoundError, ProviderValidationError } from "./provider.errors.js";
+import type { LoopProvider, LoopProviderAdminUpdate, LoopProviderInsert, Provider, ProviderInsert, ProviderModel, ProviderModelPreviewRequest, ProviderUpdate } from "./provider.schema.js";
 import {
-  queryLoopProviderCreate,
+  queryLoopProviderAssign,
   queryLoopProviderDelete,
   queryLoopProviderList,
   queryLoopProviderUpdateByAdmin,
+  queryProviderApiConnectionByOwner,
   queryProviderByIdForOwner,
   queryProviderCreate,
   queryProviderDelete,
   queryProviderListByOwner,
   queryProviderUpdate,
 } from "./provider.service.js";
-
-export class ProviderValidationError extends Error {}
-export class ProviderNotFoundError extends Error {}
-export class ProviderForbiddenError extends Error {}
 
 const validateLoopId = (loopId: string): void => {
   if (!isValidUuid(loopId)) {
@@ -36,48 +35,28 @@ const enforceOpenRouterOnly = (providerType: string): void => {
   }
 };
 
-export const validateProviderInsertRequest = (value: unknown): ProviderInsert => {
-  const result = providerInsertSchema.safeParse(value);
-
-  if (!result.success) {
-    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid provider request.`);
+const fetchProviderModelsByType = async (providerType: string, connection: { baseUrl: string; apiKey: string }, logger?: AppLogger): Promise<ProviderModel[]> => {
+  switch (providerType) {
+    case `openrouter`:
+      return fetchOpenRouterModels(connection, logger);
+    default:
+      throw new ProviderValidationError(`Unsupported providerType for model listing: ${providerType}.`);
   }
-
-  enforceOpenRouterOnly(result.data.providerType);
-
-  return result.data;
 };
 
-export const validateProviderUpdateRequest = (value: unknown): ProviderUpdate => {
-  const result = providerUpdateSchema.safeParse(value);
+const normalizeProviderModelConfig = <T extends { defaultModel: string | null; enabledModels: string[] | null }>(input: T): T => {
+  const enabledModels = input.enabledModels === null ? null : Array.from(new Set(input.enabledModels.map((value) => value.trim()).filter((value) => value.length > 0)));
+  const defaultModel = input.defaultModel?.trim() ?? null;
 
-  if (!result.success) {
-    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid provider request.`);
+  if (defaultModel && !enabledModels?.includes(defaultModel)) {
+    throw new ProviderValidationError(`Default model must also be present in enabledModels.`);
   }
 
-  enforceOpenRouterOnly(result.data.providerType);
-
-  return result.data;
-};
-
-export const validateLoopProviderInsertRequest = (value: unknown): LoopProviderInsert => {
-  const result = loopProviderInsertSchema.safeParse(value);
-
-  if (!result.success) {
-    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid loop provider request.`);
-  }
-
-  return result.data;
-};
-
-export const validateLoopProviderAdminUpdateRequest = (value: unknown): LoopProviderAdminUpdate => {
-  const result = loopProviderAdminUpdateSchema.safeParse(value);
-
-  if (!result.success) {
-    throw new ProviderValidationError(result.error.issues[0]?.message ?? `Invalid loop provider update request.`);
-  }
-
-  return result.data;
+  return {
+    ...input,
+    defaultModel,
+    enabledModels,
+  };
 };
 
 export const providerList = async (ownerId: string): Promise<Provider[]> => queryProviderListByOwner(ownerId);
@@ -94,12 +73,17 @@ export const providerGet = async (providerId: string, ownerId: string): Promise<
   return provider;
 };
 
-export const providerCreate = async (input: ProviderInsert, ownerId: string): Promise<Provider> => queryProviderCreate(input, ownerId);
+export const providerCreate = async (input: ProviderInsert, ownerId: string): Promise<Provider> => {
+  enforceOpenRouterOnly(input.providerType);
+
+  return queryProviderCreate(normalizeProviderModelConfig(input), ownerId);
+};
 
 export const providerUpdate = async (providerId: string, ownerId: string, input: ProviderUpdate): Promise<Provider> => {
   validateProviderId(providerId);
+  enforceOpenRouterOnly(input.providerType);
 
-  const updated = await queryProviderUpdate(providerId, ownerId, input);
+  const updated = await queryProviderUpdate(providerId, ownerId, normalizeProviderModelConfig(input));
 
   if (!updated) {
     throw new ProviderNotFoundError(`Provider not found.`);
@@ -116,6 +100,29 @@ export const providerDelete = async (providerId: string, ownerId: string): Promi
   }
 };
 
+export const providerModels = async (providerId: string, ownerId: string, logger?: AppLogger): Promise<ProviderModel[]> => {
+  validateProviderId(providerId);
+
+  const connection = await queryProviderApiConnectionByOwner(providerId, ownerId);
+
+  if (!connection) {
+    throw new ProviderNotFoundError(`Provider not found.`);
+  }
+
+  return fetchProviderModelsByType(connection.providerType, connection, logger);
+};
+
+export const providerModelPreview = async (input: ProviderModelPreviewRequest, logger?: AppLogger): Promise<ProviderModel[]> => {
+  return fetchProviderModelsByType(
+    input.providerType,
+    {
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey,
+    },
+    logger,
+  );
+};
+
 export const loopProviderList = async (loopId: string, userId: string): Promise<LoopProvider[]> => {
   validateLoopId(loopId);
 
@@ -126,7 +133,7 @@ export const loopProviderList = async (loopId: string, userId: string): Promise<
   return queryLoopProviderList(loopId);
 };
 
-export const loopProviderCreate = async (loopId: string, userId: string, input: LoopProviderInsert): Promise<void> => {
+export const providerAssign = async (loopId: string, userId: string, input: LoopProviderInsert): Promise<void> => {
   validateLoopId(loopId);
   validateProviderId(input.provider);
 
@@ -140,7 +147,7 @@ export const loopProviderCreate = async (loopId: string, userId: string, input: 
     throw new ProviderNotFoundError(`Provider not found.`);
   }
 
-  await queryLoopProviderCreate(loopId, input.provider);
+  await queryLoopProviderAssign(loopId, input.provider);
 };
 
 export const loopProviderUpdateByAdmin = async (loopId: string, providerId: string, userId: string, input: LoopProviderAdminUpdate): Promise<LoopProvider> => {

@@ -19,6 +19,12 @@ export const config = {
     port,
     nodeEnv,
   },
+  logging: {
+    traceHeaderName: env.getEnv(`LOG_TRACE_HEADER_NAME`, `traceparent`),
+    serviceName: env.getEnv(`LOG_SERVICE_NAME`, `athena-service`),
+    level: env.getEnv(`LOG_LEVEL`, `info`),
+    enabled: env.getBoolean(`LOG_ENABLED`, true),
+  },
   cors: {
     allowedOrigins: requiredEnv.getList(`ALLOWED_ORIGINS`, `,`),
   },

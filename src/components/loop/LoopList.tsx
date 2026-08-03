@@ -1,5 +1,6 @@
 import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
+import { useFeedbackToast } from "@components/base/toast.js";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { LoopEditor } from "./LoopEditor.js";
@@ -19,6 +20,7 @@ export function LoopList({ editor, loopId }: LoopListProps) {
   const { state, reload } = useLoopList();
   const [busyLoopId, setBusyLoopId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  useFeedbackToast(feedback, setFeedback);
 
   const openCreateDrawer = () => {
     void navigate({ to: `/loop/list`, search: { create: true, edit: undefined } });
@@ -37,6 +39,12 @@ export function LoopList({ editor, loopId }: LoopListProps) {
   const selectedLoop = state.status === `success` && loopId ? state.loops.find((loop) => loop.id === loopId) : undefined;
 
   const handleDelete = async (loop: Loop) => {
+    const confirmed = window.confirm(`Delete loop "${loop.name}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
     setBusyLoopId(loop.id);
     setFeedback(null);
 
@@ -67,18 +75,12 @@ export function LoopList({ editor, loopId }: LoopListProps) {
 
   return (
     <section className="u-no-max-width">
-      {feedback ? (
-        <Notification severity={feedback.severity} title={feedback.title}>
-          {feedback.message}
-        </Notification>
-      ) : null}
       {state.status === `loading` ? <p className="p-text--default">Loading loops...</p> : null}
       {state.status === `error` ? (
         <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load loops">
           {state.message}
         </Notification>
       ) : null}
-      {state.status === `success` && state.loops.length === 0 ? <p className="p-text--default">No loops yet.</p> : null}
       <div className="p-card p-strip is-shallow">
         <div className="p-grid">
           <div className="p-grid__row">

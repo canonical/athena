@@ -5,6 +5,7 @@ import passport from "passport";
 
 import { defineCors } from "./define-cors.js";
 import { defineExtensions } from "./define-extensions.js";
+import { defineLogging } from "./define-logging.js";
 
 /**
  * Registers Athena's core HTTP middleware stack, mirroring the Zeus pattern.
@@ -21,6 +22,7 @@ export const defineMiddlewares = (app: Express) => {
     }),
   );
 
+  defineLogging(app);
   app.use(passport.initialize());
   defineExtensions(app);
   defineCors(app);

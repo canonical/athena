@@ -2,29 +2,29 @@
 
 ## Purpose
 
-This definition specifies how personas use tools during event execution in Athena loops.
+This definition specifies how personas use tools during task execution in Athena loops.
 
 Harness and LLM provider selection rules are defined in [llm-harness.md](./llm-harness.md).
 
 Tools extend persona capability. Tools do not change Athena routing authority.
 
 - Athena remains deterministic orchestration code.
-- Athena routes unassigned events to the active routing persona (`isRouting = true`).
-- Only the active routing persona (`isRouting = true`) can push an event with an assigned persona.
+- Athena routes unassigned tasks to the active routing persona (`isRouting = true`).
+- Only the active routing persona (`isRouting = true`) can push a task with an assigned persona.
 - Tool outputs are context inputs for personas; they are not ownership decisions.
 
 ## Tool usage model
 
-Tool usage is always attached to an active event.
+Tool usage is always attached to an active task.
 
-- A persona may invoke zero or more tools while processing an event.
-- Tool usage must be traceable in event context (tool name, intent, execution state, result summary, timestamp).
-- Tool invocations can fail. Failures are recorded in event context and handled by the active persona.
+- A persona may invoke zero or more tools while processing a task.
+- Tool usage must be traceable in task context (tool name, intent, execution state, result summary, timestamp).
+- Tool invocations can fail. Failures are recorded in task context and handled by the active persona.
 - Tool usage must not leak secrets into user-visible responses.
 
 ## Tool execution record (minimum)
 
-Each tool invocation appended to event context must include at least:
+Each tool invocation appended to task context must include at least:
 
 - `toolName`
 - `intent`
@@ -64,9 +64,9 @@ Collect factual context that improves engineering manager and assigned persona d
 - Sources must be attributable (URL or internal document reference).
 - Research does not assign the next owning persona.
 
-### Event integration
+### Task integration
 
-Research output is appended to event context and consumed by the current owner.
+Research output is appended to task context and consumed by the current owner.
 If routing is needed after research, Athena routes through the active routing persona (`isRouting = true`) per [theloop.md](./theloop.md).
 
 ## Initial tool catalog to populate
@@ -74,13 +74,13 @@ If routing is needed after research, Athena routes through the active routing pe
 The following tool categories are included for MVP planning beyond Research.
 
 1. Summarize
-   - Condense long artifacts into structured context for event processing.
+   - Condense long artifacts into structured context for task processing.
 2. Validate
    - Check schema, policy, or rule compliance against definition files, including Zod-based conversation payload validation defined in [llm-harness.md](./llm-harness.md).
 3. Transform
-   - Convert source artifacts into normalized Athena event context.
+   - Convert source artifacts into normalized Athena task context.
 4. Retrieve
-   - Fetch loop-linked artifacts (docs, specs, payload history) for current event context.
+   - Fetch loop-linked artifacts (docs, specs, payload history) for current task context.
 5. Compare
    - Diff two artifacts and return behavior-impact oriented change notes.
 
@@ -99,10 +99,10 @@ Athena may execute tools through an optimization runtime (for example [rtk-ai/rt
 
 - Optimization runtime choice must not change ownership or routing semantics defined in [theloop.md](./theloop.md) and [interaction.protocol.md](./interaction.protocol.md).
 - Tool contracts remain canonical in Athena definitions; optimization runtimes are execution infrastructure, not policy authority.
-- Any optimization feature (caching, batching, deduplication, speculative execution, retry shaping, or model selection) must preserve equivalent user-visible outcomes for the same event context.
+- Any optimization feature (caching, batching, deduplication, speculative execution, retry shaping, or model selection) must preserve equivalent user-visible outcomes for the same task context.
 - If optimization introduces non-deterministic variance, Athena must persist enough execution metadata to make outcomes explainable and auditable.
 - Optimization configuration should be pluggable and provider-agnostic so Athena can switch between RTK and compatible runtimes without redefining tool behavior.
-- Optimization failures must degrade gracefully to baseline tool execution when possible, while still recording failure details in the event context.
+- Optimization failures must degrade gracefully to baseline tool execution when possible, while still recording failure details in the task context.
 
 ### Additional execution metadata (recommended)
 
@@ -115,14 +115,14 @@ When an optimization runtime is used, each tool execution record should also inc
 
 ## Failure handling
 
-- A failed tool execution does not change event ownership by itself.
+- A failed tool execution does not change task ownership by itself.
 - Attempting a disallowed tool must be recorded as a failed execution with a policy-denied failure summary.
 - The active persona decides whether to retry the tool, continue with partial evidence, or perform a blocked handoff per [handoff.definition.md](./handoff.definition.md).
 - Retries must be recorded as separate tool execution records.
 
-## Event source mapping
+## Task source mapping
 
-Tool-triggered work should be represented as a tool execution event source as defined in [event.md](./event.md).
+Tool-triggered work should be represented as a tool execution task source as defined in [task.md](./task.md).
 
 ## Tool Execution Lifecycle Diagram
 

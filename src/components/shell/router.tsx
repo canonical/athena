@@ -7,27 +7,25 @@ import { lazy, Suspense } from "react";
 import athenaLogo from "./athena-logo.svg";
 import favicon from "./favicon.png";
 import { primarySideNavigationItems, SideNavigationLink, useAccountSideNavigationItems } from "./SideNavigation.js";
-import type { AuthenticationSearch, HarnessListSearch, LoopDetailSearch, LoopListSearch, PersonaListSearch, ProviderListSearch } from "./shell.schema.js";
+import type { AuthenticationSearch, LoopDetailSearch, LoopListSearch, PersonaListSearch, ProviderDetailSearch, ProviderListSearch, RunnerListSearch } from "./shell.schema.js";
 import "./shell.scss";
 
 const rootPath = `/`;
 const authenticationPath = `/authentication`;
 const authenticationSignOutPath = `/authentication/sign-out`;
 const loopBasePath = `/loop`;
-const eventBasePath = `/event`;
 const personaBasePath = `/persona`;
 const providerBasePath = `/provider`;
-const harnessBasePath = `/harness`;
+const runnerBasePath = `/runner`;
 
 const loopListRoutePath = `list`;
 const loopDetailRoutePath = `$loopId`;
-const eventListRoutePath = `list`;
 const personaListRoutePath = `list`;
 const personaDetailRoutePath = `$personaId`;
 const providerListRoutePath = `list`;
 const providerDetailRoutePath = `$providerId`;
-const harnessListRoutePath = `list`;
-const harnessDetailRoutePath = `$harnessId`;
+const runnerListRoutePath = `list`;
+const runnerDetailRoutePath = `$runnerId`;
 
 const parseCreateFlag = (value: unknown): true | undefined => (value === true || value === `true` ? true : undefined);
 
@@ -37,6 +35,7 @@ const parseLoopListSearch = (search: Record<string, unknown>): LoopListSearch =>
 });
 
 const parsePersonaListSearch = (search: Record<string, unknown>): PersonaListSearch => ({
+  tab: search.tab === `my-personas` || search.tab === `catalog` ? search.tab : `my-personas`,
   create: parseCreateFlag(search.create),
   edit: typeof search.edit === `string` ? search.edit : undefined,
   clone: parseCreateFlag(search.clone),
@@ -47,14 +46,18 @@ const parseProviderListSearch = (search: Record<string, unknown>): ProviderListS
   edit: typeof search.edit === `string` ? search.edit : undefined,
 });
 
+const parseProviderDetailSearch = (search: Record<string, unknown>): ProviderDetailSearch => ({
+  tab: search.tab === `details` || search.tab === `settings` ? search.tab : `details`,
+});
+
 const parseLoopDetailSearch = (search: Record<string, unknown>): LoopDetailSearch => ({
-  tab: search.tab === `personas` || search.tab === `providers` || search.tab === `harnesses` ? search.tab : `details`,
+  tab: search.tab === `dashboard` || search.tab === `details` || search.tab === `personas` || search.tab === `providers` || search.tab === `runners` ? search.tab : `dashboard`,
   create: parseCreateFlag(search.create),
   edit: typeof search.edit === `string` ? search.edit : undefined,
   clone: parseCreateFlag(search.clone),
 });
 
-const parseHarnessListSearch = (search: Record<string, unknown>): HarnessListSearch => ({
+const parseRunnerListSearch = (search: Record<string, unknown>): RunnerListSearch => ({
   create: parseCreateFlag(search.create),
   edit: typeof search.edit === `string` ? search.edit : undefined,
 });
@@ -69,18 +72,6 @@ const LazyAuthenticationSignOutView = lazy(async () => {
   const module = await import("@components/authentication/Authentication.js");
 
   return { default: module.AuthenticationSignOutView };
-});
-
-const LazyEvent = lazy(async () => {
-  const module = await import("@components/event/Event.js");
-
-  return { default: module.Event };
-});
-
-const LazyEventLayout = lazy(async () => {
-  const module = await import("@components/event/EventLayout.js");
-
-  return { default: module.EventLayout };
 });
 
 const LazyLoop = lazy(async () => {
@@ -149,22 +140,22 @@ const LazyProvider = lazy(async () => {
   return { default: module.Provider };
 });
 
-const LazyHarnessList = lazy(async () => {
-  const module = await import("@components/harness/HarnessList.js");
+const LazyRunnerList = lazy(async () => {
+  const module = await import("@components/runner/RunnerList.js");
 
-  return { default: module.HarnessList };
+  return { default: module.RunnerList };
 });
 
-const LazyHarnessLayout = lazy(async () => {
-  const module = await import("@components/harness/HarnessLayout.js");
+const LazyRunnerLayout = lazy(async () => {
+  const module = await import("@components/runner/RunnerLayout.js");
 
-  return { default: module.HarnessLayout };
+  return { default: module.RunnerLayout };
 });
 
-const LazyHarness = lazy(async () => {
-  const module = await import("@components/harness/Harness.js");
+const LazyRunner = lazy(async () => {
+  const module = await import("@components/runner/Runner.js");
 
-  return { default: module.Harness };
+  return { default: module.Runner };
 });
 
 function ShellLayout() {
@@ -264,10 +255,11 @@ function PersonaDetailView() {
 
 function ProviderDetailView() {
   const { providerId } = providerDetailRoute.useParams();
+  const { tab } = providerDetailRoute.useSearch();
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyProvider providerId={providerId} />
+      <LazyProvider providerId={providerId} tab={tab ?? `details`} />
     </Suspense>
   );
 }
@@ -284,12 +276,12 @@ function LoopListRouteView() {
 }
 
 function PersonaListRouteView() {
-  const { create, edit, clone } = personaRoute.useSearch();
+  const { tab, create, edit, clone } = personaRoute.useSearch();
   const editor = create ? `create` : clone && edit ? `clone` : edit ? `edit` : undefined;
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyPersonaList editor={editor} personaId={edit} />
+      <LazyPersonaList editor={editor} personaId={edit} tab={tab} />
     </Suspense>
   );
 }
@@ -305,13 +297,13 @@ function ProviderListRouteView() {
   );
 }
 
-function HarnessListRouteView() {
-  const { create, edit } = harnessRoute.useSearch();
+function RunnerListRouteView() {
+  const { create, edit } = runnerRoute.useSearch();
   const editor = create ? `create` : edit ? `edit` : undefined;
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyHarnessList editor={editor} harnessId={edit} />
+      <LazyRunnerList editor={editor} runnerId={edit} />
     </Suspense>
   );
 }
@@ -332,20 +324,20 @@ function ProviderLayoutRouteView() {
   );
 }
 
-function HarnessLayoutRouteView() {
+function RunnerLayoutRouteView() {
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyHarnessLayout />
+      <LazyRunnerLayout />
     </Suspense>
   );
 }
 
-function HarnessDetailView() {
-  const { harnessId } = harnessDetailRoute.useParams();
+function RunnerDetailView() {
+  const { runnerId } = runnerDetailRoute.useParams();
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyHarness harnessId={harnessId} />
+      <LazyRunner runnerId={runnerId} />
     </Suspense>
   );
 }
@@ -354,22 +346,6 @@ function LoopLayoutRouteView() {
   return (
     <Suspense fallback={<RouteLoadingView />}>
       <LazyLoopLayout />
-    </Suspense>
-  );
-}
-
-function EventRouteView() {
-  return (
-    <Suspense fallback={<RouteLoadingView />}>
-      <LazyEvent />
-    </Suspense>
-  );
-}
-
-function EventLayoutRouteView() {
-  return (
-    <Suspense fallback={<RouteLoadingView />}>
-      <LazyEventLayout />
     </Suspense>
   );
 }
@@ -445,18 +421,6 @@ const loopDetailRoute = createRoute({
   component: LoopDetailView,
 });
 
-const eventLayoutRoute = createRoute({
-  getParentRoute: () => protectedRoute,
-  path: eventBasePath,
-  component: EventLayoutRouteView,
-});
-
-const eventRoute = createRoute({
-  getParentRoute: () => eventLayoutRoute,
-  path: eventListRoutePath,
-  component: EventRouteView,
-});
-
 const personaLayoutRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: personaBasePath,
@@ -492,26 +456,27 @@ const providerRoute = createRoute({
 const providerDetailRoute = createRoute({
   getParentRoute: () => providerLayoutRoute,
   path: providerDetailRoutePath,
+  validateSearch: parseProviderDetailSearch,
   component: ProviderDetailView,
 });
 
-const harnessLayoutRoute = createRoute({
+const runnerLayoutRoute = createRoute({
   getParentRoute: () => protectedRoute,
-  path: harnessBasePath,
-  component: HarnessLayoutRouteView,
+  path: runnerBasePath,
+  component: RunnerLayoutRouteView,
 });
 
-const harnessRoute = createRoute({
-  getParentRoute: () => harnessLayoutRoute,
-  path: harnessListRoutePath,
-  validateSearch: parseHarnessListSearch,
-  component: HarnessListRouteView,
+const runnerRoute = createRoute({
+  getParentRoute: () => runnerLayoutRoute,
+  path: runnerListRoutePath,
+  validateSearch: parseRunnerListSearch,
+  component: RunnerListRouteView,
 });
 
-const harnessDetailRoute = createRoute({
-  getParentRoute: () => harnessLayoutRoute,
-  path: harnessDetailRoutePath,
-  component: HarnessDetailView,
+const runnerDetailRoute = createRoute({
+  getParentRoute: () => runnerLayoutRoute,
+  path: runnerDetailRoutePath,
+  component: RunnerDetailView,
 });
 
 const routeTree = rootRoute.addChildren([
@@ -520,10 +485,9 @@ const routeTree = rootRoute.addChildren([
   protectedRoute.addChildren([
     overviewRoute,
     loopLayoutRoute.addChildren([loopListRoute, loopDetailRoute]),
-    eventLayoutRoute.addChildren([eventRoute]),
     personaLayoutRoute.addChildren([personaRoute, personaDetailRoute]),
     providerLayoutRoute.addChildren([providerRoute, providerDetailRoute]),
-    harnessLayoutRoute.addChildren([harnessRoute, harnessDetailRoute]),
+    runnerLayoutRoute.addChildren([runnerRoute, runnerDetailRoute]),
   ]),
 ]);
 

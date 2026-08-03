@@ -9,7 +9,7 @@ export const createLoop = async (page: Page, name: string, description = `${name
   await page.getByLabel(`Loop description`).fill(description);
   await page.getByRole(`button`, { name: `Create loop` }).click();
 
-  await expect(page.getByText(`${name} is ready to receive events.`)).toBeVisible();
+  await expect(page.getByText(`${name} is ready to receive tasks.`)).toBeVisible();
 
   const loopLink = page.getByRole(`link`, { name, exact: true }).first();
   await expect(loopLink).toBeVisible();
