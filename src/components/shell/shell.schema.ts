@@ -5,7 +5,7 @@ export const authenticationSearchSchema = z.object({
 });
 
 export const loopDetailSearchSchema = z.object({
-  tab: z.enum([`dashboard`, `details`, `llm-tools`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`]).optional(),
+  tab: z.enum([`dashboard`, `details`, `tools`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`]).optional(),
   create: z.literal(true).optional(),
   edit: z.string().optional(),
   clone: z.literal(true).optional(),

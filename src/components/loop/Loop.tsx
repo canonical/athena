@@ -18,10 +18,10 @@ const LazyLoopDetails = lazy(async () => {
   return { default: module.LoopDetails };
 });
 
-const LazyLoopLlmTools = lazy(async () => {
-  const module = await import("./LoopLlmTools.js");
+const LazyLoopTools = lazy(async () => {
+  const module = await import("@components/tool/LoopTools.js");
 
-  return { default: module.LoopLlmTools };
+  return { default: module.LoopTools };
 });
 
 const LazyLoopPersonas = lazy(async () => {
@@ -124,8 +124,8 @@ export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId,
               </button>
             </li>
             <li className="p-tabs__item" role="presentation">
-              <button aria-selected={tab === `llm-tools`} className={`p-tabs__link${tab === `llm-tools` ? ` is-active` : ``}`} onClick={() => setTab(`llm-tools`)} role="tab" type="button">
-                LLM Tools
+              <button aria-selected={tab === `tools`} className={`p-tabs__link${tab === `tools` ? ` is-active` : ``}`} onClick={() => setTab(`tools`)} role="tab" type="button">
+                Tools
               </button>
             </li>
             <li className="p-tabs__item" role="presentation">
@@ -173,9 +173,9 @@ export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId,
           />
         </Suspense>
       ) : null}
-      {tab === `llm-tools` ? (
-        <Suspense fallback={<div>Loading LLM tools...</div>}>
-          <LazyLoopLlmTools loopId={loopId} onFeedback={setFeedback} />
+      {tab === `tools` ? (
+        <Suspense fallback={<div>Loading tools...</div>}>
+          <LazyLoopTools loopId={loopId} onFeedback={setFeedback} />
         </Suspense>
       ) : null}
       {tab === `personas` ? (

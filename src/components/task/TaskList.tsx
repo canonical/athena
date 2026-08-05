@@ -1,6 +1,8 @@
 import { Button, Notification, NotificationSeverity } from "@canonical/react-components";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ChatMessageBody } from "./ChatMessageBody.js";
+import { createTask } from "./task.client.js";
 import { useTasks } from "./task.query.js";
 import type { Task, TimelineChatTurn, TimelineEntry } from "./task.schema.js";
 import "./task.scss";
@@ -100,19 +102,63 @@ const timelineCounts = (task: Task): Array<{ type: string; count: number }> => {
   return [...counts.entries()].map(([type, count]) => ({ type, count }));
 };
 
+const readPendingProviderMutationApproval = (task: Task): { requestedMutationTools: string[]; requestedHighImpactTools: string[] } | null => {
+  const timeline = readTimeline(task);
+  let latestRequired: { timestamp: string; requestedMutationTools: string[]; requestedHighImpactTools: string[] } | null = null;
+  let latestDecisionTimestamp: string | null = null;
+
+  for (const entry of timeline) {
+    if (entry.type === `llm-call` && isRecord(entry.data) && entry.data.status === `approval-required` && entry.data.approvalType === `provider-mutation`) {
+      const requestedMutationTools = Array.isArray(entry.data.requestedMutationTools)
+        ? entry.data.requestedMutationTools.filter((value): value is string => typeof value === `string`)
+        : [];
+      const requestedHighImpactTools = Array.isArray(entry.data.requestedHighImpactTools)
+        ? entry.data.requestedHighImpactTools.filter((value): value is string => typeof value === `string`)
+        : [];
+
+      latestRequired = {
+        timestamp: entry.timestamp,
+        requestedMutationTools,
+        requestedHighImpactTools,
+      };
+    }
+
+    if (entry.type === `user-approval` && isRecord(entry.data) && entry.data.approvalType === `provider-mutation`) {
+      latestDecisionTimestamp = entry.timestamp;
+    }
+  }
+
+  if (!latestRequired) {
+    return null;
+  }
+
+  if (latestDecisionTimestamp && latestDecisionTimestamp > latestRequired.timestamp) {
+    return null;
+  }
+
+  return {
+    requestedMutationTools: latestRequired.requestedMutationTools,
+    requestedHighImpactTools: latestRequired.requestedHighImpactTools,
+  };
+};
+
 type TaskListProps = {
   loopId: string;
   onContinueChat?: (task: Task) => void;
 };
 
 export function TaskList({ loopId, onContinueChat }: TaskListProps) {
+  const queryClient = useQueryClient();
   const { state: tasksState } = useTasks(loopId);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<string>(`all`);
+  const [approvalMessage, setApprovalMessage] = useState(``);
+  const [approvalBusy, setApprovalBusy] = useState<`approved` | `rejected` | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   const loopTasks = useMemo(() => (tasksState.status === `success` ? tasksState.tasks : []), [tasksState]);
 
-  const sourceTypes = useMemo(() => {
+  const sourceTypes = useMemo<string[]>(() => {
     return [...new Set(loopTasks.map((task) => task.sourceType))].sort((left, right) => left.localeCompare(right));
   }, [loopTasks]);
 
@@ -147,6 +193,36 @@ export function TaskList({ loopId, onContinueChat }: TaskListProps) {
 
   const selectedTask = filteredTasks.find((task) => task.id === selectedTaskId) ?? null;
   const chatMessages = selectedTask ? toChatMessages(selectedTask) : [];
+  const pendingApproval = selectedTask ? readPendingProviderMutationApproval(selectedTask) : null;
+
+  const submitApprovalDecision = async (decision: `approved` | `rejected`) => {
+    if (!selectedTask || !pendingApproval) {
+      return;
+    }
+
+    setApprovalBusy(decision);
+    setApprovalError(null);
+
+    const decisionToken = decision === `approved` ? `approve` : `reject`;
+    const payloadMessage = `::approval-decision::${decisionToken}\n${approvalMessage.trim()}`;
+
+    try {
+      await createTask({
+        loop: loopId,
+        resumeTaskId: selectedTask.id,
+        sourceType: selectedTask.sourceType,
+        description: payloadMessage,
+        payload: { channel: `chat-ui`, timeline: [] },
+      });
+
+      setApprovalMessage(``);
+      await queryClient.invalidateQueries({ queryKey: [`tasks`, loopId] });
+    } catch (error) {
+      setApprovalError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setApprovalBusy(null);
+    }
+  };
 
   return (
     <div className="p-card p-strip is-shallow">
@@ -154,6 +230,11 @@ export function TaskList({ loopId, onContinueChat }: TaskListProps) {
       {tasksState.status === `error` ? (
         <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load tasks">
           {tasksState.message}
+        </Notification>
+      ) : null}
+      {approvalError ? (
+        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to submit approval decision">
+          {approvalError}
         </Notification>
       ) : null}
       {tasksState.status === `success` && loopTasks.length === 0 ? <p className="p-text--default">No tasks yet for this loop.</p> : null}
@@ -211,6 +292,31 @@ export function TaskList({ loopId, onContinueChat }: TaskListProps) {
                 <p className="p-text--small">Source: {selectedTask.sourceType}</p>
                 <p className="p-text--small">Context: {selectedTask.context}</p>
                 <p className="p-text--small">Requested outcome: {selectedTask.description ?? `n/a`}</p>
+                {selectedTask.status === `requires-user-approval` && pendingApproval ? (
+                  <div className="athena-approval-actions">
+                    <p className="p-text--small">Approval required for mutation tools.</p>
+                    {pendingApproval.requestedMutationTools.length > 0 ? <p className="p-text--small">Requested: {pendingApproval.requestedMutationTools.join(`, `)}</p> : null}
+                    {pendingApproval.requestedHighImpactTools.length > 0 ? <p className="p-text--small">High impact: {pendingApproval.requestedHighImpactTools.join(`, `)}</p> : null}
+                    <label className="u-no-margin--bottom" htmlFor="task-approval-message">
+                      Message (optional)
+                    </label>
+                    <textarea
+                      id="task-approval-message"
+                      onChange={(event) => setApprovalMessage(event.target.value)}
+                      placeholder="Optional message for Athena/LLM"
+                      rows={3}
+                      value={approvalMessage}
+                    />
+                    <div className="athena-approval-actions__buttons">
+                      <Button appearance="positive" disabled={approvalBusy !== null} onClick={() => void submitApprovalDecision(`approved`)} type="button">
+                        {approvalBusy === `approved` ? `Approving...` : `Approve`}
+                      </Button>
+                      <Button appearance="negative" disabled={approvalBusy !== null} onClick={() => void submitApprovalDecision(`rejected`)} type="button">
+                        {approvalBusy === `rejected` ? `Rejecting...` : `Reject`}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 {selectedTask.status === `requires-user-input` ? (
                   <div className="u-no-margin--top">
                     <Button appearance="positive" onClick={() => onContinueChat?.(selectedTask)} type="button">

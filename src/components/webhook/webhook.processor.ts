@@ -1,7 +1,17 @@
 import { log } from "@components/logging/logging.service.js";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { syncJiraWorkgraphItems } from "@components/workgraph/workgraph.jira.service.js";
-import { queryLoopWorkgraphItemList, queryLoopWorkgraphReplaceItems, queryLoopWorkgraphSyncConnection, queryWebhookByReceiverId, queryWebhookItemClaimNext, queryWebhookItemMarkDone, queryWebhookItemRequeue } from "@components/workgraph/workgraph.pg.service.js";
+import {
+  queryLoopWorkgraphItemList,
+  queryLoopWorkgraphMarkSyncFailed,
+  queryLoopWorkgraphMarkSynchronizing,
+  queryLoopWorkgraphReplaceItems,
+  queryLoopWorkgraphSyncConnection,
+  queryWebhookByReceiverId,
+  queryWebhookItemClaimNext,
+  queryWebhookItemMarkDone,
+  queryWebhookItemRequeue,
+} from "@components/workgraph/workgraph.pg.service.js";
 import { queryLoopPersonaList } from "@components/persona/persona.service.js";
 import { queryTaskCreateForWorkgraphItem } from "@components/task/task.service.js";
 import type { TaskInsert, TaskRoutingMeta } from "@components/task/task.schema.js";
@@ -202,15 +212,28 @@ const processWebhookItem = async (item: { id: string; payload: Record<string, un
     return;
   }
 
-  const syncedItems = await syncJiraWorkgraphItems({
-    baseUrl: syncConnection.baseUrl,
-    browseBaseUrl: syncConnection.browseBaseUrl ?? syncConnection.baseUrl,
-    email: syncConnection.email,
-    apiKey: syncConnection.apiKey,
-    jql,
-  });
+  const started = await queryLoopWorkgraphMarkSynchronizing(webhook.loop, webhook.workgraph);
 
-  await queryLoopWorkgraphReplaceItems(webhook.loop, webhook.workgraph, syncedItems);
+  if (!started) {
+    // Another sync is already active for this loop/workgraph.
+    return;
+  }
+
+  try {
+    const syncedItems = await syncJiraWorkgraphItems({
+      baseUrl: syncConnection.baseUrl,
+      browseBaseUrl: syncConnection.browseBaseUrl ?? syncConnection.baseUrl,
+      email: syncConnection.email,
+      apiKey: syncConnection.apiKey,
+      jql,
+    });
+
+    await queryLoopWorkgraphReplaceItems(webhook.loop, webhook.workgraph, syncedItems);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await queryLoopWorkgraphMarkSyncFailed(webhook.loop, webhook.workgraph, message);
+    throw error;
+  }
 
   const workgraphItems = await queryLoopWorkgraphItemList(webhook.loop, webhook.workgraph);
   const routingPersona = await resolveActiveRoutingPersona(webhook.loop);

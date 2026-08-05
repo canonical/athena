@@ -27,6 +27,10 @@ export const requiresRunnerLaneByTaskKind = (taskKind: TaskKind): boolean => {
 
 const toolSet = new Set<string>(providerToolNames);
 
+const isReadonlyStringSet = (value: ReadonlyArray<string> | ReadonlySet<string>): value is ReadonlySet<string> => {
+  return typeof (value as { has?: unknown }).has === `function`;
+};
+
 export const isProviderBasedToolAllowed = (toolName: string, enabledToolNames?: ReadonlyArray<string> | ReadonlySet<string>): boolean => {
   if (!toolSet.has(toolName)) {
     return false;
@@ -36,5 +40,5 @@ export const isProviderBasedToolAllowed = (toolName: string, enabledToolNames?: 
     return true;
   }
 
-  return enabledToolNames instanceof Set ? enabledToolNames.has(toolName) : enabledToolNames.includes(toolName);
+  return isReadonlyStringSet(enabledToolNames) ? enabledToolNames.has(toolName) : enabledToolNames.includes(toolName);
 };

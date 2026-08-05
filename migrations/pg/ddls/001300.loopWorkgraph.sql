@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS "loopWorkgraph" (
   "enabled" BOOLEAN NOT NULL DEFAULT TRUE,
   "assignmentConfig" JSONB NOT NULL DEFAULT '{}'::jsonb,
   "lastSyncedAt" TIMESTAMPTZ,
-  "lastSyncStatus" TEXT NOT NULL DEFAULT 'never' CHECK ("lastSyncStatus" IN ('never', 'ok', 'failed')),
+  "lastSyncStatus" TEXT NOT NULL DEFAULT 'never' CHECK ("lastSyncStatus" IN ('never', 'synchronizing', 'synchronized', 'failed')),
   "lastSyncError" TEXT,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),

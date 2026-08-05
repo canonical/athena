@@ -1,16 +1,16 @@
 import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
-import { fetchLoopLlmTools, updateLoopLlmTools } from "@components/loop/loop.client.js";
-import type { LoopLlmToolsProps } from "@components/loop/loop.schema.js";
+import { fetchLoopTools, updateLoopTools } from "@components/loop/loop.client.js";
+import type { LoopToolsProps } from "@components/loop/loop.schema.js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-export function LoopLlmTools({ loopId, onFeedback }: LoopLlmToolsProps) {
+export function LoopTools({ loopId, onFeedback }: LoopToolsProps) {
   const queryClient = useQueryClient();
   const [busyToolName, setBusyToolName] = useState<string | null>(null);
 
   const { isPending, isError, data, error } = useQuery({
-    queryKey: [`loopLlmTools`, loopId],
-    queryFn: () => fetchLoopLlmTools(loopId),
+    queryKey: [`loopTools`, loopId],
+    queryFn: () => fetchLoopTools(loopId),
   });
 
   const handleToggleTool = async (toolName: string) => {
@@ -31,18 +31,18 @@ export function LoopLlmTools({ loopId, onFeedback }: LoopLlmToolsProps) {
     const nextEnabledToolNames = currentTool.enabled ? enabledToolNames.filter((name) => name !== toolName) : [...enabledToolNames, toolName];
 
     try {
-      await updateLoopLlmTools(loopId, { enabledToolNames: nextEnabledToolNames });
-      await queryClient.invalidateQueries({ queryKey: [`loopLlmTools`, loopId] });
+      await updateLoopTools(loopId, { enabledToolNames: nextEnabledToolNames });
+      await queryClient.invalidateQueries({ queryKey: [`loopTools`, loopId] });
       onFeedback({
         severity: NotificationSeverity.INFORMATION,
-        title: `LLM tool settings updated`,
+        title: `Tool settings updated`,
         message: `${toolName} has been ${currentTool.enabled ? `disabled` : `enabled`} for this loop.`,
       });
     } catch (updateError) {
       const message = updateError instanceof Error ? updateError.message : String(updateError);
       onFeedback({
         severity: NotificationSeverity.NEGATIVE,
-        title: `Unable to update LLM tool settings`,
+        title: `Unable to update tool settings`,
         message,
       });
     } finally {
@@ -52,13 +52,13 @@ export function LoopLlmTools({ loopId, onFeedback }: LoopLlmToolsProps) {
 
   return (
     <div className="p-card p-strip is-shallow">
-      <h2 className="p-heading--4">LLM Tools</h2>
+      <h2 className="p-heading--4">Tools</h2>
       <p className="p-text--small">Enable or disable provider tools for this loop. Disabled tools are not exposed to provider-based execution.</p>
 
-      {isPending ? <p className="p-text--default">Loading LLM tools...</p> : null}
+      {isPending ? <p className="p-text--default">Loading tools...</p> : null}
 
       {isError ? (
-        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load LLM tools">
+        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load tools">
           {error instanceof Error ? error.message : String(error)}
         </Notification>
       ) : null}

@@ -19,7 +19,7 @@ type LoopWorkgraphDefinitionsProps = {
   busyWorkgraphId: string | null;
   formatTimestamp: (value: Date | string | null) => string;
   jqlPreview: (jql: string) => string;
-  statusLabels: Record<`never` | `ok` | `failed`, string>;
+  statusLabels: Record<`never` | `synchronizing` | `synchronized` | `failed`, string>;
 };
 
 const getAssignmentJql = (workgraph: LoopWorkgraph): string => {

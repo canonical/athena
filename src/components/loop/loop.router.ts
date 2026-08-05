@@ -3,8 +3,8 @@ import { defineRoutes } from "@components/express/express.router.js";
 import { uuid } from "@components/utilities/zod.utilities.js";
 import { Router } from "express";
 import { z } from "zod";
-import { loopCreate, loopDelete, loopGet, loopList, loopLlmToolsGet, loopLlmToolsUpdate, loopProviderSelectionPolicyGet, loopProviderSelectionPolicyUpdate, loopReadinessGet, loopUpdate } from "./loop.controller.js";
-import { loopInsertSchema, loopLlmToolsUpdateRequestSchema, loopUpdateSchema, providerSelectionPolicyUpdateSchema } from "./loop.schema.js";
+import { loopCreate, loopDelete, loopGet, loopList, loopProviderSelectionPolicyGet, loopProviderSelectionPolicyUpdate, loopReadinessGet, loopToolsGet, loopToolsUpdate, loopUpdate } from "./loop.controller.js";
+import { loopInsertSchema, loopToolsUpdateRequestSchema, loopUpdateSchema, providerSelectionPolicyUpdateSchema } from "./loop.schema.js";
 
 export const loopRouter = Router();
 const route = defineRoutes(loopRouter);
@@ -108,25 +108,25 @@ route({
 
 route({
   method: `get`,
-  route: `/:loop/llm-tools`,
+  route: `/:loop/tools`,
   validators: {
     params: loopParamsSchema,
   },
   handler: async ({ params, response, respond }) => {
-    const tools = await loopLlmToolsGet(params.loop, getAuthenticatedUserId(response));
+    const tools = await loopToolsGet(params.loop, getAuthenticatedUserId(response));
     respond({ status: 200, data: tools });
   },
 });
 
 route({
   method: `put`,
-  route: `/:loop/llm-tools`,
+  route: `/:loop/tools`,
   validators: {
     params: loopParamsSchema,
-    body: loopLlmToolsUpdateRequestSchema,
+    body: loopToolsUpdateRequestSchema,
   },
   handler: async ({ params, body, response, respond }) => {
-    const tools = await loopLlmToolsUpdate(params.loop, getAuthenticatedUserId(response), body);
+    const tools = await loopToolsUpdate(params.loop, getAuthenticatedUserId(response), body);
     respond({ status: 200, data: tools });
   },
 });

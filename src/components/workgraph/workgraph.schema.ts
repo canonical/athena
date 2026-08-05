@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const workgraphTypes = [`jira`] as const;
 export const workgraphLifecycleStatuses = [`active`, `deprecated`, `archived`] as const;
-export const workgraphSyncStatuses = [`never`, `ok`, `failed`] as const;
+export const workgraphSyncStatuses = [`never`, `synchronizing`, `synchronized`, `failed`] as const;
 
 export const workgraphSchema = z.object({
   id: uuid(),
@@ -126,7 +126,8 @@ export const loopWorkgraphItemSchema = z.object({
 
 export const loopWorkgraphSyncResultSchema = z.object({
   ok: z.literal(true),
-  syncedCount: z.number().int().nonnegative(),
+  state: z.enum(workgraphSyncStatuses),
+  started: z.boolean(),
   message: z.string(),
 });
 

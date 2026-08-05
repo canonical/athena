@@ -3,8 +3,8 @@ import type { OpenRouterMessage, OpenRouterTool } from "@components/openrouter/o
 import { fetchOpenRouterChatCompletion, OpenRouterRequestError, readOpenRouterContentText, readOpenRouterUsageCostUsd } from "@components/openrouter/openrouter.service.js";
 import type { Persona } from "@components/persona/persona.schema.js";
 import { executeProviderToolBatch } from "@components/tool/tool.service.js";
-import type { ProviderToolRequest } from "@components/tool/tool.schema.js";
-import { providerToolNames } from "@components/tool/tool.catalog.js";
+import type { ProviderToolRequest, ProviderToolResult } from "@components/tool/tool.schema.js";
+import { isProviderHighImpactTool, isProviderMutationTool, providerToolNames } from "@components/tool/tool.catalog.js";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { queryLoopWorkgraphList } from "@components/workgraph/workgraph.pg.service.js";
 import { v7 as uuidv7 } from "uuid";
@@ -33,7 +33,7 @@ type RunnerExecutionTarget = {
 type ExecutionTarget = ProviderExecutionTarget | RunnerExecutionTarget;
 
 export type TaskExecutionResult = {
-  status: `completed` | `requires-user-input` | `blocked`;
+  status: `completed` | `requires-user-input` | `requires-user-approval` | `blocked`;
   summary: string;
   output: string;
   blocker?: string;
@@ -441,6 +441,51 @@ const readString = (value: unknown): string | undefined => {
   return normalized.length > 0 ? normalized : undefined;
 };
 
+const readTimeline = (task: Task): TimelineEntry[] => {
+  return Array.isArray(task.payload.timeline) ? task.payload.timeline : [];
+};
+
+const readProviderMutationApprovalDecision = (task: Task): { decision: `approved` | `rejected`; note?: string } | null => {
+  const timeline = readTimeline(task);
+  let lastApprovalRequiredTimestamp: string | null = null;
+  let lastApprovalDecision: { timestamp: string; decision: `approved` | `rejected`; note?: string } | null = null;
+
+  for (const entry of timeline) {
+    if (entry.type === `llm-call` && isRecord(entry.data) && entry.data.status === `approval-required` && entry.data.approvalType === `provider-mutation`) {
+      lastApprovalRequiredTimestamp = entry.timestamp;
+    }
+
+    if (entry.type === `user-approval` && isRecord(entry.data) && entry.data.approvalType === `provider-mutation`) {
+      const rawDecision = readString(entry.data.decision);
+
+      if (rawDecision === `approved` || rawDecision === `rejected`) {
+        lastApprovalDecision = {
+          timestamp: entry.timestamp,
+          decision: rawDecision,
+          note: readString(entry.data.note),
+        };
+      }
+    }
+  }
+
+  if (!lastApprovalRequiredTimestamp) {
+    return null;
+  }
+
+  if (!lastApprovalDecision) {
+    return null;
+  }
+
+  if (lastApprovalDecision.timestamp <= lastApprovalRequiredTimestamp) {
+    return null;
+  }
+
+  return {
+    decision: lastApprovalDecision.decision,
+    note: lastApprovalDecision.note,
+  };
+};
+
 const terminalToolNames = new Set([`athena_emit_blocker`, `athena_mark_complete`, `athena_request_chat`]);
 
 const parseAthenaTerminalIntent = (tool: string, result: unknown): AthenaTerminalIntent | null => {
@@ -590,7 +635,7 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
     return {
       status: `blocked`,
       summary: `No provider tools are enabled for this loop.`,
-      output: `Enable at least one provider tool in Loop > LLM Tools to continue provider-based execution.`,
+      output: `Enable at least one provider tool in Loop > Tools to continue provider-based execution.`,
       blocker: `No enabled provider tools`,
       llmTimelineEntries: [],
       llmCostUsd: 0,
@@ -721,6 +766,110 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
             llmCostUsd,
             llmCallCount,
           };
+        }
+
+        const requestedMutationTools = Array.from(new Set(toolRequests.filter((request) => isProviderMutationTool(request.tool)).map((request) => request.tool)));
+        const requestedHighImpactTools = requestedMutationTools.filter((toolName) => isProviderHighImpactTool(toolName));
+
+        if (requestedMutationTools.length > 0) {
+          const approvalDecision = readProviderMutationApprovalDecision(task);
+
+          if (!approvalDecision) {
+            const needsHighImpactApproval = requestedHighImpactTools.length > 0;
+
+            llmTimelineEntries.push({
+              ...llmTimelineEntry,
+              data: {
+                ...llmTimelineEntry.data,
+                status: `approval-required`,
+                approvalType: `provider-mutation`,
+                requestedMutationTools,
+                requestedHighImpactTools,
+              },
+            });
+
+            return {
+              status: `requires-user-approval`,
+              summary: `User approval required before LLM tool mutations can run.`,
+              output: needsHighImpactApproval
+                ? `Approval required for high-impact Jira mutations: ${requestedHighImpactTools.join(`, `)}. Use Approve or Reject and optionally include a message.`
+                : `Approval required for LLM mutation tools: ${requestedMutationTools.join(`, `)}. Use Approve or Reject and optionally include a message.`,
+              achieved: false,
+              llmTimelineEntries,
+              llmCostUsd,
+              llmCallCount,
+            };
+          }
+
+          if (approvalDecision.decision === `rejected`) {
+            const nonMutationRequests = toolRequests.filter((request) => !isProviderMutationTool(request.tool));
+            const nonMutationBatch =
+              nonMutationRequests.length > 0
+                ? await executeProviderToolBatch(
+                    {
+                      taskId: task.id,
+                      loopId: task.loop,
+                      claimToken: task.claimToken,
+                    },
+                    nonMutationRequests,
+                  )
+                : { results: [], hadError: false };
+
+            let nonMutationResultIndex = 0;
+            const toolResults: ProviderToolResult[] = toolRequests.map((request) => {
+              if (!isProviderMutationTool(request.tool)) {
+                const passthrough = nonMutationBatch.results[nonMutationResultIndex];
+                nonMutationResultIndex += 1;
+                return passthrough ?? { tool: request.tool, ok: false, error: `Tool result missing.` };
+              }
+
+              const rejectionMessage = approvalDecision.note
+                ? `User rejected mutation approval. Message: ${approvalDecision.note}`
+                : `User rejected mutation approval.`;
+
+              return {
+                tool: request.tool,
+                ok: false,
+                error: rejectionMessage,
+                result: {
+                  status: `rejected-by-user`,
+                  approvalType: `provider-mutation`,
+                  note: approvalDecision.note,
+                },
+              };
+            });
+
+            llmTimelineEntries.push(
+              makeLlmCallTimelineEntry(selectedPersona.displayName, {
+                operation: `task-provider-tool-batch`,
+                status: `completed-with-user-rejection`,
+                toolRound,
+                toolCalls,
+                toolRequests,
+                toolResults,
+              }),
+            );
+
+            const toolMessages: OpenRouterMessage[] = toolResults.map((result, index) => ({
+              role: `tool`,
+              name: result.tool,
+              tool_call_id: toolCalls[index]?.id,
+              content: JSON.stringify({ ok: result.ok, result: result.result, error: result.error }),
+            }));
+
+            messages = [
+              ...messages,
+              {
+                role: `assistant`,
+                content: responseMessage?.content === null ? null : message,
+                tool_calls: toolCalls,
+              },
+              ...toolMessages,
+            ];
+
+            toolRound += 1;
+            continue;
+          }
         }
 
         const toolBatch = await executeProviderToolBatch(

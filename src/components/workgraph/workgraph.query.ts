@@ -10,7 +10,6 @@ export type LoopWorkgraphItemListState = { status: "loading" } | { status: "erro
 export type LoopWorkgraphIssueTypeState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; issueTypes: WorkgraphIssueType[] };
 
 export const useWorkgraphTypeOptions = () => {
-  const queryClient = useQueryClient();
   const { isPending, isError, data, error } = useQuery({
     queryKey: [`workgraphTypes`],
     queryFn: fetchWorkgraphTypeOptions,
@@ -18,11 +17,7 @@ export const useWorkgraphTypeOptions = () => {
 
   const state: WorkgraphTypeOptionState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, options: data };
 
-  const reload = () => {
-    void queryClient.invalidateQueries({ queryKey: [`workgraphTypes`] });
-  };
-
-  return { state, reload };
+  return { state };
 };
 
 export const useWorkgraphList = () => {
@@ -42,7 +37,6 @@ export const useWorkgraphList = () => {
 };
 
 export const useWorkgraphById = (workgraphId: string) => {
-  const queryClient = useQueryClient();
   const { isPending, isError, data, error } = useQuery({
     queryKey: [`workgraphs`, workgraphId],
     queryFn: () => fetchWorkgraphById(workgraphId),
@@ -50,18 +44,27 @@ export const useWorkgraphById = (workgraphId: string) => {
 
   const state: WorkgraphState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, workgraph: data };
 
-  const reload = () => {
-    void queryClient.invalidateQueries({ queryKey: [`workgraphs`, workgraphId] });
-  };
-
-  return { state, reload };
+  return { state };
 };
 
-export const useLoopWorkgraphList = (loopId: string) => {
+export const useLoopWorkgraphList = (loopId: string, options?: { pollWhenSynchronizing?: boolean; pollIntervalMs?: number }) => {
   const queryClient = useQueryClient();
   const { isPending, isError, data, error } = useQuery({
     queryKey: [`loopWorkgraphs`, loopId],
     queryFn: () => fetchLoopWorkgraphList(loopId),
+    refetchInterval: (query) => {
+      if (!options?.pollWhenSynchronizing) {
+        return false;
+      }
+
+      const workgraphs = query.state.data as LoopWorkgraph[] | undefined;
+
+      if (!workgraphs?.some((workgraph) => workgraph.lastSyncStatus === `synchronizing`)) {
+        return false;
+      }
+
+      return options.pollIntervalMs ?? 3000;
+    },
   });
 
   const state: LoopWorkgraphListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, workgraphs: data };
@@ -73,12 +76,13 @@ export const useLoopWorkgraphList = (loopId: string) => {
   return { state, reload };
 };
 
-export const useLoopWorkgraphItems = (loopId: string, workgraphId: string | null) => {
+export const useLoopWorkgraphItems = (loopId: string, workgraphId: string | null, options?: { pollIntervalMs?: number }) => {
   const queryClient = useQueryClient();
   const { isPending, isError, data, error } = useQuery({
     queryKey: [`loopWorkgraphItems`, loopId, workgraphId],
     queryFn: () => fetchLoopWorkgraphItems(loopId, workgraphId ?? ``),
     enabled: Boolean(workgraphId),
+    refetchInterval: workgraphId ? (options?.pollIntervalMs ?? false) : false,
   });
 
   const state: LoopWorkgraphItemListState = !workgraphId
@@ -101,7 +105,6 @@ export const useLoopWorkgraphItems = (loopId: string, workgraphId: string | null
 };
 
 export const useLoopWorkgraphIssueTypes = (loopId: string, workgraphId: string | null) => {
-  const queryClient = useQueryClient();
   const { isPending, isError, data, error } = useQuery({
     queryKey: [`loopWorkgraphIssueTypes`, loopId, workgraphId],
     queryFn: () => fetchLoopWorkgraphIssueTypes(loopId, workgraphId ?? ``),
@@ -116,13 +119,5 @@ export const useLoopWorkgraphIssueTypes = (loopId: string, workgraphId: string |
         ? { status: `error`, message: error instanceof Error ? error.message : String(error) }
         : { status: `success`, issueTypes: data };
 
-  const reload = () => {
-    if (!workgraphId) {
-      return;
-    }
-
-    void queryClient.invalidateQueries({ queryKey: [`loopWorkgraphIssueTypes`, loopId, workgraphId] });
-  };
-
-  return { state, reload };
+  return { state };
 };

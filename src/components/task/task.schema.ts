@@ -8,7 +8,7 @@ import { z } from "zod";
 export const taskPhases = [`routing`, `execution`, `done`] as const;
 export type TaskPhase = (typeof taskPhases)[number];
 
-export const taskStatuses = [`active`, `queued`, `processing`, `requires-user-input`, `completed`, `blocked`, `pool-not-ready`] as const;
+export const taskStatuses = [`active`, `queued`, `processing`, `requires-user-input`, `requires-user-approval`, `completed`, `blocked`, `pool-not-ready`] as const;
 export type TaskStatus = (typeof taskStatuses)[number];
 
 export const taskSourceTypes = [`chat-ui`, `workgraph-webhook`] as const;

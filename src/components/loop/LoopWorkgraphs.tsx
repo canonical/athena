@@ -48,9 +48,10 @@ const LazyLoopWorkgraphConfigWebhookDefinitions = lazy(async () => {
 
 const formatTimestamp = (value: Date | string | null) => (value ? new Date(value).toLocaleString() : `-`);
 
-const statusLabels: Record<`never` | `ok` | `failed`, string> = {
+const statusLabels: Record<`never` | `synchronizing` | `synchronized` | `failed`, string> = {
   never: `Never synced`,
-  ok: `Last sync succeeded`,
+  synchronizing: `Synchronizing`,
+  synchronized: `Last sync succeeded`,
   failed: `Last sync failed`,
 };
 
@@ -112,9 +113,8 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { state: workgraphListState } = useWorkgraphList();
-  const { state: assignedWorkgraphState, reload: reloadAssignedWorkgraphs } = useLoopWorkgraphList(loopId);
+  const { state: assignedWorkgraphState, reload: reloadAssignedWorkgraphs } = useLoopWorkgraphList(loopId, { pollWhenSynchronizing: true, pollIntervalMs: 3000 });
   const [busyWorkgraphId, setBusyWorkgraphId] = useState<string | null>(null);
-  const [syncingWorkgraphId, setSyncingWorkgraphId] = useState<string | null>(null);
   const [startingItemId, setStartingItemId] = useState<string | null>(null);
   const hydratedWorkgraphIdRef = useRef<string | null>(null);
 
@@ -125,7 +125,10 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
   const unassignedWorkgraphs = availableWorkgraphs.filter((workgraph) => !assignedWorkgraphIds.has(workgraph.id));
   const selectedWorkgraphView = workgraphViewWorkgraphId ? assignedWorkgraphs.find((workgraph) => workgraph.workgraph === workgraphViewWorkgraphId) : undefined;
   const selectedWorkgraphId = selectedWorkgraphView?.workgraph ?? null;
-  const { state: workgraphItemListState, reload: reloadWorkgraphItems } = useLoopWorkgraphItems(loopId, selectedWorkgraphId);
+  const selectedWorkgraphSyncInProgress = selectedWorkgraphView?.lastSyncStatus === `synchronizing`;
+  const { state: workgraphItemListState, reload: reloadWorkgraphItems } = useLoopWorkgraphItems(loopId, selectedWorkgraphId, {
+    pollIntervalMs: selectedWorkgraphSyncInProgress ? 3000 : undefined,
+  });
   const { state: issueTypeState } = useLoopWorkgraphIssueTypes(loopId, selectedWorkgraphId);
   const activeSubtab: `definitions` | string = selectedWorkgraphView ? selectedWorkgraphView.workgraph : `definitions`;
   const activeConfigTab = workgraphConfigTab ?? `jql`;
@@ -169,16 +172,25 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
   };
 
   const handleSyncWorkItems = async (workgraph: LoopWorkgraph) => {
-    setSyncingWorkgraphId(workgraph.workgraph);
+    if (workgraph.lastSyncStatus === `synchronizing`) {
+      return;
+    }
+
     onFeedback(null);
 
     try {
       const result = await syncLoopWorkgraphItems(loopId, workgraph.workgraph);
+      queryClient.setQueryData<LoopWorkgraph[]>([`loopWorkgraphs`, loopId], (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return current.map((entry) => (entry.workgraph === workgraph.workgraph ? { ...entry, lastSyncStatus: result.state, lastSyncError: null } : entry));
+      });
       reloadAssignedWorkgraphs();
-      reloadWorkgraphItems();
       onFeedback({
         severity: NotificationSeverity.INFORMATION,
-        title: `Sync completed`,
+        title: `Sync scheduled`,
         message: result.message,
       });
     } catch (error) {
@@ -188,8 +200,6 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
         title: `Sync failed`,
         message,
       });
-    } finally {
-      setSyncingWorkgraphId(null);
     }
   };
 
@@ -512,8 +522,8 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
                 itemListState={workgraphItemListState}
                 onStartWorkItem={handleStartWorkItem}
                 onSyncWorkItems={handleSyncWorkItems}
+                syncInProgress={selectedWorkgraphSyncInProgress}
                 startingItemId={startingItemId}
-                syncingWorkgraphId={syncingWorkgraphId}
                 workOnLabel={readWorkOnLabelFromAssignmentConfig(selectedWorkgraphView.assignmentConfig)}
                 workgraph={selectedWorkgraphView}
               />

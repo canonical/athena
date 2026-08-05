@@ -56,6 +56,28 @@ const normalizeString = (value: unknown): string | undefined => {
   return normalized.length > 0 ? normalized : undefined;
 };
 
+const approvalDecisionPrefix = `::approval-decision::`;
+
+const parseApprovalDecisionMessage = (value: string): { decision: `approved` | `rejected`; message: string } | null => {
+  if (!value.startsWith(approvalDecisionPrefix)) {
+    return null;
+  }
+
+  const lines = value.slice(approvalDecisionPrefix.length).split(`\n`);
+  const decisionToken = (lines.shift() ?? ``).trim().toLowerCase();
+  const message = lines.join(`\n`).trim();
+
+  if (decisionToken === `approve` || decisionToken === `approved`) {
+    return { decision: `approved`, message };
+  }
+
+  if (decisionToken === `reject` || decisionToken === `rejected`) {
+    return { decision: `rejected`, message };
+  }
+
+  return null;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
 
 const buildRoutingPersonaSystemPrompt = (routingPersona: Persona): string =>
@@ -976,9 +998,11 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
       reason:
         effectiveExecutionResult.status === `blocked`
           ? `Execution encountered a blocker and needs user intervention.`
-          : effectiveExecutionResult.terminalIntent === `request-chat`
-            ? `Execution requested a chat response from the user.`
-            : `Execution requires user response before continuing.`,
+          : effectiveExecutionResult.status === `requires-user-approval`
+            ? `Execution requires explicit user approval before continuing.`
+            : effectiveExecutionResult.terminalIntent === `request-chat`
+              ? `Execution requested a chat response from the user.`
+              : `Execution requires user response before continuing.`,
       prompt: effectiveExecutionResult.requestedChatPrompt,
     }),
   ]);
@@ -1467,12 +1491,12 @@ export const taskCreate = async (request: ValidatedCreateTaskRequest, userId: st
   if (request.resumeTaskId) {
     const resumeTask = await queryTaskById(request.resumeTaskId);
 
-    if (!resumeTask || resumeTask.loop !== request.loop || resumeTask.sourceType !== `chat-ui`) {
+    if (!resumeTask || resumeTask.loop !== request.loop) {
       throw new TaskAccessError(`Task not found.`);
     }
 
-    if (resumeTask.status !== `requires-user-input`) {
-      throw new TaskConflictError(`Only tasks requiring user input can be continued.`);
+    if (resumeTask.status !== `requires-user-input` && resumeTask.status !== `requires-user-approval`) {
+      throw new TaskConflictError(`Only tasks requiring user input or approval can be continued.`);
     }
 
     if (resumeTask.phase === `routing`) {
@@ -1502,19 +1526,42 @@ export const taskCreate = async (request: ValidatedCreateTaskRequest, userId: st
       return { loop, tasks: [updatedTask] };
     }
 
-    const updatedPayload = appendTimelineEntries(resumeTask.payload, [
-      makeTimelineEntry(`chat-session`, `chat-ui`, {
-        channel: parsePayloadChannel(resumeTask.payload),
-        turns: [{ speaker: `user`, message: request.description }],
-      }),
-    ]);
+    const approvalDecision = parseApprovalDecisionMessage(request.description);
+    const userMessage = approvalDecision?.message ?? request.description;
+    const approvalSummaryMessage = approvalDecision
+      ? approvalDecision.message.length > 0
+        ? `Approval decision: ${approvalDecision.decision}. Message: ${approvalDecision.message}`
+        : `Approval decision: ${approvalDecision.decision}.`
+      : userMessage;
+
+    const updatedPayload = appendTimelineEntries(
+      resumeTask.payload,
+      [
+        makeTimelineEntry(`chat-session`, `chat-ui`, {
+          channel: parsePayloadChannel(resumeTask.payload),
+          turns: [{ speaker: `user`, message: approvalSummaryMessage }],
+        }),
+      ].concat(
+        approvalDecision
+          ? [
+              makeTimelineEntry(`user-approval`, `user`, {
+                approvalType: `provider-mutation`,
+                mode: `llm`,
+                decision: approvalDecision.decision,
+                note: approvalDecision.message,
+              }),
+            ]
+          : [],
+      ),
+    );
+
     const updatedTask = await queryTaskUpdate({
       id: resumeTask.id,
       phase: `execution`,
       status: `queued`,
       blocker: null,
       payload: updatedPayload,
-      context: `${resumeTask.context}\n\nHuman message:\n${request.description}`,
+      context: `${resumeTask.context}\n\nHuman message:\n${approvalSummaryMessage}`,
     });
 
     triggerQueueProcessing();

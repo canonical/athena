@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 
 type LoopWorkgraphDetailsProps = {
   workgraph: LoopWorkgraph;
-  syncingWorkgraphId: string | null;
+  syncInProgress: boolean;
   startingItemId: string | null;
   workOnLabel: string;
   onSyncWorkItems: (workgraph: LoopWorkgraph) => Promise<void>;
@@ -162,7 +162,7 @@ const renderNode = (
   );
 };
 
-export function LoopWorkgraphDetails({ workgraph, syncingWorkgraphId, startingItemId, workOnLabel, onSyncWorkItems, onStartWorkItem, itemListState }: LoopWorkgraphDetailsProps) {
+export function LoopWorkgraphDetails({ workgraph, syncInProgress, startingItemId, workOnLabel, onSyncWorkItems, onStartWorkItem, itemListState }: LoopWorkgraphDetailsProps) {
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const hierarchyNodes = buildItemTree(itemListState);
   const byItemId = useMemo(() => {
@@ -196,10 +196,11 @@ export function LoopWorkgraphDetails({ workgraph, syncingWorkgraphId, startingIt
     <>
       <div className="p-card p-strip is-shallow">
         <div className="u-align--right">
-          <Button appearance="positive" disabled={syncingWorkgraphId === workgraph.workgraph} onClick={() => void onSyncWorkItems(workgraph)} type="button">
-            {syncingWorkgraphId === workgraph.workgraph ? `Syncing...` : `Sync work items`}
+          <Button appearance="positive" disabled={syncInProgress} onClick={() => void onSyncWorkItems(workgraph)} type="button">
+            {syncInProgress ? `Synchronizing...` : `Sync work items`}
           </Button>
         </div>
+        {syncInProgress ? <p className="p-text--small">Synchronizing...</p> : null}
 
         {itemListState.status === `loading` ? <p className="p-text--small">Loading synced items...</p> : null}
         {itemListState.status === `error` ? (
@@ -209,7 +210,7 @@ export function LoopWorkgraphDetails({ workgraph, syncingWorkgraphId, startingIt
         ) : null}
         {itemListState.status === `success` && hierarchyNodes.length === 0 ? <p className="p-text--small">No synced items yet.</p> : null}
         {itemListState.status === `success` && hierarchyNodes.length > 0
-          ? <ul>{hierarchyNodes.map((node) => renderNode(node, setSelectedItemKey, handleStartItem, startingItemId, syncingWorkgraphId === workgraph.workgraph, workOnLabel))}</ul>
+          ? <ul>{hierarchyNodes.map((node) => renderNode(node, setSelectedItemKey, handleStartItem, startingItemId, syncInProgress, workOnLabel))}</ul>
           : null}
       </div>
 

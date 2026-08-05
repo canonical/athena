@@ -347,6 +347,24 @@ export const queryLoopWorkgraphMarkSyncFailed = async (loopId: string, workgraph
   );
 };
 
+export const queryLoopWorkgraphMarkSynchronizing = async (loopId: string, workgraphId: string): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      UPDATE "loopWorkgraph"
+      SET
+        "lastSyncStatus" = 'synchronizing',
+        "lastSyncError" = NULL
+      WHERE "loop" = $1
+        AND "workgraph" = $2
+        AND "lastSyncStatus" <> 'synchronizing'
+      RETURNING 1
+    `,
+    [loopId, workgraphId],
+  );
+
+  return Boolean(result.rowCount);
+};
+
 export const queryLoopWorkgraphReplaceItems = async (loopId: string, workgraphId: string, items: JiraSyncedItem[]): Promise<void> => {
   const pool = getPool();
   const client = await pool.connect();
@@ -435,7 +453,7 @@ export const queryLoopWorkgraphReplaceItems = async (loopId: string, workgraphId
         UPDATE "loopWorkgraph"
         SET
           "lastSyncedAt" = NOW(),
-          "lastSyncStatus" = 'ok',
+          "lastSyncStatus" = 'synchronized',
           "lastSyncError" = NULL
         WHERE "loop" = $1
           AND "workgraph" = $2

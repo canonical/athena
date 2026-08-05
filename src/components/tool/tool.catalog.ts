@@ -29,7 +29,26 @@ export const providerToolNames: ReadonlyArray<string> = providerToolDefinitions.
 
 const providerToolNameSet = new Set(providerToolNames);
 
+const providerMutationToolNameSet = new Set<string>([
+  `jira_create_issue`,
+  `jira_add_labels`,
+  `jira_remove_labels`,
+  `jira_transition_issue`,
+  `jira_edit_field`,
+  `jira_add_comment`,
+]);
+
+const providerHighImpactToolNameSet = new Set<string>([
+  `jira_create_issue`,
+  `jira_edit_field`,
+  `jira_transition_issue`,
+]);
+
 export const isKnownProviderToolName = (toolName: string): boolean => providerToolNameSet.has(toolName);
+
+export const isProviderMutationTool = (toolName: string): boolean => providerMutationToolNameSet.has(toolName);
+
+export const isProviderHighImpactTool = (toolName: string): boolean => providerHighImpactToolNameSet.has(toolName);
 
 export const normalizeProviderToolNames = (toolNames: ReadonlyArray<string>): string[] => {
   const uniqueRequested = new Set(toolNames);

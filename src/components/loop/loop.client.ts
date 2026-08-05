@@ -1,11 +1,11 @@
 import { authenticatedJsonDelete, authenticatedJsonGet, authenticatedJsonPost, authenticatedJsonPut } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
-import type { Loop, LoopInsert, LoopLlmTools, LoopLlmToolsUpdateRequest, LoopReadiness, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
+import type { Loop, LoopInsert, LoopReadiness, LoopTools, LoopToolsUpdateRequest, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
 
 export const loopApiPaths = {
   list: getApiUrl(`/loop`),
   byId: (loopId: string) => getApiUrl(`/loop/${loopId}`),
-  llmTools: (loopId: string) => getApiUrl(`/loop/${loopId}/llm-tools`),
+  tools: (loopId: string) => getApiUrl(`/loop/${loopId}/tools`),
   providerSelectionPolicy: (loopId: string) => getApiUrl(`/loop/${loopId}/provider-selection-policy`),
   readiness: (loopId: string) => getApiUrl(`/loop/${loopId}/readiness`),
 } as const;
@@ -97,22 +97,22 @@ export const fetchLoopReadiness = async (loopId: string): Promise<LoopReadiness>
   return response.json() as Promise<LoopReadiness>;
 };
 
-export const fetchLoopLlmTools = async (loopId: string): Promise<LoopLlmTools> => {
-  const response = await authenticatedJsonGet(loopApiPaths.llmTools(loopId));
+export const fetchLoopTools = async (loopId: string): Promise<LoopTools> => {
+  const response = await authenticatedJsonGet(loopApiPaths.tools(loopId));
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, `Loop LLM tools request failed with status ${response.status}`));
+    throw new Error(await readErrorMessage(response, `Loop tools request failed with status ${response.status}`));
   }
 
-  return response.json() as Promise<LoopLlmTools>;
+  return response.json() as Promise<LoopTools>;
 };
 
-export const updateLoopLlmTools = async (loopId: string, payload: LoopLlmToolsUpdateRequest): Promise<LoopLlmTools> => {
-  const response = await authenticatedJsonPut(loopApiPaths.llmTools(loopId), payload);
+export const updateLoopTools = async (loopId: string, payload: LoopToolsUpdateRequest): Promise<LoopTools> => {
+  const response = await authenticatedJsonPut(loopApiPaths.tools(loopId), payload);
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, `Loop LLM tools update failed with status ${response.status}`));
+    throw new Error(await readErrorMessage(response, `Loop tools update failed with status ${response.status}`));
   }
 
-  return response.json() as Promise<LoopLlmTools>;
+  return response.json() as Promise<LoopTools>;
 };
