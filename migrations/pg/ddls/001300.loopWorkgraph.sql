@@ -1,16 +1,16 @@
 CREATE TABLE IF NOT EXISTS "loopWorkgraph" (
+  "id" UUID NOT NULL DEFAULT uuidv7(),
   "loop" UUID NOT NULL REFERENCES "loop"("id") ON DELETE CASCADE,
   "workgraph" UUID NOT NULL REFERENCES "workgraph"("id") ON DELETE CASCADE,
   "enabled" BOOLEAN NOT NULL DEFAULT TRUE,
-  "seedItems" JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof("seedItems") = 'array'),
-  "hierarchyRules" JSONB NOT NULL DEFAULT '{"includeSubtasks":true,"statuses":[]}'::jsonb,
-  "assignmentOverrides" JSONB NOT NULL DEFAULT '{}'::jsonb,
+  "assignmentConfig" JSONB NOT NULL DEFAULT '{}'::jsonb,
   "lastSyncedAt" TIMESTAMPTZ,
   "lastSyncStatus" TEXT NOT NULL DEFAULT 'never' CHECK ("lastSyncStatus" IN ('never', 'ok', 'failed')),
   "lastSyncError" TEXT,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY ("loop", "workgraph")
+  PRIMARY KEY ("id"),
+  UNIQUE ("loop", "workgraph")
 );
 
 CREATE INDEX IF NOT EXISTS "idxLoopWorkgraphWorkgraph" ON "loopWorkgraph"("workgraph");

@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS "workgraph" (
   "name" TEXT NOT NULL,
   "type" TEXT NOT NULL CHECK ("type" IN ('jira')),
   "baseUrl" TEXT NOT NULL CHECK ("baseUrl" ~* '^https://'),
+  "browseBaseUrl" TEXT CHECK ("browseBaseUrl" IS NULL OR "browseBaseUrl" ~* '^https://'),
   "projectKey" TEXT,
   "email" TEXT NOT NULL,
   "credentialCiphertext" TEXT NOT NULL,

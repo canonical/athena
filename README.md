@@ -113,6 +113,18 @@ This starts:
 - `dex` (local OIDC provider mimic) on `localhost:5556`
 - `athena` on `athena.localhost` (served through Traefik)
 
+For public webhook testing from external systems, start Cloudflare tunnel:
+
+```bash
+docker compose up -d cloudflared
+docker compose logs -f cloudflared
+```
+
+Tunnel behavior:
+
+- Cloudflared runs in managed tunnel mode with `tunnel run`.
+- Set `CLOUDFLARED_TUNNEL_TOKEN` in `.env` before starting `cloudflared`.
+
 The main public endpoints are:
 
 - `GET http://athena.localhost/_status/check`

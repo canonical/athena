@@ -1,6 +1,7 @@
 import type { AppLogger } from "@components/logging/logging.schema.js";
 import { log } from "@components/logging/logging.service.js";
 import type { ProviderModel } from "@components/provider/provider.schema.js";
+import { fetchWithRetry } from "@components/utilities/http-retry.js";
 import type { OpenRouterChatCompletionPayload, OpenRouterChatCompletionRequest, OpenRouterConnection } from "./openrouter.schema.js";
 
 const normalizeBaseUrl = (value: string): string => value.replace(/\/$/, ``);
@@ -62,6 +63,21 @@ export const readOpenRouterAssistantText = (message: { content?: unknown; reason
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === `object` && !Array.isArray(value);
+
+export const readOpenRouterUsageCostUsd = (payload: { usage?: { cost?: unknown } | null } | null | undefined): number | null => {
+  const rawCost = payload?.usage?.cost;
+
+  if (typeof rawCost === `number`) {
+    return Number.isFinite(rawCost) && rawCost >= 0 ? rawCost : null;
+  }
+
+  if (typeof rawCost === `string`) {
+    const parsed = Number(rawCost);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  }
+
+  return null;
+};
 
 export const parseOpenRouterFirstChoiceJsonObject = (payload: { choices?: Array<{ message?: { content?: unknown } }> }, errorMessagePrefix = `OpenRouter response`): Record<string, unknown> => {
   const content = readOpenRouterAssistantText(payload.choices?.[0]?.message).trim();
@@ -207,13 +223,17 @@ export const fetchOpenRouterModels = async (connection: OpenRouterConnection, lo
   });
 
   try {
-    const modelsResponse = await fetch(modelsEndpoint, {
+    const modelsResponse = await fetchWithRetry(modelsEndpoint, {
       method: `GET`,
       headers: {
         Authorization: `Bearer ${connection.apiKey}`,
         "Content-Type": `application/json`,
       },
       signal: controller.signal,
+    }, {
+      maxAttempts: 4,
+      baseDelayMs: 400,
+      maxDelayMs: 6_000,
     });
 
     const modelsPayload = (await modelsResponse.json().catch(() => ({}))) as unknown;
@@ -267,7 +287,7 @@ export const fetchOpenRouterChatCompletion = async (connection: OpenRouterConnec
   });
 
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetchWithRetry(endpoint, {
       method: `POST`,
       headers: {
         Authorization: `Bearer ${connection.apiKey}`,
@@ -279,9 +299,17 @@ export const fetchOpenRouterChatCompletion = async (connection: OpenRouterConnec
         temperature: request.temperature ?? 0,
         ...(request.responseFormat !== `text` ? { response_format: { type: `json_object` } } : {}),
         ...(request.sessionId ? { session_id: request.sessionId } : {}),
+        ...(request.tools ? { tools: request.tools } : {}),
+        ...(request.toolChoice ? { tool_choice: request.toolChoice } : {}),
+        ...(request.parallelToolCalls !== undefined ? { parallel_tool_calls: request.parallelToolCalls } : {}),
         messages: request.messages,
       }),
       signal: controller.signal,
+    }, {
+      maxAttempts: 4,
+      baseDelayMs: 600,
+      maxDelayMs: 8_000,
+      allowRetryOnNonIdempotentMethods: true,
     });
 
     const payload = (await response.json().catch(() => ({}))) as OpenRouterChatCompletionPayload;

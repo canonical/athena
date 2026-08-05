@@ -5,10 +5,12 @@ export const authenticationSearchSchema = z.object({
 });
 
 export const loopDetailSearchSchema = z.object({
-  tab: z.enum([`dashboard`, `details`, `personas`, `providers`, `runners`, `workgraphs`]).optional(),
+  tab: z.enum([`dashboard`, `details`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`]).optional(),
   create: z.literal(true).optional(),
   edit: z.string().optional(),
   clone: z.literal(true).optional(),
+  workgraphView: z.string().optional(),
+  workgraphConfigTab: z.enum([`jql`, `labels`, `item-type-playbooks`, `webhook-definitions`, `synced-items`]).optional(),
 });
 
 export const loopListSearchSchema = z.object({

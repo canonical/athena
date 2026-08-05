@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS "task" (
   "selectedPersona" UUID REFERENCES "persona"("id") ON DELETE SET NULL,
   "targetType" TEXT,
   "targetId" UUID,
+  "workgraphItem" UUID REFERENCES "loopWorkgraphItem"("id") ON DELETE SET NULL,
   "routeReasonCode" TEXT,
   "routeReasonText" TEXT,
   -- Work definition (was requestedOutcome + task.objective)
@@ -38,6 +39,7 @@ CREATE TABLE IF NOT EXISTS "task" (
   "claimAttemptCount" INTEGER NOT NULL DEFAULT 0,
   "autonomyIterationCount" INTEGER NOT NULL DEFAULT 0,
   "autonomyMaxIterations" INTEGER NOT NULL DEFAULT 5,
+  "llmCostUsdTotal" DOUBLE PRECISION NOT NULL DEFAULT 0 CHECK ("llmCostUsdTotal" >= 0),
   "emittedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "completedAt" TIMESTAMPTZ,
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -52,6 +54,10 @@ CREATE INDEX IF NOT EXISTS "idxTaskRouteReasonCode" ON "task"("routeReasonCode")
 CREATE INDEX IF NOT EXISTS "idxTaskSourceType" ON "task"("sourceType");
 CREATE INDEX IF NOT EXISTS "idxTaskTargetType" ON "task"("targetType");
 CREATE INDEX IF NOT EXISTS "idxTaskTargetId" ON "task"("targetId");
+CREATE UNIQUE INDEX IF NOT EXISTS "uqTaskWorkgraphItem"
+  ON "task"("workgraphItem")
+  WHERE "workgraphItem" IS NOT NULL
+    AND "status" <> 'completed';
 CREATE INDEX IF NOT EXISTS "idxTaskClaimToken" ON "task"("claimToken");
 CREATE INDEX IF NOT EXISTS "idxTaskStatusPingedAt" ON "task"("status", "pingedAt" ASC);
 CREATE INDEX IF NOT EXISTS "idxTaskEmittedAt" ON "task"("emittedAt" DESC);

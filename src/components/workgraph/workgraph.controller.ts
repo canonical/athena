@@ -1,19 +1,36 @@
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
-import { WorkgraphForbiddenError, WorkgraphNotFoundError, WorkgraphValidationError } from "./workgraph.errors.js";
-import type { LoopWorkgraph, LoopWorkgraphAdminUpdate, LoopWorkgraphAssign, Workgraph, WorkgraphConnectionTest, WorkgraphInsert, WorkgraphTypeOption, WorkgraphUpdate } from "./workgraph.schema.js";
-import { testJiraWorkgraphConnection } from "./workgraph.jira.service.js";
+import { WorkgraphForbiddenError, WorkgraphNotFoundError, WorkgraphSyncError, WorkgraphValidationError } from "./workgraph.errors.js";
+import { listJiraIssueTypes, syncJiraWorkgraphItems, testJiraWorkgraphConnection } from "./workgraph.jira.service.js";
 import {
   queryLoopWorkgraphAssign,
   queryLoopWorkgraphDelete,
+  queryLoopWorkgraphItemList,
   queryLoopWorkgraphList,
+  queryLoopWorkgraphMarkSyncFailed,
+  queryLoopWorkgraphReplaceItems,
+  queryLoopWorkgraphSyncConnection,
   queryLoopWorkgraphUpdateByAdmin,
+  queryWorkgraphApiConnectionByOwner,
   queryWorkgraphByIdForOwner,
   queryWorkgraphCreate,
   queryWorkgraphDelete,
   queryWorkgraphListByOwner,
   queryWorkgraphUpdate,
 } from "./workgraph.pg.service.js";
+import type {
+  LoopWorkgraph,
+  LoopWorkgraphAdminUpdate,
+  LoopWorkgraphAssign,
+  LoopWorkgraphItem,
+  LoopWorkgraphSyncResult,
+  Workgraph,
+  WorkgraphConnectionTest,
+  WorkgraphInsert,
+  WorkgraphIssueType,
+  WorkgraphTypeOption,
+  WorkgraphUpdate,
+} from "./workgraph.schema.js";
 
 const validateLoopId = (loopId: string): void => {
   if (!isValidUuid(loopId)) {
@@ -31,6 +48,15 @@ const enforceJiraOnly = (type: string): void => {
   if (type !== `jira`) {
     throw new WorkgraphValidationError(`Only jira type is supported in this phase.`);
   }
+};
+
+const readJqlFromAssignmentConfig = (value: unknown): string => {
+  if (!value || typeof value !== `object` || Array.isArray(value)) {
+    return ``;
+  }
+
+  const config = value as Record<string, unknown>;
+  return typeof config.jql === `string` ? config.jql.trim() : ``;
 };
 
 export const workgraphTypeOptions = (): WorkgraphTypeOption[] => {
@@ -84,6 +110,33 @@ export const workgraphTestConnection = async (input: WorkgraphConnectionTest): P
   await testJiraWorkgraphConnection(input);
 
   const projectKey = input.projectKey?.trim();
+
+  return {
+    ok: true,
+    message: projectKey ? `Jira connection succeeded for project ${projectKey}.` : `Jira connection succeeded.`,
+  };
+};
+
+export const workgraphTestConnectionById = async (workgraphId: string, ownerId: string): Promise<{ ok: true; message: string }> => {
+  validateWorkgraphId(workgraphId);
+
+  const connection = await queryWorkgraphApiConnectionByOwner(workgraphId, ownerId);
+
+  if (!connection) {
+    throw new WorkgraphNotFoundError(`Workgraph not found.`);
+  }
+
+  enforceJiraOnly(connection.type);
+
+  await testJiraWorkgraphConnection({
+    type: `jira`,
+    baseUrl: connection.baseUrl,
+    projectKey: connection.projectKey,
+    email: connection.email,
+    apiKey: connection.apiKey,
+  });
+
+  const projectKey = connection.projectKey?.trim();
 
   return {
     ok: true,
@@ -159,5 +212,89 @@ export const loopWorkgraphDelete = async (loopId: string, workgraphId: string, u
 
   if (!(await queryLoopWorkgraphDelete(loopId, workgraphId))) {
     throw new WorkgraphNotFoundError(`Loop workgraph not found.`);
+  }
+};
+
+export const loopWorkgraphItemList = async (loopId: string, workgraphId: string, userId: string): Promise<LoopWorkgraphItem[]> => {
+  validateLoopId(loopId);
+  validateWorkgraphId(workgraphId);
+
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new WorkgraphNotFoundError(`Loop not found.`);
+  }
+
+  return queryLoopWorkgraphItemList(loopId, workgraphId);
+};
+
+export const loopWorkgraphIssueTypes = async (loopId: string, workgraphId: string, userId: string): Promise<WorkgraphIssueType[]> => {
+  validateLoopId(loopId);
+  validateWorkgraphId(workgraphId);
+
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new WorkgraphNotFoundError(`Loop not found.`);
+  }
+
+  const connection = await queryLoopWorkgraphSyncConnection(loopId, workgraphId);
+
+  if (!connection) {
+    throw new WorkgraphNotFoundError(`Loop workgraph not found.`);
+  }
+
+  enforceJiraOnly(connection.type);
+
+  return listJiraIssueTypes({
+    baseUrl: connection.baseUrl,
+    projectKey: connection.projectKey,
+    email: connection.email,
+    apiKey: connection.apiKey,
+  });
+};
+
+export const loopWorkgraphSync = async (loopId: string, workgraphId: string, userId: string): Promise<LoopWorkgraphSyncResult> => {
+  validateLoopId(loopId);
+  validateWorkgraphId(workgraphId);
+
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new WorkgraphNotFoundError(`Loop not found.`);
+  }
+
+  const connection = await queryLoopWorkgraphSyncConnection(loopId, workgraphId);
+
+  if (!connection) {
+    throw new WorkgraphNotFoundError(`Loop workgraph not found.`);
+  }
+
+  if (!connection.enabled) {
+    throw new WorkgraphValidationError(`Workgraph assignment is disabled.`);
+  }
+
+  enforceJiraOnly(connection.type);
+
+  const jql = readJqlFromAssignmentConfig(connection.assignmentConfig);
+
+  if (!jql) {
+    throw new WorkgraphValidationError(`JQL is required before syncing.`);
+  }
+
+  try {
+    const syncedItems = await syncJiraWorkgraphItems({
+      baseUrl: connection.baseUrl,
+      browseBaseUrl: connection.browseBaseUrl ?? connection.baseUrl,
+      email: connection.email,
+      apiKey: connection.apiKey,
+      jql,
+    });
+
+    await queryLoopWorkgraphReplaceItems(loopId, workgraphId, syncedItems);
+
+    return {
+      ok: true,
+      syncedCount: syncedItems.length,
+      message: `Synced ${syncedItems.length} item(s).`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await queryLoopWorkgraphMarkSyncFailed(loopId, workgraphId, message);
+    throw new WorkgraphSyncError(message);
   }
 };

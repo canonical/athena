@@ -56,7 +56,7 @@ flowchart LR
 Each loop should define:
 
 1. Workgraph connection.
-2. Seed items.
+2. JQL query.
 3. Type-based refinement/implementation rules.
 
 ### 1) Connection
@@ -67,17 +67,15 @@ POC connection fields (Jira):
 2. API credential reference.
 3. Project key.
 
-### 2) Seed items
+### 2) JQL query
 
-User enters an array of top-level Jira keys or URLs.
+User enters a Jira Query Language (JQL) expression directly.
 
 Behavior:
 
-1. Athena resolves each key/URL.
-2. Athena fetches each top-level item and all descendants.
-3. The combined subtree becomes initial loop context input.
-
-If a seed has no descendants, Athena can create descendants through user-approved refinement flows.
+1. Athena executes the configured JQL query.
+2. The resulting issue set becomes initial loop context input.
+3. Status, label, and item type inclusion/exclusion are controlled in JQL.
 
 ### 3) Type-aware rules
 
@@ -142,8 +140,8 @@ Related code references:
 Must-have:
 
 1. Jira connection on loop.
-2. Seed item array entry on loop.
-3. Recursive descendant ingestion.
+2. JQL query entry on loop.
+3. Query-based ingestion from Jira search.
 4. Jira type discovery.
 5. Rule editor by type.
 6. Refine + approve + create descendants flow.

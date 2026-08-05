@@ -11,7 +11,7 @@ export type TaskPhase = (typeof taskPhases)[number];
 export const taskStatuses = [`active`, `queued`, `processing`, `requires-user-input`, `completed`, `blocked`, `pool-not-ready`] as const;
 export type TaskStatus = (typeof taskStatuses)[number];
 
-export const taskSourceTypes = [`chat-ui`] as const;
+export const taskSourceTypes = [`chat-ui`, `workgraph-webhook`] as const;
 export type TaskSourceType = (typeof taskSourceTypes)[number];
 
 export const taskChatPayloadSchema = z.object({
@@ -26,13 +26,15 @@ export const taskRoutingPayloadSchema = z.object({
   selectedPersonaDisplayName: z.string().optional(),
   selectedModel: z.string().optional(),
   targetType: z.enum([`provider`, `runner`]).optional(),
+  executionLane: z.enum([`provider-based`, `runner-based`]).optional(),
+  requiredExecutionLane: z.enum([`provider-based`, `runner-based`]).optional(),
   conversationMode: z.string().optional(),
   routeReasonCode: z.string().optional(),
   routeReasonText: z.string().optional(),
 });
 export type TaskRoutingPayload = z.infer<typeof taskRoutingPayloadSchema>;
 
-export const taskKinds = [`coding`, `jira-refinement`, `analysis`, `other`] as const;
+export const taskKinds = [`coding`, `jira-refinement`, `analysis`, `design`, `research`, `other`] as const;
 export type TaskKind = (typeof taskKinds)[number];
 
 export const taskOwnerModes = [`ai`, `human`, `mixed`] as const;
@@ -82,7 +84,7 @@ export type RouteReasonCode = (typeof routeReasonCodes)[number];
 
 export const routeDecisionSchema = z.object({
   selectedPersona: uuid(),
-  selectedModel: z.string(),
+  selectedModel: z.string().optional(),
   targetType: z.enum([`provider`, `runner`]),
   routeReasonCode: z.enum(routeReasonCodes),
   routeReasonText: z.string(),
@@ -91,7 +93,7 @@ export type RouteDecision = z.infer<typeof routeDecisionSchema>;
 
 export const routingLlmRouteDecisionSchema = z.object({
   selectedPersona: uuid(),
-  selectedModel: z.string(),
+  selectedModel: z.string().optional(),
   targetType: z.enum([`provider`, `runner`]),
   routeReasonText: z.string(),
 });
@@ -133,6 +135,7 @@ export const taskSchema = z.object({
   selectedPersona: uuid().nullable(),
   targetType: z.enum([`provider`, `runner`]).nullable(),
   targetId: uuid().nullable(),
+  workgraphItem: uuid().nullable().optional(),
   routeReasonCode: z.string().nullable(),
   routeReasonText: z.string().nullable(),
   // Work definition (formerly split between requestedOutcome and task.objective)
@@ -158,6 +161,7 @@ export const taskSchema = z.object({
   claimAttemptCount: z.number().int().nonnegative(),
   autonomyIterationCount: z.number().int().nonnegative(),
   autonomyMaxIterations: z.number().int().positive(),
+  llmCostUsdTotal: z.number().nonnegative(),
   updatedAt: isoDateTime,
 });
 export type Task = z.infer<typeof taskSchema>;
@@ -236,6 +240,7 @@ export const taskInsertSchema = taskSchema.omit({
   pingedAt: true,
   processingSourceStatus: true,
   claimAttemptCount: true,
+  llmCostUsdTotal: true,
 });
 export type TaskInsert = z.infer<typeof taskInsertSchema>;
 
@@ -255,6 +260,7 @@ const taskUpdateMutableSchema = taskSchema.pick({
   completedAt: true,
   autonomyIterationCount: true,
   autonomyMaxIterations: true,
+  llmCostUsdTotal: true,
 });
 
 export const taskUpdateInputSchema = z

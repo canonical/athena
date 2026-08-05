@@ -55,10 +55,28 @@ const parseProviderDetailSearch = (search: Record<string, unknown>): ProviderDet
 });
 
 const parseLoopDetailSearch = (search: Record<string, unknown>): LoopDetailSearch => ({
-  tab: search.tab === `dashboard` || search.tab === `details` || search.tab === `personas` || search.tab === `providers` || search.tab === `runners` || search.tab === `workgraphs` ? search.tab : `dashboard`,
+  tab:
+    search.tab === `dashboard` ||
+    search.tab === `details` ||
+    search.tab === `personas` ||
+    search.tab === `providers` ||
+    search.tab === `runners` ||
+    search.tab === `workgraphs` ||
+    search.tab === `repositories`
+      ? search.tab
+      : `dashboard`,
   create: parseCreateFlag(search.create),
   edit: typeof search.edit === `string` ? search.edit : undefined,
   clone: parseCreateFlag(search.clone),
+  workgraphView: typeof search.workgraphView === `string` ? search.workgraphView : undefined,
+  workgraphConfigTab:
+    search.workgraphConfigTab === `jql` ||
+    search.workgraphConfigTab === `labels` ||
+    search.workgraphConfigTab === `item-type-playbooks` ||
+    search.workgraphConfigTab === `webhook-definitions` ||
+    search.workgraphConfigTab === `synced-items`
+      ? search.workgraphConfigTab
+      : undefined,
 });
 
 const parseRunnerListSearch = (search: Record<string, unknown>): RunnerListSearch => ({
@@ -272,12 +290,19 @@ const guardAuthenticatedRoute = async (location: { href?: string }) => {
 
 function LoopDetailView() {
   const { loopId } = loopDetailRoute.useParams();
-  const { tab, create, edit, clone } = loopDetailRoute.useSearch();
+  const { tab, create, edit, clone, workgraphView, workgraphConfigTab } = loopDetailRoute.useSearch();
   const editor = create ? `create` : clone && edit ? `clone` : edit ? `edit` : undefined;
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyLoop editor={editor} loopId={loopId} personaId={edit} tab={tab ?? `details`} />
+      <LazyLoop
+        editor={editor}
+        loopId={loopId}
+        personaId={edit}
+        tab={tab ?? `details`}
+        workgraphViewWorkgraphId={workgraphView}
+        workgraphConfigTab={workgraphConfigTab}
+      />
     </Suspense>
   );
 }

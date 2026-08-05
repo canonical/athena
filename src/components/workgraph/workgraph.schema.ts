@@ -11,6 +11,7 @@ export const workgraphSchema = z.object({
   name: requiredString(`name is required.`),
   type: z.enum(workgraphTypes),
   baseUrl: requiredString(`baseUrl is required.`).pipe(httpsUrl),
+  browseBaseUrl: nullableString,
   projectKey: nullableString,
   email: requiredString(`email is required.`),
   lifecycleStatus: z.enum(workgraphLifecycleStatuses).default(`active`),
@@ -22,16 +23,19 @@ const workgraphMutableSchema = workgraphSchema.pick({
   name: true,
   type: true,
   baseUrl: true,
+  browseBaseUrl: true,
   projectKey: true,
   email: true,
   lifecycleStatus: true,
 });
 
 export const workgraphInsertSchema = workgraphMutableSchema.extend({
+  browseBaseUrl: requiredString(`browseBaseUrl is required.`).pipe(httpsUrl),
   apiKey: requiredString(`apiKey is required.`),
 });
 
 export const workgraphUpdateSchema = workgraphMutableSchema.extend({
+  browseBaseUrl: requiredString(`browseBaseUrl is required.`).pipe(httpsUrl),
   apiKey: optionalString,
 });
 
@@ -48,13 +52,9 @@ export const loopWorkgraphAssignSchema = z.object({
   workgraph: uuid(),
 });
 
-export const workgraphSeedItemSchema = requiredString(`seed item id is required.`);
-
 export const loopWorkgraphAdminUpdateSchema = z.object({
   enabled: z.boolean().optional(),
-  seedItems: z.array(workgraphSeedItemSchema).optional(),
-  hierarchyRules: z.record(z.string(), z.unknown()).optional(),
-  assignmentOverrides: z.record(z.string(), z.unknown()).optional(),
+  assignmentConfig: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const workgraphTypeOptionSchema = z.object({
@@ -63,19 +63,48 @@ export const workgraphTypeOptionSchema = z.object({
   seedItemTypes: z.array(z.string()),
 });
 
-export const loopWorkgraphSchema = workgraphSchema.pick({ name: true, type: true, baseUrl: true, projectKey: true }).extend({
+export const workgraphIssueTypeSchema = z.object({
+  id: requiredString(`id is required.`),
+  name: requiredString(`name is required.`),
+  hierarchyLevel: z.number().nullable().optional(),
+});
+
+export const loopWorkgraphSchema = workgraphSchema.pick({ name: true, type: true, baseUrl: true, browseBaseUrl: true, projectKey: true }).extend({
+  id: uuid(),
   loop: uuid(),
   workgraph: uuid(),
   owner: uuid(),
   enabled: z.boolean(),
-  seedItems: z.array(workgraphSeedItemSchema),
-  hierarchyRules: z.record(z.string(), z.unknown()),
-  assignmentOverrides: z.record(z.string(), z.unknown()),
+  assignmentConfig: z.record(z.string(), z.unknown()),
   lastSyncedAt: isoDateTime.nullable(),
   lastSyncStatus: z.enum(workgraphSyncStatuses),
   lastSyncError: nullableString,
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
+});
+
+export const loopWorkgraphItemSchema = z.object({
+  id: uuid(),
+  loopWorkgraph: uuid(),
+  loop: uuid(),
+  workgraph: uuid(),
+  itemKey: requiredString(`itemKey is required.`),
+  itemId: requiredString(`itemId is required.`),
+  parentKey: nullableString,
+  title: requiredString(`title is required.`),
+  itemType: requiredString(`itemType is required.`),
+  status: nullableString,
+  webUrl: nullableString,
+  payload: z.record(z.string(), z.unknown()),
+  syncedAt: isoDateTime,
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+});
+
+export const loopWorkgraphSyncResultSchema = z.object({
+  ok: z.literal(true),
+  syncedCount: z.number().int().nonnegative(),
+  message: z.string(),
 });
 
 export type WorkgraphInsert = z.infer<typeof workgraphInsertSchema>;
@@ -85,5 +114,7 @@ export type LoopWorkgraphAssign = z.infer<typeof loopWorkgraphAssignSchema>;
 export type LoopWorkgraphAdminUpdate = z.infer<typeof loopWorkgraphAdminUpdateSchema>;
 export type Workgraph = z.infer<typeof workgraphSchema>;
 export type LoopWorkgraph = z.infer<typeof loopWorkgraphSchema>;
+export type LoopWorkgraphItem = z.infer<typeof loopWorkgraphItemSchema>;
+export type LoopWorkgraphSyncResult = z.infer<typeof loopWorkgraphSyncResultSchema>;
 export type WorkgraphTypeOption = z.infer<typeof workgraphTypeOptionSchema>;
-export type WorkgraphSeedItem = z.infer<typeof workgraphSeedItemSchema>;
+export type WorkgraphIssueType = z.infer<typeof workgraphIssueTypeSchema>;

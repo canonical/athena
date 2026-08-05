@@ -12,7 +12,30 @@ type LoopEditorProps = {
 type LoopFormValues = {
   name: string;
   description: string;
+  iterationCostLimitUsd: string;
 };
+
+const parseIterationCostLimitUsd = (value: string): number | null => {
+  const normalized = value.trim();
+
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Per-iteration cost limit must be a valid number.`);
+  }
+
+  return parsed;
+};
+
+const toLoopPayload = (values: LoopFormValues): { name: string; description: string; iterationCostLimitUsd: number | null } => ({
+  name: values.name,
+  description: values.description,
+  iterationCostLimitUsd: parseIterationCostLimitUsd(values.iterationCostLimitUsd),
+});
 
 export function LoopEditor({ loop, onSuccess }: LoopEditorProps) {
   const isEdit = Boolean(loop);
@@ -23,9 +46,20 @@ export function LoopEditor({ loop, onSuccess }: LoopEditorProps) {
     initialValues: {
       name: loop?.name ?? ``,
       description: loop?.description ?? ``,
+      iterationCostLimitUsd: loop?.iterationCostLimitUsd === null || loop?.iterationCostLimitUsd === undefined ? `` : String(loop.iterationCostLimitUsd),
     },
     validate: (values) => {
-      const parseResult = (isEdit ? loopUpdateSchema : loopInsertSchema).safeParse(values);
+      let payload: { name: string; description: string; iterationCostLimitUsd: number | null };
+
+      try {
+        payload = toLoopPayload(values);
+      } catch (error) {
+        return {
+          iterationCostLimitUsd: error instanceof Error ? error.message : String(error),
+        };
+      }
+
+      const parseResult = (isEdit ? loopUpdateSchema : loopInsertSchema).safeParse(payload);
 
       if (parseResult.success) {
         return {};
@@ -36,7 +70,7 @@ export function LoopEditor({ loop, onSuccess }: LoopEditorProps) {
       for (const issue of parseResult.error.issues) {
         const key = issue.path[0];
 
-        if (typeof key === `string` && (key === `name` || key === `description`) && !errors[key]) {
+        if (typeof key === `string` && (key === `name` || key === `description` || key === `iterationCostLimitUsd`) && !errors[key]) {
           errors[key] = issue.message;
         }
       }
@@ -46,7 +80,16 @@ export function LoopEditor({ loop, onSuccess }: LoopEditorProps) {
     onSubmit: async (values, helpers) => {
       helpers.setStatus(undefined);
 
-      const parseResult = (isEdit ? loopUpdateSchema : loopInsertSchema).safeParse(values);
+      let payload: { name: string; description: string; iterationCostLimitUsd: number | null };
+
+      try {
+        payload = toLoopPayload(values);
+      } catch (error) {
+        toastNotify.failure(isEdit ? `Unable to update loop` : `Unable to create loop`, error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
+
+      const parseResult = (isEdit ? loopUpdateSchema : loopInsertSchema).safeParse(payload);
 
       if (!parseResult.success) {
         toastNotify.failure(isEdit ? `Unable to update loop` : `Unable to create loop`, new Error(parseResult.error.issues[0]?.message ?? `Invalid input.`));
@@ -54,7 +97,7 @@ export function LoopEditor({ loop, onSuccess }: LoopEditorProps) {
       }
 
       try {
-        const savedLoop = loop ? await updateLoop(loop.id, parseResult.data) : await createLoop(parseResult.data);
+        const savedLoop = loop ? await updateLoop(loop.id, loopUpdateSchema.parse(payload)) : await createLoop(loopInsertSchema.parse(payload));
 
         onSuccess({
           severity: NotificationSeverity.INFORMATION,
@@ -76,6 +119,19 @@ export function LoopEditor({ loop, onSuccess }: LoopEditorProps) {
       <label htmlFor="loop-editor-description">Loop description</label>
       <textarea id="loop-editor-description" name="description" onBlur={formik.handleBlur} onChange={formik.handleChange} rows={3} value={formik.values.description} />
       {formik.touched.description && formik.errors.description ? <p className="p-form-validation is-error">{formik.errors.description}</p> : null}
+      <label htmlFor="loop-editor-iteration-cost-limit-usd">Per-iteration cost limit (USD)</label>
+      <input
+        id="loop-editor-iteration-cost-limit-usd"
+        min="0"
+        name="iterationCostLimitUsd"
+        onBlur={formik.handleBlur}
+        onChange={formik.handleChange}
+        placeholder="Leave empty for no limit"
+        step="0.000001"
+        type="number"
+        value={formik.values.iterationCostLimitUsd}
+      />
+      {formik.touched.iterationCostLimitUsd && formik.errors.iterationCostLimitUsd ? <p className="p-form-validation is-error">{formik.errors.iterationCostLimitUsd}</p> : null}
       <div className="u-align--right">
         <Button appearance="positive" disabled={formik.isSubmitting} type="submit">
           {isEdit ? (formik.isSubmitting ? `Saving loop...` : `Save loop`) : formik.isSubmitting ? `Creating loop...` : `Create loop`}

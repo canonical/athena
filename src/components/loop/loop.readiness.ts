@@ -7,6 +7,7 @@ export type LoopReadinessCounts = {
   activeProviderWithModelConfigCount: number;
   activeProviderMissingModelConfigCount: number;
   activeRunnerCount: number;
+  activeWorkgraphCount: number;
 };
 
 export const evaluateLoopReadiness = (loopId: string, counts: LoopReadinessCounts): LoopReadiness => {
@@ -58,6 +59,13 @@ export const evaluateLoopReadiness = (loopId: string, counts: LoopReadinessCount
     blockers.push({
       code: `NO_ACTIVE_RUNNER`,
       message: `No active runner assignment is available for this loop.`,
+    });
+  }
+
+  if (counts.activeWorkgraphCount === 0) {
+    blockers.push({
+      code: `NO_ACTIVE_WORKGRAPH`,
+      message: `No active workgraph assignment is available for this loop.`,
     });
   }
 

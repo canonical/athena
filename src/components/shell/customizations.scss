@@ -48,6 +48,16 @@ body {
   top: 0;
 }
 
+.p-modal.athena-entity-drawer--large .p-modal__dialog {
+  max-width: min(72rem, 100vw);
+  width: min(72rem, 100vw);
+}
+
+.p-modal.athena-entity-drawer--xl .p-modal__dialog {
+  max-width: min(88rem, 100vw);
+  width: min(88rem, 100vw);
+}
+
 .toast-animate {
   z-index: 1200;
 }

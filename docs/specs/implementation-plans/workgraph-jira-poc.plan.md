@@ -7,14 +7,15 @@ Implement Workgraph end-to-end as a loop-assignable external hierarchy source.
 - Workgraph is a first-class owner-scoped definition.
 - Jira is the only selectable Workgraph type in this phase.
 - Loop can assign one or more Workgraphs and configure ingestion seed/rules per assignment.
+ - Loop can assign one or more Workgraphs and configure ingestion JQL/rules per assignment.
 
 ## Data Model
 
 - `workgraph` definition table:
   - owner, displayName, workgraphType (`jira` only), baseUrl, optional projectKey, lifecycle status.
 - `loopWorkgraph` assignment table:
-  - priority, enabled flag, seed item type (`epic|project|initiative`), optional seed external id,
-  - `hierarchyRules` JSON, `assignmentOverrides` JSON,
+  - priority, enabled flag,
+  - `jql` text, `assignmentConfig` JSON,
   - sync metadata (`lastSyncedAt`, `lastSyncStatus`, `lastSyncError`).
 
 ## API Surface
@@ -34,7 +35,7 @@ Implement Workgraph end-to-end as a loop-assignable external hierarchy source.
 - Loop Workgraphs tab:
   - assign existing workgraph.
   - list assigned workgraphs with sync metadata.
-  - edit seed and hierarchy rules.
+  - edit JQL and assignment rules.
 
 ## Constraints
 

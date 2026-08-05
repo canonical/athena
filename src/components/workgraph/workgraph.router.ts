@@ -5,7 +5,10 @@ import { Router } from "express";
 import { z } from "zod";
 import {
   loopWorkgraphDelete,
+  loopWorkgraphIssueTypes,
+  loopWorkgraphItemList,
   loopWorkgraphList,
+  loopWorkgraphSync,
   loopWorkgraphUpdateByAdmin,
   workgraphAssign,
   workgraphCreate,
@@ -13,6 +16,7 @@ import {
   workgraphGet,
   workgraphList,
   workgraphTestConnection,
+  workgraphTestConnectionById,
   workgraphTypeOptions,
   workgraphUpdate,
 } from "./workgraph.controller.js";
@@ -37,7 +41,6 @@ const loopWorkgraphParamsSchema = z.object({
 const workgraphDeleteBodySchema = z.object({
   workgraph: uuid(`workgraph must be a valid UUID.`),
 });
-
 
 route({
   method: `get`,
@@ -76,6 +79,18 @@ route({
   },
   handler: async ({ body, respond }) => {
     const result = await workgraphTestConnection(body);
+    respond({ status: 200, data: result });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/:workgraph/test`,
+  validators: {
+    params: workgraphParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const result = await workgraphTestConnectionById(params.workgraph, getAuthenticatedUserId(response));
     respond({ status: 200, data: result });
   },
 });
@@ -151,6 +166,42 @@ route({
   handler: async ({ params, body, response, respond }) => {
     const workgraph = await loopWorkgraphUpdateByAdmin(params.loop, params.workgraph, getAuthenticatedUserId(response), body);
     respond({ status: 200, data: workgraph });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/:workgraph/items`,
+  validators: {
+    params: loopWorkgraphParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const items = await loopWorkgraphItemList(params.loop, params.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 200, data: items });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/:workgraph/issue-types`,
+  validators: {
+    params: loopWorkgraphParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const issueTypes = await loopWorkgraphIssueTypes(params.loop, params.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 200, data: issueTypes });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/loop/:loop/:workgraph/sync`,
+  validators: {
+    params: loopWorkgraphParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const result = await loopWorkgraphSync(params.loop, params.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 200, data: result });
   },
 });
 

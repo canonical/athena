@@ -2,8 +2,22 @@ import { getPool } from "@components/postgres/postgres.js";
 import type { LoopReadinessCounts } from "./loop.readiness.js";
 import type { Loop, LoopInsert, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
 
-const loopColumns = `"id", "name", "description", "createdAt", "updatedAt"`;
-const loopSelectColumns = `l."id", l."name", l."description", l."createdAt", l."updatedAt"`;
+const loopColumns = `"id", "name", "description", "iterationCostLimitUsd", "createdAt", "updatedAt"`;
+const loopSelectColumns = `l."id", l."name", l."description", l."iterationCostLimitUsd", l."createdAt", l."updatedAt"`;
+
+export const queryLoopById = async (loopId: string): Promise<Loop | undefined> => {
+  const result = await getPool().query<Loop>(
+    `
+      SELECT ${loopSelectColumns}
+      FROM "loop" l
+      WHERE l."id" = $1
+      LIMIT 1
+    `,
+    [loopId],
+  );
+
+  return result.rows[0];
+};
 
 export const queryLoopForUser = async (loopId: string, userId: string): Promise<Loop | undefined> => {
   const result = await getPool().query<Loop>(
@@ -55,11 +69,11 @@ export const queryLoopCreate = async (input: LoopInsert, userId: string): Promis
 
     const result = await client.query<Loop>(
       `
-        INSERT INTO "loop" ("name", "description")
-        VALUES ($1, $2)
+        INSERT INTO "loop" ("name", "description", "iterationCostLimitUsd")
+        VALUES ($1, $2, $3)
         RETURNING ${loopColumns}
       `,
-      [input.name, input.description ?? null],
+      [input.name, input.description ?? null, input.iterationCostLimitUsd ?? null],
     );
 
     const loop = result.rows[0];
@@ -92,15 +106,16 @@ export const queryLoopUpdate = async (loopId: string, input: LoopUpdate, userId:
       UPDATE "loop" AS l
       SET
         "name" = $1,
-        "description" = $2
+        "description" = $2,
+        "iterationCostLimitUsd" = $3
       FROM "loopUser" AS lu
-      WHERE l."id" = $3
+      WHERE l."id" = $4
         AND lu."loop" = l."id"
-        AND lu."user" = $4
+        AND lu."user" = $5
        AND lu."isAdmin" = TRUE
-      RETURNING l."id", l."name", l."description", l."createdAt", l."updatedAt"
+      RETURNING l."id", l."name", l."description", l."iterationCostLimitUsd", l."createdAt", l."updatedAt"
     `,
-    [input.name, input.description ?? null, loopId, userId],
+    [input.name, input.description ?? null, input.iterationCostLimitUsd ?? null, loopId, userId],
   );
 
   return result.rows[0];
@@ -177,6 +192,7 @@ export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopRead
     activeProviderWithModelConfigCount: string;
     activeProviderMissingModelConfigCount: string;
     activeRunnerCount: string;
+    activeWorkgraphCount: string;
   }>(
     `
       SELECT
@@ -237,7 +253,16 @@ export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopRead
             AND lr."enabled" = TRUE
             AND r."lifecycleStatus" = 'active'
             AND r."runnerType" = 'github-copilot-cloud'
-        ) AS "activeRunnerCount"
+        ) AS "activeRunnerCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopWorkgraph" lw
+          JOIN "workgraph" w ON w."id" = lw."workgraph"
+          WHERE lw."loop" = $1
+            AND lw."enabled" = TRUE
+            AND w."lifecycleStatus" = 'active'
+            AND w."type" = 'jira'
+        ) AS "activeWorkgraphCount"
     `,
     [loopId],
   );
@@ -251,5 +276,6 @@ export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopRead
     activeProviderWithModelConfigCount: Number(row?.activeProviderWithModelConfigCount ?? `0`),
     activeProviderMissingModelConfigCount: Number(row?.activeProviderMissingModelConfigCount ?? `0`),
     activeRunnerCount: Number(row?.activeRunnerCount ?? `0`),
+    activeWorkgraphCount: Number(row?.activeWorkgraphCount ?? `0`),
   };
 };

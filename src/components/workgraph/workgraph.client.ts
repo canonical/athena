@@ -1,13 +1,17 @@
 import { authenticatedJsonDelete, authenticatedJsonGet, authenticatedJsonPost, authenticatedJsonPut } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
-import type { LoopWorkgraph, Workgraph, WorkgraphConnectionTest, WorkgraphInsert, WorkgraphSeedItem, WorkgraphTypeOption, WorkgraphUpdate } from "./workgraph.schema.js";
+import type { LoopWorkgraph, LoopWorkgraphItem, LoopWorkgraphSyncResult, Workgraph, WorkgraphConnectionTest, WorkgraphInsert, WorkgraphIssueType, WorkgraphTypeOption, WorkgraphUpdate } from "./workgraph.schema.js";
 
 export const workgraphApiPaths = {
   list: getApiUrl(`/workgraph`),
   types: getApiUrl(`/workgraph/types`),
   byId: (workgraphId: string) => getApiUrl(`/workgraph/${workgraphId}`),
   test: getApiUrl(`/workgraph/test`),
+  testById: (workgraphId: string) => getApiUrl(`/workgraph/${workgraphId}/test`),
   loopList: (loopId: string) => getApiUrl(`/workgraph/loop/${loopId}/list`),
+  loopItems: (loopId: string, workgraphId: string) => getApiUrl(`/workgraph/loop/${loopId}/${workgraphId}/items`),
+  loopIssueTypes: (loopId: string, workgraphId: string) => getApiUrl(`/workgraph/loop/${loopId}/${workgraphId}/issue-types`),
+  loopSync: (loopId: string, workgraphId: string) => getApiUrl(`/workgraph/loop/${loopId}/${workgraphId}/sync`),
   assign: getApiUrl(`/workgraph/assign`),
   loopAssignmentAdmin: (loopId: string, workgraphId: string) => getApiUrl(`/workgraph/loop/${loopId}/${workgraphId}/admin`),
   unassign: getApiUrl(`/workgraph/unassign`),
@@ -72,6 +76,16 @@ export const testWorkgraphConnection = async (payload: WorkgraphConnectionTest):
   return response.json() as Promise<{ ok: true; message: string }>;
 };
 
+export const testWorkgraphConnectionById = async (workgraphId: string): Promise<{ ok: true; message: string }> => {
+  const response = await authenticatedJsonPost(workgraphApiPaths.testById(workgraphId), {});
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Workgraph connection test failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<{ ok: true; message: string }>;
+};
+
 export const updateWorkgraph = async (workgraphId: string, payload: WorkgraphUpdate): Promise<Workgraph> => {
   const response = await authenticatedJsonPut(workgraphApiPaths.byId(workgraphId), payload);
 
@@ -113,9 +127,7 @@ export const updateLoopWorkgraphByAdmin = async (
   workgraphId: string,
   payload: {
     enabled?: boolean;
-    seedItems?: WorkgraphSeedItem[];
-    hierarchyRules?: Record<string, unknown>;
-    assignmentOverrides?: Record<string, unknown>;
+    assignmentConfig?: Record<string, unknown>;
   },
 ): Promise<LoopWorkgraph> => {
   const response = await authenticatedJsonPut(workgraphApiPaths.loopAssignmentAdmin(loopId, workgraphId), payload);
@@ -133,4 +145,34 @@ export const removeWorkgraphFromLoop = async (loopId: string, workgraphId: strin
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Workgraph removal failed with status ${response.status}`));
   }
+};
+
+export const fetchLoopWorkgraphItems = async (loopId: string, workgraphId: string): Promise<LoopWorkgraphItem[]> => {
+  const response = await authenticatedJsonGet(workgraphApiPaths.loopItems(loopId, workgraphId));
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Loop workgraph items request failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<LoopWorkgraphItem[]>;
+};
+
+export const syncLoopWorkgraphItems = async (loopId: string, workgraphId: string): Promise<LoopWorkgraphSyncResult> => {
+  const response = await authenticatedJsonPost(workgraphApiPaths.loopSync(loopId, workgraphId), {});
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Loop workgraph sync failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<LoopWorkgraphSyncResult>;
+};
+
+export const fetchLoopWorkgraphIssueTypes = async (loopId: string, workgraphId: string): Promise<WorkgraphIssueType[]> => {
+  const response = await authenticatedJsonGet(workgraphApiPaths.loopIssueTypes(loopId, workgraphId));
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Loop workgraph issue type request failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<WorkgraphIssueType[]>;
 };

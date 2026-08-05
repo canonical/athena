@@ -14,6 +14,7 @@ const taskColumnNames = [
   `selectedPersona`,
   `targetType`,
   `targetId`,
+  `workgraphItem`,
   `routeReasonCode`,
   `routeReasonText`,
   `description`,
@@ -36,6 +37,7 @@ const taskColumnNames = [
   `claimAttemptCount`,
   `autonomyIterationCount`,
   `autonomyMaxIterations`,
+  `llmCostUsdTotal`,
   `updatedAt`,
 ] as const;
 
@@ -48,16 +50,16 @@ export const queryTaskCreate = async (task: TaskInsert): Promise<Task> => {
     `
       INSERT INTO "task" (
         "loop", "phase", "sourceType", "sourceRef", "status", "assignee",
-        "selectedPersona", "targetType", "targetId", "routeReasonCode", "routeReasonText",
+        "selectedPersona", "targetType", "targetId", "workgraphItem", "routeReasonCode", "routeReasonText",
         "description", "kind", "ownerMode", "successCriteria", "externalRefs",
         "context", "routing", "emittedByPersona", "blocker", "approvals", "payload",
         "completedAt", "autonomyIterationCount", "autonomyMaxIterations"
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15::jsonb, $16::jsonb,
-        $17, $18::jsonb, $19, $20, $21::jsonb, $22::jsonb,
-        $23, $24, $25
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+        $13, $14, $15, $16::jsonb, $17::jsonb,
+        $18, $19::jsonb, $20, $21, $22::jsonb, $23::jsonb,
+        $24, $25, $26
       )
       RETURNING ${getTaskColumns()}
     `,
@@ -71,6 +73,7 @@ export const queryTaskCreate = async (task: TaskInsert): Promise<Task> => {
       v.selectedPersona,
       v.targetType,
       v.targetId,
+      v.workgraphItem ?? null,
       v.routeReasonCode,
       v.routeReasonText,
       v.description,
@@ -93,6 +96,105 @@ export const queryTaskCreate = async (task: TaskInsert): Promise<Task> => {
   const created = result.rows[0];
   if (!created) throw new Error(`Task was not created.`);
   return created;
+};
+
+export const queryTaskCreateForWorkgraphItem = async (input: {
+  task: TaskInsert;
+  workgraphItemId: string;
+}): Promise<Task | null> => {
+  const v = taskInsertSchema.parse(input.task);
+  const client = await getPool().connect();
+
+  try {
+    await client.query(`BEGIN`);
+
+    const lockedItem = await client.query<{ id: string }>(
+      `
+        SELECT "id"
+        FROM "loopWorkgraphItem"
+        WHERE "id" = $1::uuid
+        FOR UPDATE
+      `,
+      [input.workgraphItemId],
+    );
+
+    if (!lockedItem.rows[0]) {
+      await client.query(`ROLLBACK`);
+      return null;
+    }
+
+    const existingTask = await client.query<{ id: string }>(
+      `
+        SELECT "id"
+        FROM "task"
+        WHERE "workgraphItem" = $1::uuid
+          AND "status" <> 'completed'
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [input.workgraphItemId],
+    );
+
+    if (existingTask.rows[0]) {
+      await client.query(`COMMIT`);
+      return null;
+    }
+
+    const createdResult = await client.query<Task>(
+      `
+        INSERT INTO "task" (
+          "loop", "phase", "sourceType", "sourceRef", "status", "assignee",
+          "selectedPersona", "targetType", "targetId", "workgraphItem", "routeReasonCode", "routeReasonText",
+          "description", "kind", "ownerMode", "successCriteria", "externalRefs",
+          "context", "routing", "emittedByPersona", "blocker", "approvals", "payload",
+          "completedAt", "autonomyIterationCount", "autonomyMaxIterations"
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+          $13, $14, $15, $16::jsonb, $17::jsonb,
+          $18, $19::jsonb, $20, $21, $22::jsonb, $23::jsonb,
+          $24, $25, $26
+        )
+        RETURNING ${getTaskColumns()}
+      `,
+      [
+        v.loop,
+        v.phase,
+        v.sourceType,
+        v.sourceRef,
+        v.status,
+        v.assignee,
+        v.selectedPersona,
+        v.targetType,
+        v.targetId,
+        input.workgraphItemId,
+        v.routeReasonCode,
+        v.routeReasonText,
+        v.description,
+        v.kind,
+        v.ownerMode,
+        JSON.stringify(v.successCriteria),
+        JSON.stringify(v.externalRefs),
+        v.context,
+        JSON.stringify(v.routing),
+        v.emittedByPersona,
+        v.blocker,
+        JSON.stringify(v.approvals),
+        JSON.stringify(v.payload),
+        v.completedAt,
+        v.autonomyIterationCount,
+        v.autonomyMaxIterations,
+      ],
+    );
+
+    await client.query(`COMMIT`);
+    return createdResult.rows[0] ?? null;
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export const queryTaskList = async (userId: string): Promise<Task[]> => {
@@ -337,6 +439,7 @@ export const queryTaskUpdate = async (input: TaskUpdateInput): Promise<Task> => 
         "processingSourceStatus" = $17,
         "autonomyIterationCount" = $19,
         "autonomyMaxIterations" = $20,
+        "llmCostUsdTotal" = $21,
         "updatedAt" = NOW()
       WHERE "id" = $1
         AND ($18::uuid IS NULL OR "claimToken" = $18::uuid)
@@ -363,6 +466,7 @@ export const queryTaskUpdate = async (input: TaskUpdateInput): Promise<Task> => 
       validatedInput.expectedClaimToken ?? null,
       validatedInput.autonomyIterationCount ?? current.autonomyIterationCount,
       validatedInput.autonomyMaxIterations ?? current.autonomyMaxIterations,
+      validatedInput.llmCostUsdTotal ?? current.llmCostUsdTotal,
     ],
   );
 

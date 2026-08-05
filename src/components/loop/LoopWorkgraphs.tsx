@@ -1,11 +1,50 @@
-import { Button, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
-import { assignWorkgraphToLoop, removeWorkgraphFromLoop, updateLoopWorkgraphByAdmin } from "@components/workgraph/workgraph.client.js";
-import { useLoopWorkgraphList, useWorkgraphList, useWorkgraphTypeOptions } from "@components/workgraph/workgraph.query.js";
-import type { LoopWorkgraph, WorkgraphSeedItem } from "@components/workgraph/workgraph.schema.js";
+import { Button, Notification, NotificationSeverity } from "@canonical/react-components";
+import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
+import { assignWorkgraphToLoop, removeWorkgraphFromLoop, syncLoopWorkgraphItems, updateLoopWorkgraphByAdmin } from "@components/workgraph/workgraph.client.js";
+import { useLoopWorkgraphIssueTypes, useLoopWorkgraphItems, useLoopWorkgraphList, useWorkgraphList } from "@components/workgraph/workgraph.query.js";
+import type { LoopWorkgraph } from "@components/workgraph/workgraph.schema.js";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useFormik } from "formik";
-import { useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { LoopWorkgraphsProps } from "./loop.schema.js";
+import type { WorkgraphIssueType } from "@components/workgraph/workgraph.schema.js";
+
+const LazyLoopWorkgraphDefinitions = lazy(async () => {
+  const module = await import("./LoopWorkgraphDefinitions.js");
+
+  return { default: module.LoopWorkgraphDefinitions };
+});
+
+const LazyLoopWorkgraphDetails = lazy(async () => {
+  const module = await import("./LoopWorkgraphDetails.js");
+
+  return { default: module.LoopWorkgraphDetails };
+});
+
+const LazyLoopWorkgraphConfigJql = lazy(async () => {
+  const module = await import("./LoopWorkgraphConfigJql.js");
+
+  return { default: module.LoopWorkgraphConfigJql };
+});
+
+const LazyLoopWorkgraphConfigLabels = lazy(async () => {
+  const module = await import("./LoopWorkgraphConfigLabels.js");
+
+  return { default: module.LoopWorkgraphConfigLabels };
+});
+
+const LazyLoopWorkgraphConfigTypePlaybooks = lazy(async () => {
+  const module = await import("./LoopWorkgraphConfigTypePlaybooks.js");
+
+  return { default: module.LoopWorkgraphConfigTypePlaybooks };
+});
+
+const LazyLoopWorkgraphConfigWebhookDefinitions = lazy(async () => {
+  const module = await import("@components/webhook/WebhookDefinitions.js");
+
+  return { default: module.WebhookDefinitions };
+});
 
 const formatTimestamp = (value: Date | string | null) => (value ? new Date(value).toLocaleString() : `-`);
 
@@ -15,36 +54,158 @@ const statusLabels: Record<`never` | `ok` | `failed`, string> = {
   failed: `Last sync failed`,
 };
 
-const parseSeedItemsInput = (value: string): { items: WorkgraphSeedItem[]; error?: string } => {
-  const items = value
-    .split(`\n`)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+const jqlPreview = (jql: string) => {
+  const normalized = jql.trim();
 
-  return { items };
-};
-
-const seedItemsPreview = (seedItems: WorkgraphSeedItem[]) => {
-  if (seedItems.length === 0) {
+  if (normalized.length === 0) {
     return `-`;
   }
 
-  return seedItems.slice(0, 2).join(`, `);
+  return normalized.length > 72 ? `${normalized.slice(0, 72)}...` : normalized;
 };
 
-export function LoopWorkgraphs({ loopId, onFeedback }: LoopWorkgraphsProps) {
+const parseTypeInstructions = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== `object` || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>((accumulator, [key, instruction]) => {
+    if (typeof instruction === `string`) {
+      accumulator[key] = instruction;
+    }
+
+    return accumulator;
+  }, {});
+};
+
+const parseAssignmentJql = (value: unknown): string => {
+  if (!value || typeof value !== `object` || Array.isArray(value)) {
+    return ``;
+  }
+
+  const assignmentConfig = value as Record<string, unknown>;
+  return typeof assignmentConfig.jql === `string` ? assignmentConfig.jql : ``;
+};
+
+const normalizeTypeInstructionsById = (input: Record<string, string>, issueTypes: WorkgraphIssueType[]): Record<string, string> => {
+  const normalized: Record<string, string> = {};
+
+  for (const issueType of issueTypes) {
+    const byId = input[issueType.id];
+
+    if (typeof byId === `string` && byId.trim().length > 0) {
+      normalized[issueType.id] = byId;
+      continue;
+    }
+
+    const byName = input[issueType.name];
+
+    if (typeof byName === `string` && byName.trim().length > 0) {
+      normalized[issueType.id] = byName;
+    }
+  }
+
+  return normalized;
+};
+
+export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, workgraphConfigTab }: LoopWorkgraphsProps) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { state: workgraphListState } = useWorkgraphList();
   const { state: assignedWorkgraphState, reload: reloadAssignedWorkgraphs } = useLoopWorkgraphList(loopId);
-  const { state: workgraphTypeOptionState } = useWorkgraphTypeOptions();
   const [busyWorkgraphId, setBusyWorkgraphId] = useState<string | null>(null);
-  const [editingWorkgraphId, setEditingWorkgraphId] = useState<string | null>(null);
+  const [syncingWorkgraphId, setSyncingWorkgraphId] = useState<string | null>(null);
+  const hydratedWorkgraphIdRef = useRef<string | null>(null);
 
   const availableWorkgraphs = workgraphListState.status === `success` ? workgraphListState.workgraphs : [];
   const assignedWorkgraphs = assignedWorkgraphState.status === `success` ? assignedWorkgraphState.workgraphs : [];
 
   const assignedWorkgraphIds = new Set(assignedWorkgraphs.map((workgraph) => workgraph.workgraph));
   const unassignedWorkgraphs = availableWorkgraphs.filter((workgraph) => !assignedWorkgraphIds.has(workgraph.id));
+  const selectedWorkgraphView = workgraphViewWorkgraphId ? assignedWorkgraphs.find((workgraph) => workgraph.workgraph === workgraphViewWorkgraphId) : undefined;
+  const selectedWorkgraphId = selectedWorkgraphView?.workgraph ?? null;
+  const { state: workgraphItemListState, reload: reloadWorkgraphItems } = useLoopWorkgraphItems(loopId, selectedWorkgraphId);
+  const { state: issueTypeState } = useLoopWorkgraphIssueTypes(loopId, selectedWorkgraphId);
+  const activeSubtab: `definitions` | string = selectedWorkgraphView ? selectedWorkgraphView.workgraph : `definitions`;
+  const activeConfigTab = workgraphConfigTab ?? `jql`;
+
+  const applyWorkgraphConfigValues = (workgraph: LoopWorkgraph) => {
+    const assignmentConfig = workgraph.assignmentConfig as Record<string, unknown>;
+    const parsedTypeInstructions = parseTypeInstructions(assignmentConfig?.typeInstructions);
+    const typeInstructions = issueTypeState.status === `success` ? normalizeTypeInstructionsById(parsedTypeInstructions, issueTypeState.issueTypes) : parsedTypeInstructions;
+
+    updateFormik.setValues({
+      jql: parseAssignmentJql(assignmentConfig),
+      workOnLabel: readWorkOnLabelFromAssignmentConfig(assignmentConfig),
+      workInProgressLabel: readWorkInProgressLabelFromAssignmentConfig(assignmentConfig),
+      workDoneLabel: readWorkDoneLabelFromAssignmentConfig(assignmentConfig),
+      typeInstructions,
+    });
+  };
+
+  useEffect(() => {
+    if (!selectedWorkgraphView) {
+      hydratedWorkgraphIdRef.current = null;
+      return;
+    }
+
+    const workgraphChanged = hydratedWorkgraphIdRef.current !== selectedWorkgraphView.workgraph;
+
+    // Preserve in-progress edits; only hydrate on selection change or when form is clean.
+    if (workgraphChanged || !updateFormik.dirty) {
+      applyWorkgraphConfigValues(selectedWorkgraphView);
+      hydratedWorkgraphIdRef.current = selectedWorkgraphView.workgraph;
+    }
+  }, [selectedWorkgraphView, issueTypeState.status, updateFormik.dirty]);
+
+  const openDefinitionsSubtab = () => {
+    void navigate({
+      to: `/loop/$loopId`,
+      params: { loopId },
+      search: (previous) => ({ ...previous, tab: `workgraphs`, workgraphView: undefined, workgraphConfigTab: undefined }),
+    });
+  };
+
+  const openWorkgraphSubtab = (workgraphId: string) => {
+    void navigate({
+      to: `/loop/$loopId`,
+      params: { loopId },
+      search: (previous) => ({ ...previous, tab: `workgraphs`, workgraphView: workgraphId, workgraphConfigTab: `jql` }),
+    });
+  };
+
+  const openWorkgraphConfigTab = (workgraphId: string, tab: `jql` | `labels` | `item-type-playbooks` | `webhook-definitions` | `synced-items`) => {
+    void navigate({
+      to: `/loop/$loopId`,
+      params: { loopId },
+      search: (previous) => ({ ...previous, tab: `workgraphs`, workgraphView: workgraphId, workgraphConfigTab: tab }),
+    });
+  };
+
+  const handleSyncWorkItems = async (workgraph: LoopWorkgraph) => {
+    setSyncingWorkgraphId(workgraph.workgraph);
+    onFeedback(null);
+
+    try {
+      const result = await syncLoopWorkgraphItems(loopId, workgraph.workgraph);
+      reloadAssignedWorkgraphs();
+      reloadWorkgraphItems();
+      onFeedback({
+        severity: NotificationSeverity.INFORMATION,
+        title: `Sync completed`,
+        message: result.message,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      onFeedback({
+        severity: NotificationSeverity.NEGATIVE,
+        title: `Sync failed`,
+        message,
+      });
+    } finally {
+      setSyncingWorkgraphId(null);
+    }
+  };
 
   const assignFormik = useFormik<{ selectedWorkgraphId: string }>({
     initialValues: { selectedWorkgraphId: `` },
@@ -76,52 +237,69 @@ export function LoopWorkgraphs({ loopId, onFeedback }: LoopWorkgraphsProps) {
     },
   });
 
-  const updateFormik = useFormik<{
-    seedItemsInput: string;
-    includeSubtasks: `true` | `false`;
-    statusesCsv: string;
-  }>({
+  const updateFormik = useFormik<{ jql: string; workOnLabel: string; workInProgressLabel: string; workDoneLabel: string; typeInstructions: Record<string, string> }>({
     enableReinitialize: true,
     initialValues: {
-      seedItemsInput: ``,
-      includeSubtasks: `true`,
-      statusesCsv: ``,
+      jql: ``,
+      workOnLabel: readWorkOnLabelFromAssignmentConfig(undefined),
+      workInProgressLabel: readWorkInProgressLabelFromAssignmentConfig(undefined),
+      workDoneLabel: readWorkDoneLabelFromAssignmentConfig(undefined),
+      typeInstructions: {},
     },
     onSubmit: async (values) => {
-      if (!editingWorkgraphId) {
+      if (!selectedWorkgraphId) {
         return;
       }
 
       onFeedback(null);
 
-      const statuses = values.statusesCsv
-        .split(`,`)
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0);
+      const jql = values.jql.trim();
+      const workOnLabel = values.workOnLabel.trim();
+      const workInProgressLabel = values.workInProgressLabel.trim();
+      const workDoneLabel = values.workDoneLabel.trim();
 
-      const parsedSeeds = parseSeedItemsInput(values.seedItemsInput);
-
-      if (parsedSeeds.error) {
+      if (jql.length === 0) {
         onFeedback({
           severity: NotificationSeverity.NEGATIVE,
           title: `Unable to update assignment`,
-          message: parsedSeeds.error,
+          message: `JQL is required.`,
         });
         return;
       }
 
+      if (workOnLabel.length === 0 || workInProgressLabel.length === 0 || workDoneLabel.length === 0) {
+        onFeedback({
+          severity: NotificationSeverity.NEGATIVE,
+          title: `Unable to update assignment`,
+          message: `Work on label, work in progress label, and work done label are required.`,
+        });
+        return;
+      }
+
+      const typeInstructions = Object.entries(values.typeInstructions).reduce<Record<string, string>>((accumulator, [issueTypeId, instruction]) => {
+        const normalizedInstruction = instruction.trim();
+
+        if (normalizedInstruction.length > 0) {
+          accumulator[issueTypeId] = normalizedInstruction;
+        }
+
+        return accumulator;
+      }, {});
+
       try {
-        await updateLoopWorkgraphByAdmin(loopId, editingWorkgraphId, {
-          seedItems: parsedSeeds.items,
-          hierarchyRules: {
-            includeSubtasks: values.includeSubtasks === `true`,
-            statuses,
+        await updateLoopWorkgraphByAdmin(loopId, selectedWorkgraphId, {
+          assignmentConfig: {
+            jql,
+            workOnLabel,
+            workInProgressLabel,
+            workDoneLabel,
+            typeInstructions,
           },
         });
         onFeedback({
           severity: NotificationSeverity.INFORMATION,
-          title: `Workgraph assignment updated`,
-          message: `Seeding rules have been updated.`,
+          title: `Workgraph configuration updated`,
+          message: `Workgraph configuration has been saved.`,
         });
         reloadAssignedWorkgraphs();
       } catch (error) {
@@ -134,19 +312,6 @@ export function LoopWorkgraphs({ loopId, onFeedback }: LoopWorkgraphsProps) {
       }
     },
   });
-
-  const startEditing = (workgraph: LoopWorkgraph) => {
-    setEditingWorkgraphId(workgraph.workgraph);
-
-    const hierarchyRules = workgraph.hierarchyRules as { includeSubtasks?: boolean; statuses?: unknown };
-    const statuses = Array.isArray(hierarchyRules.statuses) ? hierarchyRules.statuses.filter((item): item is string => typeof item === `string`) : [];
-
-    updateFormik.setValues({
-      seedItemsInput: workgraph.seedItems.join(`\n`),
-      includeSubtasks: hierarchyRules.includeSubtasks === false ? `false` : `true`,
-      statusesCsv: statuses.join(`, `),
-    });
-  };
 
   const handleRemoveAssignment = async (workgraph: LoopWorkgraph) => {
     setBusyWorkgraphId(workgraph.workgraph);
@@ -161,8 +326,12 @@ export function LoopWorkgraphs({ loopId, onFeedback }: LoopWorkgraphsProps) {
       });
       await queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
       reloadAssignedWorkgraphs();
-      if (editingWorkgraphId === workgraph.workgraph) {
-        setEditingWorkgraphId(null);
+      if (selectedWorkgraphId === workgraph.workgraph) {
+        void navigate({
+          to: `/loop/$loopId`,
+          params: { loopId },
+          search: (previous) => ({ ...previous, tab: `workgraphs`, workgraphView: undefined, workgraphConfigTab: undefined }),
+        });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -178,117 +347,151 @@ export function LoopWorkgraphs({ loopId, onFeedback }: LoopWorkgraphsProps) {
 
   return (
     <>
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Assign an existing workgraph</h2>
-        {workgraphListState.status === `loading` ? <p className="p-text--default">Loading available workgraphs...</p> : null}
-        {workgraphListState.status === `error` ? (
-          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load available workgraphs">
-            {workgraphListState.message}
-          </Notification>
-        ) : null}
-        {workgraphListState.status === `success` && availableWorkgraphs.length === 0 ? <p className="p-text--default">No workgraphs are available yet. Create a workgraph first, then assign it to this loop.</p> : null}
-        {workgraphListState.status === `success` && availableWorkgraphs.length > 0 && unassignedWorkgraphs.length === 0 ? <p className="p-text--default">All available workgraphs are already assigned to this loop.</p> : null}
-        <form onSubmit={assignFormik.handleSubmit}>
-          <Select
-            id="assign-workgraph-select"
-            label="Workgraph"
-            name="selectedWorkgraphId"
-            onChange={assignFormik.handleChange}
-            options={[{ value: ``, label: `- Select a workgraph -` }, ...unassignedWorkgraphs.map((workgraph) => ({ value: workgraph.id, label: workgraph.name }))]}
-            value={assignFormik.values.selectedWorkgraphId}
-          />
-          <div className="u-align--right">
-            <Button appearance="base" disabled={!assignFormik.values.selectedWorkgraphId || assignFormik.isSubmitting} type="submit">
-              {assignFormik.isSubmitting ? `Assigning...` : `Assign workgraph`}
-            </Button>
-          </div>
-        </form>
-      </div>
+      <nav aria-label="Workgraph views" className="p-tabs">
+        <div role="tablist">
+          <ul className="p-tabs__list">
+            <li className="p-tabs__item" role="presentation">
+              <button aria-selected={activeSubtab === `definitions`} className={`p-tabs__link${activeSubtab === `definitions` ? ` is-active` : ``}`} onClick={openDefinitionsSubtab} role="tab" type="button">
+                Definitions
+              </button>
+            </li>
+            {assignedWorkgraphs.map((workgraph) => (
+              <li className="p-tabs__item" key={workgraph.workgraph} role="presentation">
+                <button
+                  aria-selected={activeSubtab === workgraph.workgraph}
+                  className={`p-tabs__link${activeSubtab === workgraph.workgraph ? ` is-active` : ``}`}
+                  onClick={() => openWorkgraphSubtab(workgraph.workgraph)}
+                  role="tab"
+                  type="button"
+                >
+                  {workgraph.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </nav>
 
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Assigned workgraphs</h2>
-        {assignedWorkgraphState.status === `loading` ? <p className="p-text--default">Loading workgraphs...</p> : null}
-        {assignedWorkgraphState.status === `error` ? (
-          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load assigned workgraphs">
-            {assignedWorkgraphState.message}
-          </Notification>
-        ) : null}
-        {assignedWorkgraphState.status === `success` && assignedWorkgraphs.length === 0 ? <p className="p-text--default">No workgraphs assigned to this loop yet.</p> : null}
-        {assignedWorkgraphState.status === `success` && assignedWorkgraphs.length > 0 ? (
-          <MainTable
-            headers={[{ content: `Name` }, { content: `Type` }, { content: `Seed items` }, { content: `Seed count` }, { content: `Sync status` }, { content: `Last synced` }, { content: `Actions` }]}
-            rows={assignedWorkgraphs.map((workgraph) => ({
-              key: workgraph.workgraph,
-              columns: [
-                { content: workgraph.name },
-                { content: workgraph.type },
-                { content: seedItemsPreview(workgraph.seedItems) },
-                { content: String(workgraph.seedItems.length) },
-                { content: statusLabels[workgraph.lastSyncStatus] ?? workgraph.lastSyncStatus },
-                { content: formatTimestamp(workgraph.lastSyncedAt) },
-                {
-                  content: (
-                    <div className="u-align--right">
-                      <Button appearance="base" onClick={() => startEditing(workgraph)} type="button">
-                        Edit seed rules
-                      </Button>
-                      <Button appearance="negative" disabled={busyWorkgraphId === workgraph.workgraph} onClick={() => handleRemoveAssignment(workgraph)} type="button">
-                        {busyWorkgraphId === workgraph.workgraph ? `Removing ${workgraph.name}...` : `Remove ${workgraph.name}`}
-                      </Button>
-                    </div>
-                  ),
-                },
-              ],
-            }))}
+      {activeSubtab === `definitions` ? (
+        <Suspense fallback={<p className="p-text--default">Loading definitions...</p>}>
+          <LazyLoopWorkgraphDefinitions
+            assignedWorkgraphState={assignedWorkgraphState}
+            assignedWorkgraphs={assignedWorkgraphs}
+            assignFormik={assignFormik}
+            availableWorkgraphs={availableWorkgraphs}
+            busyWorkgraphId={busyWorkgraphId}
+            formatTimestamp={formatTimestamp}
+            jqlPreview={jqlPreview}
+            onOpenWorkgraphSubtab={openWorkgraphSubtab}
+            onRemoveAssignment={handleRemoveAssignment}
+            statusLabels={statusLabels}
+            unassignedWorkgraphs={unassignedWorkgraphs}
+            workgraphListState={workgraphListState}
           />
-        ) : null}
-      </div>
+        </Suspense>
+      ) : null}
 
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Seed and hierarchy rules</h2>
-        {workgraphTypeOptionState.status === `loading` ? <p className="p-text--default">Loading workgraph options...</p> : null}
-        {workgraphTypeOptionState.status === `error` ? (
-          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load workgraph options">
-            {workgraphTypeOptionState.message}
-          </Notification>
-        ) : null}
-        {!editingWorkgraphId ? <p className="p-text--default">Select an assigned workgraph and click "Edit seed rules" to configure ingestion.</p> : null}
-        {editingWorkgraphId ? (
-          <form onSubmit={updateFormik.handleSubmit}>
-            <label htmlFor="workgraph-seed-items-input">Seed items</label>
-            <textarea
-              id="workgraph-seed-items-input"
-              name="seedItemsInput"
-              onChange={updateFormik.handleChange}
-              placeholder="PROJ-123\nPROJ-456\nPROJ-789"
-              rows={5}
-              value={updateFormik.values.seedItemsInput}
-            />
-            <p className="p-text--small">Use one seed item id per line. Athena will fetch all descendants for each seed id.</p>
-            <Select
-              id="workgraph-include-subtasks"
-              label="Include subtasks"
-              name="includeSubtasks"
-              onChange={updateFormik.handleChange}
-              options={[
-                { value: `true`, label: `Yes` },
-                { value: `false`, label: `No` },
-              ]}
-              value={updateFormik.values.includeSubtasks}
-            />
-            <label htmlFor="workgraph-status-filter">Status filter CSV (optional)</label>
-            <input id="workgraph-status-filter" name="statusesCsv" onChange={updateFormik.handleChange} placeholder="To Do, In Progress, Done" type="text" value={updateFormik.values.statusesCsv} />
-            <div className="u-align--right">
-              <Button appearance="base" onClick={() => setEditingWorkgraphId(null)} type="button">
-                Cancel
-              </Button>
-              <Button appearance="positive" disabled={updateFormik.isSubmitting} type="submit">
-                {updateFormik.isSubmitting ? `Saving...` : `Save seed rules`}
-              </Button>
+      {activeSubtab !== `definitions` && selectedWorkgraphView ? (
+        <>
+          <nav aria-label="Workgraph configuration tabs" className="p-tabs">
+            <div role="tablist">
+              <ul className="p-tabs__list">
+                <li className="p-tabs__item" role="presentation">
+                  <button
+                    aria-selected={activeConfigTab === `jql`}
+                    className={`p-tabs__link${activeConfigTab === `jql` ? ` is-active` : ``}`}
+                    onClick={() => openWorkgraphConfigTab(selectedWorkgraphView.workgraph, `jql`)}
+                    role="tab"
+                    type="button"
+                  >
+                    JQL
+                  </button>
+                </li>
+                <li className="p-tabs__item" role="presentation">
+                  <button
+                    aria-selected={activeConfigTab === `labels`}
+                    className={`p-tabs__link${activeConfigTab === `labels` ? ` is-active` : ``}`}
+                    onClick={() => openWorkgraphConfigTab(selectedWorkgraphView.workgraph, `labels`)}
+                    role="tab"
+                    type="button"
+                  >
+                    Labels
+                  </button>
+                </li>
+                <li className="p-tabs__item" role="presentation">
+                  <button
+                    aria-selected={activeConfigTab === `item-type-playbooks`}
+                    className={`p-tabs__link${activeConfigTab === `item-type-playbooks` ? ` is-active` : ``}`}
+                    onClick={() => openWorkgraphConfigTab(selectedWorkgraphView.workgraph, `item-type-playbooks`)}
+                    role="tab"
+                    type="button"
+                  >
+                    Item Type Playbooks
+                  </button>
+                </li>
+                <li className="p-tabs__item" role="presentation">
+                  <button
+                    aria-selected={activeConfigTab === `webhook-definitions`}
+                    className={`p-tabs__link${activeConfigTab === `webhook-definitions` ? ` is-active` : ``}`}
+                    onClick={() => openWorkgraphConfigTab(selectedWorkgraphView.workgraph, `webhook-definitions`)}
+                    role="tab"
+                    type="button"
+                  >
+                    Webhook Definitions
+                  </button>
+                </li>
+                <li className="p-tabs__item" role="presentation">
+                  <button
+                    aria-selected={activeConfigTab === `synced-items`}
+                    className={`p-tabs__link${activeConfigTab === `synced-items` ? ` is-active` : ``}`}
+                    onClick={() => openWorkgraphConfigTab(selectedWorkgraphView.workgraph, `synced-items`)}
+                    role="tab"
+                    type="button"
+                  >
+                    Synced Items
+                  </button>
+                </li>
+              </ul>
             </div>
-          </form>
-        ) : null}
-      </div>
+          </nav>
+
+          {activeConfigTab === `jql` ? (
+            <Suspense fallback={<p className="p-text--default">Loading JQL...</p>}>
+              <LazyLoopWorkgraphConfigJql formik={updateFormik} />
+            </Suspense>
+          ) : null}
+
+          {activeConfigTab === `labels` ? (
+            <Suspense fallback={<p className="p-text--default">Loading labels...</p>}>
+              <LazyLoopWorkgraphConfigLabels formik={updateFormik} />
+            </Suspense>
+          ) : null}
+
+          {activeConfigTab === `item-type-playbooks` ? (
+            <Suspense fallback={<p className="p-text--default">Loading item type playbooks...</p>}>
+              <LazyLoopWorkgraphConfigTypePlaybooks formik={updateFormik} issueTypeState={issueTypeState} />
+            </Suspense>
+          ) : null}
+
+          {activeConfigTab === `webhook-definitions` ? (
+            <Suspense fallback={<p className="p-text--default">Loading webhook definitions...</p>}>
+              <LazyLoopWorkgraphConfigWebhookDefinitions loopId={loopId} onFeedback={onFeedback} workgraphId={selectedWorkgraphView.workgraph} />
+            </Suspense>
+          ) : null}
+
+          {activeConfigTab === `synced-items` ? (
+            <Suspense fallback={<p className="p-text--default">Loading synced items...</p>}>
+              <LazyLoopWorkgraphDetails itemListState={workgraphItemListState} onSyncWorkItems={handleSyncWorkItems} syncingWorkgraphId={syncingWorkgraphId} workgraph={selectedWorkgraphView} />
+            </Suspense>
+          ) : null}
+        </>
+      ) : null}
+
+      {activeSubtab !== `definitions` && !selectedWorkgraphView ? (
+        <Notification severity={NotificationSeverity.CAUTION} title="Workgraph view not found">
+          The selected workgraph tab no longer exists. Switch back to Definitions.
+        </Notification>
+      ) : null}
     </>
   );
 }

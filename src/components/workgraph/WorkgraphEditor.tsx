@@ -24,6 +24,7 @@ type WorkgraphFormValues = {
   name: string;
   type: WorkgraphTypeOption[`id`];
   baseUrl: string;
+  browseBaseUrl: string;
   projectKey: string;
   email: string;
   apiKey: string;
@@ -54,6 +55,7 @@ export function WorkgraphEditor({ workgraph, typeOptions, onSuccess, onDelete, i
       name: values.name,
       type: values.type,
       baseUrl: values.baseUrl,
+      browseBaseUrl: values.browseBaseUrl,
       projectKey: values.projectKey,
       email: values.email,
       apiKey: isEdit ? values.apiKey || undefined : values.apiKey,
@@ -69,6 +71,7 @@ export function WorkgraphEditor({ workgraph, typeOptions, onSuccess, onDelete, i
       name: values.name,
       type: values.type,
       baseUrl: values.baseUrl,
+      browseBaseUrl: values.browseBaseUrl,
       projectKey: values.projectKey,
       email: values.email,
       apiKey: values.apiKey,
@@ -80,6 +83,7 @@ export function WorkgraphEditor({ workgraph, typeOptions, onSuccess, onDelete, i
       name: values.name,
       type: values.type,
       baseUrl: values.baseUrl,
+      browseBaseUrl: values.browseBaseUrl,
       projectKey: values.projectKey,
       email: values.email,
       apiKey: values.apiKey || undefined,
@@ -92,6 +96,7 @@ export function WorkgraphEditor({ workgraph, typeOptions, onSuccess, onDelete, i
       name: workgraph?.name ?? ``,
       type: workgraph?.type ?? `jira`,
       baseUrl: workgraph?.baseUrl ?? `https://your-domain.atlassian.net`,
+      browseBaseUrl: workgraph?.browseBaseUrl ?? workgraph?.baseUrl ?? `https://your-domain.atlassian.net`,
       projectKey: workgraph?.projectKey ?? ``,
       email: workgraph?.email ?? ``,
       apiKey: ``,
@@ -180,6 +185,10 @@ export function WorkgraphEditor({ workgraph, typeOptions, onSuccess, onDelete, i
       <label htmlFor="workgraph-editor-base-url">Base URL</label>
       <input id="workgraph-editor-base-url" required type="url" {...formik.getFieldProps(`baseUrl`)} />
       {formik.touched.baseUrl && formik.errors.baseUrl ? <p className="p-form-validation is-error">{formik.errors.baseUrl}</p> : null}
+      <label htmlFor="workgraph-editor-browse-base-url">Browse base URL</label>
+      <input id="workgraph-editor-browse-base-url" required type="url" {...formik.getFieldProps(`browseBaseUrl`)} />
+      <p className="p-text--small">Used to open ticket links in Jira UI, for example https://your-domain.atlassian.net.</p>
+      {formik.touched.browseBaseUrl && formik.errors.browseBaseUrl ? <p className="p-form-validation is-error">{formik.errors.browseBaseUrl}</p> : null}
       <label htmlFor="workgraph-editor-project-key">Project key (optional)</label>
       <input id="workgraph-editor-project-key" type="text" {...formik.getFieldProps(`projectKey`)} />
       <label htmlFor="workgraph-editor-email">Jira email</label>

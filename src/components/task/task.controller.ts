@@ -1,13 +1,14 @@
 import { evaluateLoopReadiness } from "@components/loop/loop.readiness.js";
-import { queryLoopForUser, queryLoopReadinessCounts } from "@components/loop/loop.service.js";
+import { queryLoopById, queryLoopForUser, queryLoopReadinessCounts } from "@components/loop/loop.service.js";
 import { resolveLoopSelection, resolveLoopSelectionByAssignment } from "@components/loop/loop-selection.service.js";
-import { fetchOpenRouterChatCompletion, fetchOpenRouterModels, OpenRouterRequestError, parseOpenRouterFirstChoiceJsonObject, readOpenRouterAssistantText } from "@components/openrouter/openrouter.service.js";
+import { fetchOpenRouterChatCompletion, fetchOpenRouterModels, OpenRouterRequestError, parseOpenRouterFirstChoiceJsonObject, readOpenRouterAssistantText, readOpenRouterUsageCostUsd } from "@components/openrouter/openrouter.service.js";
 import type { Persona } from "@components/persona/persona.schema.js";
 import { queryLoopPersonaList } from "@components/persona/persona.service.js";
 import type { ProviderModel } from "@components/provider/provider.schema.js";
 import { buildProcessScopedOwner } from "@components/utilities/process-identity.js";
 import { v7 as uuidv7 } from "uuid";
 import { TaskAccessError, TaskClaimLostError, TaskConflictError, TaskValidationError } from "./task.errors.js";
+import { executionLaneForTargetType, requiredExecutionLaneByTaskKind, resolveRequiredExecutionLaneForTaskKind, type ExecutionLane } from "./task.execution-lane.js";
 import { executeTaskTarget, type TaskExecutionResult } from "./task.execution.js";
 import { buildRoutingConversationContext, buildTaskOpenRouterSessionId } from "./task.history.js";
 import type { CreateTaskResponse, RouteDecision, RoutingLlmRouteDecision, RoutingProviderConnection, Task, TaskPayload, TaskRoutingMeta, TimelineEntry, TimelineEntryType, ValidatedCreateTaskRequest } from "./task.schema.js";
@@ -26,6 +27,18 @@ import {
 
 const queueClaimOwner = buildProcessScopedOwner(`athena-worker`);
 const defaultAutonomyMaxIterations = 5;
+
+const toFixedUsd = (value: number): string => value.toFixed(6);
+
+const addUsdCost = (current: number, delta: number): number => {
+  const next = current + delta;
+  return Number.isFinite(next) && next >= 0 ? next : current;
+};
+
+const readLoopIterationCostLimitUsd = async (loopId: string): Promise<number | null> => {
+  const loop = await queryLoopById(loopId);
+  return loop?.iterationCostLimitUsd ?? null;
+};
 
 const normalizeString = (value: unknown): string | undefined => {
   if (typeof value !== `string`) {
@@ -88,6 +101,7 @@ type RoutingChoiceAttempt<T> = {
 
 type RoutingDecisionChoiceAttempt = RoutingChoiceAttempt<RoutingLlmRouteDecision> & {
   conversationMode: string;
+  llmCostUsd: number;
 };
 
 type RouteDecisionAttempt = {
@@ -95,6 +109,7 @@ type RouteDecisionAttempt = {
   llmTimelineEntries: TimelineEntry[];
   conversationMode: string | null;
   error: Error | null;
+  llmCostUsd: number;
 };
 
 const getActiveRoutingPersona = (personas: Persona[]): Persona => {
@@ -169,7 +184,8 @@ const executeRoutingLlmCall = async (
   operation: string,
   systemPrompt: string,
   userPrompt: string,
-): Promise<{ parsed: Record<string, unknown> | null; auditEntry: TimelineEntry; error: Error | null }> => {
+  iterationCostLimitUsd: number | null,
+): Promise<{ parsed: Record<string, unknown> | null; auditEntry: TimelineEntry; error: Error | null; callCostUsd: number }> => {
   const messages = buildRoutingLlmMessages(systemPrompt, userPrompt);
 
   try {
@@ -187,6 +203,27 @@ const executeRoutingLlmCall = async (
       },
     );
     const responseText = readOpenRouterAssistantText(payload.choices?.[0]?.message).trim();
+    const callCostUsd = readOpenRouterUsageCostUsd(payload) ?? 0;
+
+    if (iterationCostLimitUsd !== null && callCostUsd > iterationCostLimitUsd) {
+      return {
+        parsed: null,
+        auditEntry: makeLlmCallTimelineEntry(routingPersona.displayName, {
+          operation,
+          status: `cost-limit-exceeded`,
+          providerType: `openrouter`,
+          model: connection.routingModel,
+          messages,
+          responseText,
+          responsePayload: payload,
+          usageCostUsd: callCostUsd,
+          iterationCostLimitUsd,
+          errorMessage: `Routing iteration cost limit exceeded after this LLM call.`,
+        }),
+        error: new TaskConflictError(`Routing iteration cost exceeded loop limit. Actual: $${toFixedUsd(callCostUsd)} Limit: $${toFixedUsd(iterationCostLimitUsd)}.`),
+        callCostUsd,
+      };
+    }
 
     try {
       const parsed = parseOpenRouterFirstChoiceJsonObject(payload, `Routing persona response`);
@@ -199,11 +236,14 @@ const executeRoutingLlmCall = async (
           providerType: `openrouter`,
           model: connection.routingModel,
           messages,
+          usageCostUsd: callCostUsd,
+          iterationCostLimitUsd,
           responseText,
           responsePayload: payload,
           parsedResponse: parsed,
         }),
         error: null,
+        callCostUsd,
       };
     } catch (error) {
       return {
@@ -214,11 +254,14 @@ const executeRoutingLlmCall = async (
           providerType: `openrouter`,
           model: connection.routingModel,
           messages,
+          usageCostUsd: callCostUsd,
+          iterationCostLimitUsd,
           responseText,
           responsePayload: payload,
           errorMessage: error instanceof Error ? error.message : String(error),
         }),
         error: error instanceof Error ? error : new Error(String(error)),
+        callCostUsd,
       };
     }
   } catch (error) {
@@ -230,11 +273,14 @@ const executeRoutingLlmCall = async (
         providerType: `openrouter`,
         model: connection.routingModel,
         messages,
+        usageCostUsd: 0,
+        iterationCostLimitUsd,
         errorMessage: error instanceof Error ? error.message : String(error),
         errorStatus: error instanceof OpenRouterRequestError ? error.status : undefined,
         errorPayload: error instanceof OpenRouterRequestError ? error.payload : undefined,
       }),
       error: error instanceof Error ? error : new Error(String(error)),
+      callCostUsd: 0,
     };
   }
 };
@@ -291,7 +337,13 @@ const resolveRoutingProviderConnection = async (loopId: string): Promise<Routing
   };
 };
 
-const resolveRouteDecisionByLlm = async (connection: RoutingProviderConnection, routingPersona: Persona, personas: Persona[], task: Task): Promise<RoutingDecisionChoiceAttempt> => {
+const resolveRouteDecisionByLlm = async (
+  connection: RoutingProviderConnection,
+  routingPersona: Persona,
+  personas: Persona[],
+  task: Task,
+  iterationCostLimitUsd: number | null,
+): Promise<RoutingDecisionChoiceAttempt> => {
   const personasForPrompt = personas.map((persona) => ({
     id: persona.id,
     displayName: persona.displayName,
@@ -311,17 +363,20 @@ const resolveRouteDecisionByLlm = async (connection: RoutingProviderConnection, 
     `Assigned personas JSON: ${JSON.stringify(personasForPrompt)}`,
     `Available models JSON: ${JSON.stringify(buildRoutingModelPromptCatalog(availableModels))}`,
     `Available execution pool counts JSON: ${JSON.stringify({ provider: counts.activeProviderCount, runner: counts.activeRunnerCount })}`,
+    `Task kind execution lane requirements JSON: ${JSON.stringify(requiredExecutionLaneByTaskKind)}`,
     `Current task description: ${task.description ?? `none`}`,
+    `Task kind: ${task.kind}`,
     `Current task context: ${task.context}`,
     `Conversation mode: ${routingContext.mode}`,
     `Conversation summary: ${routingContext.summary}`,
     `Conversation transcript before latest user message:\n${routingContext.transcript}`,
     `Latest user message: ${routingContext.latestUserMessage}`,
     `Choose runner when the work should be performed by an external runner. Choose provider when it should be handled directly through provider autonomy.`,
+    `You must choose targetType that matches the required lane for the task kind.`,
     `Choose a model from available models when provided.`,
     `Respond with strict JSON: {"selectedPersona":"<persona-id>","selectedModel":"<model-id>","targetType":"<provider|runner>","routeReasonText":"<short reason>"}`,
   ].join(`\n`);
-  const result = await executeRoutingLlmCall(connection, routingPersona, task.id, `routing-decision`, systemPrompt, userPrompt);
+  const result = await executeRoutingLlmCall(connection, routingPersona, task.id, `routing-decision`, systemPrompt, userPrompt, iterationCostLimitUsd);
 
   if (!result.parsed) {
     return {
@@ -329,6 +384,7 @@ const resolveRouteDecisionByLlm = async (connection: RoutingProviderConnection, 
       auditEntry: result.auditEntry,
       conversationMode: routingContext.mode,
       error: result.error,
+      llmCostUsd: result.callCostUsd,
     };
   }
 
@@ -344,6 +400,7 @@ const resolveRouteDecisionByLlm = async (connection: RoutingProviderConnection, 
       auditEntry: withLlmAuditValidationFailure(result.auditEntry, `Routing persona response is missing selectedPersona.`),
       conversationMode: routingContext.mode,
       error: new TaskValidationError(`Routing persona response is missing selectedPersona.`),
+      llmCostUsd: result.callCostUsd,
     };
   }
 
@@ -353,24 +410,27 @@ const resolveRouteDecisionByLlm = async (connection: RoutingProviderConnection, 
       auditEntry: withLlmAuditValidationFailure(result.auditEntry, `Routing persona selected an unknown persona.`),
       conversationMode: routingContext.mode,
       error: new TaskValidationError(`Routing persona selected an unknown persona.`),
+      llmCostUsd: result.callCostUsd,
     };
   }
 
-  if (!selectedModel) {
+  if (targetType === `provider` && !selectedModel) {
     return {
       choice: null,
       auditEntry: withLlmAuditValidationFailure(result.auditEntry, `Routing persona response is missing selectedModel.`),
       conversationMode: routingContext.mode,
       error: new TaskValidationError(`Routing persona response is missing selectedModel.`),
+      llmCostUsd: result.callCostUsd,
     };
   }
 
-  if (availableModelIds.length > 0 && !availableModelIds.includes(selectedModel)) {
+  if (targetType === `provider` && selectedModel && availableModelIds.length > 0 && !availableModelIds.includes(selectedModel)) {
     return {
       choice: null,
       auditEntry: withLlmAuditValidationFailure(result.auditEntry, `Routing persona selected a model that is not in enabledModels.`),
       conversationMode: routingContext.mode,
       error: new TaskValidationError(`Routing persona selected a model that is not in enabledModels.`),
+      llmCostUsd: result.callCostUsd,
     };
   }
 
@@ -380,23 +440,29 @@ const resolveRouteDecisionByLlm = async (connection: RoutingProviderConnection, 
       auditEntry: withLlmAuditValidationFailure(result.auditEntry, `Routing persona response is missing targetType.`),
       conversationMode: routingContext.mode,
       error: new TaskValidationError(`Routing persona response is missing targetType.`),
+      llmCostUsd: result.callCostUsd,
     };
   }
 
   return {
     choice: {
       selectedPersona,
-      selectedModel,
+      selectedModel: targetType === `provider` ? selectedModel : undefined,
       targetType,
-      routeReasonText: routeReasonText ?? `${routingPersona.displayName} selected persona ${selectedPersona}, model ${selectedModel}, and execution target ${targetType}.`,
+      routeReasonText:
+        routeReasonText ??
+        (targetType === `provider`
+          ? `${routingPersona.displayName} selected persona ${selectedPersona}, model ${selectedModel}, and execution target ${targetType}.`
+          : `${routingPersona.displayName} selected persona ${selectedPersona} and execution target ${targetType}.`),
     },
     auditEntry: result.auditEntry,
     conversationMode: routingContext.mode,
     error: null,
+    llmCostUsd: result.callCostUsd,
   };
 };
 
-const resolveRouterDecisionForTask = async (task: Task, personas: Persona[], routingPersona: Persona): Promise<RouteDecisionAttempt> => {
+const resolveRouterDecisionForTask = async (task: Task, personas: Persona[], routingPersona: Persona, iterationCostLimitUsd: number | null): Promise<RouteDecisionAttempt> => {
   const llmTimelineEntries: TimelineEntry[] = [];
 
   try {
@@ -409,10 +475,11 @@ const resolveRouterDecisionForTask = async (task: Task, personas: Persona[], rou
         llmTimelineEntries,
         conversationMode: null,
         error: new TaskValidationError(`This loop has no active personas available for routing.`),
+        llmCostUsd: 0,
       };
     }
 
-    const llmRouteDecision = await resolveRouteDecisionByLlm(routingConnection, routingPersona, candidates, task);
+    const llmRouteDecision = await resolveRouteDecisionByLlm(routingConnection, routingPersona, candidates, task, iterationCostLimitUsd);
     llmTimelineEntries.push(llmRouteDecision.auditEntry);
 
     if (!llmRouteDecision.choice) {
@@ -421,6 +488,7 @@ const resolveRouterDecisionForTask = async (task: Task, personas: Persona[], rou
         llmTimelineEntries,
         conversationMode: llmRouteDecision.conversationMode,
         error: llmRouteDecision.error,
+        llmCostUsd: llmRouteDecision.llmCostUsd,
       };
     }
 
@@ -437,6 +505,7 @@ const resolveRouterDecisionForTask = async (task: Task, personas: Persona[], rou
       llmTimelineEntries,
       conversationMode: llmRouteDecision.conversationMode,
       error: null,
+      llmCostUsd: llmRouteDecision.llmCostUsd,
     };
   } catch (error) {
     return {
@@ -444,6 +513,7 @@ const resolveRouterDecisionForTask = async (task: Task, personas: Persona[], rou
       llmTimelineEntries,
       conversationMode: null,
       error: error instanceof Error ? error : new Error(String(error)),
+      llmCostUsd: 0,
     };
   }
 };
@@ -646,12 +716,34 @@ const readRoutingFailureMessage = (error: unknown): string => {
   return String(error);
 };
 
+const resolveExpectedExecutionLane = (task: Task, targetType: `provider` | `runner`): ExecutionLane => {
+  return resolveRequiredExecutionLaneForTaskKind(task.kind);
+};
+
+const validateExecutionLane = (task: Task, targetType: `provider` | `runner`): { valid: true; selectedLane: ExecutionLane; expectedLane: ExecutionLane } | { valid: false; selectedLane: ExecutionLane; expectedLane: ExecutionLane; reason: string } => {
+  const selectedLane = executionLaneForTargetType(targetType);
+  const expectedLane = resolveExpectedExecutionLane(task, targetType);
+
+  if (selectedLane === expectedLane) {
+    return { valid: true, selectedLane, expectedLane };
+  }
+
+  return {
+    valid: false,
+    selectedLane,
+    expectedLane,
+    reason: `Task kind ${task.kind} requires ${expectedLane}, but routing selected ${selectedLane}.`,
+  };
+};
+
 const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task> => {
   const loopPersonas = await queryLoopPersonaList(task.loop);
   const activePersonas = loopPersonas.filter((persona) => persona.lifecycleStatus === `active`);
   const routingPersona = getActiveRoutingPersona(activePersonas);
+  const iterationCostLimitUsd = await readLoopIterationCostLimitUsd(task.loop);
+  const routingPayload = task.payload.routing;
 
-  if (!task.selectedPersona || !task.payload.routing?.selectedModel) {
+  if (!task.selectedPersona || !routingPayload) {
     const failPayload = appendTimelineEntries(task.payload, [
       makeTimelineEntry(`task-blocked`, `system`, {
         blocker: `Queued execution task is missing routing metadata.`,
@@ -695,15 +787,68 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
     });
   }
 
-  const selectedModel = task.payload.routing.selectedModel;
+  const selectedModel = routingPayload.selectedModel;
   const stickyTarget = await resolveStickyExecutionTarget(task);
-  const routedTargetType = task.targetType ?? task.payload.routing?.targetType ?? null;
+  const routedTargetType = task.targetType ?? routingPayload.targetType ?? null;
   const resolvedTarget =
     stickyTarget.targetType && stickyTarget.targetId && stickyTarget.secret && stickyTarget.definitionType
       ? stickyTarget
       : routedTargetType
         ? await resolveExecutionTarget(task.loop, routedTargetType)
         : await resolveExecutionTarget(task.loop, `provider`);
+
+  if (resolvedTarget.targetType) {
+    const laneValidation = validateExecutionLane(task, resolvedTarget.targetType);
+
+    if (!laneValidation.valid) {
+      const failPayload = appendTimelineEntries(task.payload, [
+        makeTimelineEntry(`task-blocked`, `system`, {
+          blocker: `Execution lane policy blocked queued execution target.`,
+          details: laneValidation.reason,
+          taskKind: task.kind,
+          selectedLane: laneValidation.selectedLane,
+          expectedLane: laneValidation.expectedLane,
+        }),
+        makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+          reason: `Execution target violates lane policy and requires re-routing.`,
+        }),
+      ]);
+
+      return queryTaskUpdate({
+        id: task.id,
+        phase: `routing`,
+        status: `requires-user-input`,
+        blocker: laneValidation.reason,
+        payload: failPayload,
+        context: laneValidation.reason,
+        expectedClaimToken: claimToken,
+        clearClaim: Boolean(claimToken),
+      });
+    }
+  }
+
+  if (resolvedTarget.targetType === `provider` && !selectedModel) {
+    const failPayload = appendTimelineEntries(task.payload, [
+      makeTimelineEntry(`task-blocked`, `system`, {
+        blocker: `Provider execution requires selectedModel.`,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Provider lane requires model selection. Re-route required.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      blocker: `Provider lane requires selectedModel.`,
+      payload: failPayload,
+      context: `Provider lane requires selectedModel for execution.`,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
   const canExecuteTarget =
     resolvedTarget.targetType === `provider`
       ? Boolean(resolvedTarget.targetId && resolvedTarget.secret && resolvedTarget.definitionType)
@@ -715,6 +860,8 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
           status: `requires-user-input` as const,
           summary: `Provider execution deferred to autonomy loop.`,
           output: `Provider execution deferred to autonomy loop.`,
+          llmCostUsd: 0,
+          llmCallCount: 0,
         }
       : canExecuteTarget && resolvedTarget.targetType === `runner` && resolvedTarget.targetId && resolvedTarget.definitionType && resolvedTarget.secret
         ? await executeTaskTarget(task, selectedPersona, {
@@ -729,20 +876,23 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
             summary: `No eligible execution target is currently available.`,
             output: `No runner/provider assignment with required execution metadata is enabled for this loop and persona routing decision.`,
             blocker: `No eligible execution target`,
+            llmCostUsd: 0,
+            llmCallCount: 0,
           };
 
-  const executeProviderAutonomyLoop = async (): Promise<{ result: TaskExecutionResult; attemptsUsed: number; llmTimelineEntries: TimelineEntry[] }> => {
-    const maxIterations = task.autonomyMaxIterations > 0 ? task.autonomyMaxIterations : defaultAutonomyMaxIterations;
+  const executeProviderAutonomyLoop = async (): Promise<{ result: TaskExecutionResult; attemptsUsed: number; llmTimelineEntries: TimelineEntry[]; llmCostUsd: number; llmCallCount: number }> => {
     let attemptsUsed = task.autonomyIterationCount;
     let workingTask: Task = task;
     let finalResult: TaskExecutionResult = executionResult;
     const llmTimelineEntries: TimelineEntry[] = [];
+    let llmCostUsd = 0;
+    let llmCallCount = 0;
 
-    while (attemptsUsed < maxIterations) {
+    while (true) {
       const nextTask: Task = {
         ...workingTask,
         autonomyIterationCount: attemptsUsed,
-        autonomyMaxIterations: maxIterations,
+        autonomyMaxIterations: task.autonomyMaxIterations,
       };
 
       finalResult = await executeTaskTarget(nextTask, selectedPersona, {
@@ -752,17 +902,22 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
         secret: resolvedTarget.secret as string,
         baseUrl: resolvedTarget.baseUrl,
         model: selectedModel as string,
+      },
+      {
+        iterationCostLimitUsd,
       });
 
       llmTimelineEntries.push(...(finalResult.llmTimelineEntries ?? []));
+      llmCostUsd = addUsdCost(llmCostUsd, finalResult.llmCostUsd);
+      llmCallCount += finalResult.llmCallCount;
       attemptsUsed += 1;
 
       if (finalResult.status === `blocked`) {
-        return { result: finalResult, attemptsUsed, llmTimelineEntries };
+        return { result: finalResult, attemptsUsed, llmTimelineEntries, llmCostUsd, llmCallCount };
       }
 
       if (finalResult.achieved) {
-        return { result: { ...finalResult, status: `completed` }, attemptsUsed, llmTimelineEntries };
+        return { result: { ...finalResult, status: `completed` }, attemptsUsed, llmTimelineEntries, llmCostUsd, llmCallCount };
       }
 
       workingTask = {
@@ -770,16 +925,6 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
         context: finalResult.nextContext?.trim().length ? finalResult.nextContext : `${workingTask.context}\n\nPrevious iteration output:\n${finalResult.output}`,
       };
     }
-
-    return {
-      result: {
-        status: `requires-user-input`,
-        summary: `${selectedPersona.displayName} could not confirm objective completion after ${maxIterations} autonomous iterations.`,
-        output: finalResult.output,
-      },
-      attemptsUsed,
-      llmTimelineEntries,
-    };
   };
 
   const shouldRunProviderAutonomyLoop = canExecuteTarget && resolvedTarget.targetType === `provider` && Boolean(resolvedTarget.targetId && resolvedTarget.definitionType && resolvedTarget.secret);
@@ -790,6 +935,8 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
         result: executionResult,
         attemptsUsed: task.autonomyIterationCount,
         llmTimelineEntries: executionResult.llmTimelineEntries ?? [],
+        llmCostUsd: executionResult.llmCostUsd,
+        llmCallCount: executionResult.llmCallCount,
       };
 
   const effectiveExecutionResult = autonomyLoopResult.result;
@@ -799,6 +946,7 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
     makeTimelineEntry(`system-action-started`, selectedPersona.displayName, {
       targetType: resolvedTarget.targetType,
       targetId: resolvedTarget.targetId,
+      executionLane: resolvedTarget.targetType ? executionLaneForTargetType(resolvedTarget.targetType) : null,
       note: `Execution started by selected assignee.`,
     }),
     ...autonomyLoopResult.llmTimelineEntries,
@@ -806,8 +954,11 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
       outcome: effectiveExecutionResult.status,
       summary: effectiveExecutionResult.summary,
       output: effectiveExecutionResult.output,
+      executionLane: resolvedTarget.targetType ? executionLaneForTargetType(resolvedTarget.targetType) : null,
       autonomyIterationCount,
       autonomyMaxIterations: task.autonomyMaxIterations,
+      llmCostUsdInRun: autonomyLoopResult.llmCostUsd,
+      llmCallCountInRun: autonomyLoopResult.llmCallCount,
     }),
     makeTimelineEntry(`waiting-user-input`, selectedPersona.displayName, {
       reason: effectiveExecutionResult.status === `blocked` ? `Execution encountered a blocker and needs user intervention.` : `Execution requires user response before continuing.`,
@@ -834,6 +985,7 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
     completedAt: effectiveExecutionResult.status === `completed` ? new Date().toISOString() : null,
     autonomyIterationCount,
     autonomyMaxIterations: task.autonomyMaxIterations > 0 ? task.autonomyMaxIterations : defaultAutonomyMaxIterations,
+    llmCostUsdTotal: addUsdCost(task.llmCostUsdTotal, autonomyLoopResult.llmCostUsd),
     expectedClaimToken: claimToken,
     clearClaim: Boolean(claimToken),
   });
@@ -843,8 +995,10 @@ const executeRoutingDecision = async (task: Task, claimToken?: string): Promise<
   const loopPersonas = await queryLoopPersonaList(task.loop);
   const activePersonas = loopPersonas.filter((persona) => persona.lifecycleStatus === `active`);
   const routingPersona = getActiveRoutingPersona(activePersonas);
+  const iterationCostLimitUsd = await readLoopIterationCostLimitUsd(task.loop);
 
-  const routeDecisionAttempt = await resolveRouterDecisionForTask(task, activePersonas, routingPersona);
+  const routeDecisionAttempt = await resolveRouterDecisionForTask(task, activePersonas, routingPersona, iterationCostLimitUsd);
+  const nextLlmCostUsdTotal = addUsdCost(task.llmCostUsdTotal, routeDecisionAttempt.llmCostUsd);
 
   if (!routeDecisionAttempt.routeDecision) {
     const message = readRoutingFailureMessage(routeDecisionAttempt.error);
@@ -866,6 +1020,7 @@ const executeRoutingDecision = async (task: Task, claimToken?: string): Promise<
       blocker: `Routing decision failed: ${message}`,
       payload: failPayload,
       context: `Routing decision failed. ${message}`,
+      llmCostUsdTotal: nextLlmCostUsdTotal,
       expectedClaimToken: claimToken,
       clearClaim: Boolean(claimToken),
     });
@@ -891,6 +1046,7 @@ const executeRoutingDecision = async (task: Task, claimToken?: string): Promise<
       status: `requires-user-input`,
       payload: failPayload,
       context: `Selected persona became inactive.`,
+      llmCostUsdTotal: nextLlmCostUsdTotal,
       expectedClaimToken: claimToken,
       clearClaim: Boolean(claimToken),
     });
@@ -916,6 +1072,36 @@ const executeRoutingDecision = async (task: Task, claimToken?: string): Promise<
       blocker: `No eligible ${routeDecision.targetType} assignment is available for routing.`,
       payload: failPayload,
       context: `Routing chose ${routeDecision.targetType}, but no eligible assignment is currently available.`,
+      llmCostUsdTotal: nextLlmCostUsdTotal,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
+  const laneValidation = validateExecutionLane(task, resolvedTarget.targetType);
+
+  if (!laneValidation.valid) {
+    const failPayload = appendTimelineEntries(task.payload, [
+      ...routeDecisionAttempt.llmTimelineEntries,
+      makeTimelineEntry(`task-blocked`, routingPersona.displayName, {
+        blocker: `Execution lane policy rejected routing decision.`,
+        details: laneValidation.reason,
+        selectedLane: laneValidation.selectedLane,
+        expectedLane: laneValidation.expectedLane,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Routing selected an execution lane that violates policy.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      blocker: laneValidation.reason,
+      payload: failPayload,
+      context: laneValidation.reason,
+      llmCostUsdTotal: nextLlmCostUsdTotal,
       expectedClaimToken: claimToken,
       clearClaim: Boolean(claimToken),
     });
@@ -929,6 +1115,8 @@ const executeRoutingDecision = async (task: Task, claimToken?: string): Promise<
         selectedPersonaDisplayName: selectedPersona.displayName,
         selectedModel: routeDecision.selectedModel,
         targetType: routeDecision.targetType,
+        executionLane: laneValidation.selectedLane,
+        requiredExecutionLane: laneValidation.expectedLane,
         conversationMode: routeDecisionAttempt.conversationMode ?? undefined,
         routeReasonCode: routeDecision.routeReasonCode,
         routeReasonText: routeDecision.routeReasonText,
@@ -942,6 +1130,9 @@ const executeRoutingDecision = async (task: Task, claimToken?: string): Promise<
         selectedModel: routeDecision.selectedModel,
         routeReasonCode: routeDecision.routeReasonCode,
         routeReasonText: routeDecision.routeReasonText,
+        taskKind: task.kind,
+        executionLane: laneValidation.selectedLane,
+        requiredExecutionLane: laneValidation.expectedLane,
         conversationMode: routeDecisionAttempt.conversationMode,
         targetType: resolvedTarget.targetType,
         targetId: resolvedTarget.targetId,
@@ -962,7 +1153,11 @@ const executeRoutingDecision = async (task: Task, claimToken?: string): Promise<
     blocker: null,
     payload: decisionPayload,
     routing: withRoutingMetadata(task.routing, routingPersona.id, routeDecision.routeReasonCode),
-    context: `Routing decision made. Assigned to ${selectedPersona.displayName}, model ${routeDecision.selectedModel}, target ${routeDecision.targetType}.`,
+    context:
+      routeDecision.targetType === `provider`
+        ? `Routing decision made. Assigned to ${selectedPersona.displayName}, model ${routeDecision.selectedModel}, target ${routeDecision.targetType}, lane ${laneValidation.selectedLane}.`
+        : `Routing decision made. Assigned to ${selectedPersona.displayName}, target ${routeDecision.targetType}, lane ${laneValidation.selectedLane}.`,
+    llmCostUsdTotal: nextLlmCostUsdTotal,
     expectedClaimToken: claimToken,
     clearClaim: Boolean(claimToken),
   });
@@ -972,8 +1167,10 @@ const reEvaluateBlockedTask = async (task: Task, claimToken?: string): Promise<T
   const loopPersonas = await queryLoopPersonaList(task.loop);
   const activePersonas = loopPersonas.filter((persona) => persona.lifecycleStatus === `active`);
   const routingPersona = getActiveRoutingPersona(activePersonas);
+  const iterationCostLimitUsd = await readLoopIterationCostLimitUsd(task.loop);
 
-  const routeDecisionAttempt = await resolveRouterDecisionForTask(task, activePersonas, routingPersona);
+  const routeDecisionAttempt = await resolveRouterDecisionForTask(task, activePersonas, routingPersona, iterationCostLimitUsd);
+  const nextLlmCostUsdTotal = addUsdCost(task.llmCostUsdTotal, routeDecisionAttempt.llmCostUsd);
 
   if (!routeDecisionAttempt.routeDecision) {
     const message = readRoutingFailureMessage(routeDecisionAttempt.error);
@@ -995,6 +1192,7 @@ const reEvaluateBlockedTask = async (task: Task, claimToken?: string): Promise<T
       blocker: null,
       payload: failPayload,
       context: `Re-evaluation failed: ${message}`,
+      llmCostUsdTotal: nextLlmCostUsdTotal,
       expectedClaimToken: claimToken,
       clearClaim: Boolean(claimToken),
     });
@@ -1020,6 +1218,7 @@ const reEvaluateBlockedTask = async (task: Task, claimToken?: string): Promise<T
       status: `requires-user-input`,
       payload: failPayload,
       context: `Selected persona became inactive during re-evaluation.`,
+      llmCostUsdTotal: nextLlmCostUsdTotal,
       expectedClaimToken: claimToken,
       clearClaim: Boolean(claimToken),
     });
@@ -1046,6 +1245,37 @@ const reEvaluateBlockedTask = async (task: Task, claimToken?: string): Promise<T
       blocker: null,
       payload: failPayload,
       context: `Routing chose ${routeDecision.targetType}, but no eligible assignment is currently available.`,
+      llmCostUsdTotal: nextLlmCostUsdTotal,
+      expectedClaimToken: claimToken,
+      clearClaim: Boolean(claimToken),
+    });
+  }
+
+  const laneValidation = validateExecutionLane(task, resolvedTarget.targetType);
+
+  if (!laneValidation.valid) {
+    const failPayload = appendTimelineEntries(task.payload, [
+      ...routeDecisionAttempt.llmTimelineEntries,
+      makeTimelineEntry(`routing-decision`, routingPersona.displayName, {
+        result: `execution-lane-policy-rejected`,
+        details: laneValidation.reason,
+        taskKind: task.kind,
+        selectedLane: laneValidation.selectedLane,
+        expectedLane: laneValidation.expectedLane,
+      }),
+      makeTimelineEntry(`waiting-user-input`, routingPersona.displayName, {
+        reason: `Re-routing selected an execution lane that violates policy.`,
+      }),
+    ]);
+
+    return queryTaskUpdate({
+      id: task.id,
+      phase: `routing`,
+      status: `requires-user-input`,
+      blocker: null,
+      payload: failPayload,
+      context: laneValidation.reason,
+      llmCostUsdTotal: nextLlmCostUsdTotal,
       expectedClaimToken: claimToken,
       clearClaim: Boolean(claimToken),
     });
@@ -1059,6 +1289,8 @@ const reEvaluateBlockedTask = async (task: Task, claimToken?: string): Promise<T
         selectedPersonaDisplayName: selectedPersona.displayName,
         selectedModel: routeDecision.selectedModel,
         targetType: routeDecision.targetType,
+        executionLane: laneValidation.selectedLane,
+        requiredExecutionLane: laneValidation.expectedLane,
         conversationMode: routeDecisionAttempt.conversationMode ?? undefined,
         routeReasonCode: routeDecision.routeReasonCode,
         routeReasonText: routeDecision.routeReasonText,
@@ -1074,6 +1306,9 @@ const reEvaluateBlockedTask = async (task: Task, claimToken?: string): Promise<T
         conversationMode: routeDecisionAttempt.conversationMode,
         routeReasonCode: routeDecision.routeReasonCode,
         routeReasonText: routeDecision.routeReasonText,
+        taskKind: task.kind,
+        executionLane: laneValidation.selectedLane,
+        requiredExecutionLane: laneValidation.expectedLane,
         note: `Re-routed from blocked state.`,
       }),
     ],
@@ -1093,6 +1328,7 @@ const reEvaluateBlockedTask = async (task: Task, claimToken?: string): Promise<T
     payload: reEvalPayload,
     routing: withRoutingMetadata(task.routing, routingPersona.id, routeDecision.routeReasonCode),
     context: `Re-routed from blocked state. Assigned to ${selectedPersona.displayName} on ${routeDecision.targetType}.`,
+    llmCostUsdTotal: nextLlmCostUsdTotal,
     expectedClaimToken: claimToken,
     clearClaim: Boolean(claimToken),
   });

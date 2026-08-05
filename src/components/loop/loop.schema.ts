@@ -9,6 +9,7 @@ export const loopSchema = z.object({
   id: uuid(),
   name: requiredString("name is required."),
   description: nullableString,
+  iterationCostLimitUsd: z.number().nonnegative().nullable(),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
 });
@@ -17,9 +18,12 @@ export type Loop = z.infer<typeof loopSchema>;
 
 export const loopInsertSchema = loopSchema.omit({ id: true, createdAt: true, updatedAt: true }).extend({
   description: nullableString,
+  iterationCostLimitUsd: z.number().nonnegative().nullable().optional(),
 });
 
-export const loopUpdateSchema = loopInsertSchema;
+export const loopUpdateSchema = loopInsertSchema.extend({
+  iterationCostLimitUsd: z.number().nonnegative().nullable(),
+});
 
 export const providerSelectionPolicyUpdateSchema = z.object({
   providerSelectionAlgorithm: z.enum(loopSelectionAlgorithms).optional(),
@@ -45,6 +49,7 @@ export const loopReadinessBlockerCodes = [
   `NO_PROVIDER_MODEL_CONFIGURATION`,
   `PROVIDER_MODEL_CONFIGURATION_INCOMPLETE`,
   `NO_ACTIVE_RUNNER`,
+  `NO_ACTIVE_WORKGRAPH`,
 ] as const;
 
 export const loopReadinessBlockerSchema = z.object({
@@ -82,7 +87,7 @@ export type Feedback = {
   message: string;
 };
 
-export const loopTabs = [`dashboard`, `details`, `personas`, `providers`, `runners`, `workgraphs`] as const;
+export const loopTabs = [`dashboard`, `details`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
 export const loopTabSchema = z.enum(loopTabs);
 
 export type Tab = z.infer<typeof loopTabSchema>;
@@ -92,12 +97,15 @@ export type LoopProps = {
   tab: Tab;
   editor?: `create` | `edit` | `clone`;
   personaId?: string;
+  workgraphViewWorkgraphId?: string;
+  workgraphConfigTab?: `jql` | `labels` | `item-type-playbooks` | `webhook-definitions` | `synced-items`;
 };
 
 export type LoopDetailsProps = {
   loopId: string;
   loopName: string;
   loopDescription: string;
+  loopIterationCostLimitUsd: number | null;
   onFeedback: (feedback: Feedback | null) => void;
   onSaved: () => void;
 };
@@ -122,6 +130,13 @@ export type LoopRunnersProps = {
 };
 
 export type LoopWorkgraphsProps = {
+  loopId: string;
+  onFeedback: (feedback: Feedback | null) => void;
+  workgraphViewWorkgraphId?: string;
+  workgraphConfigTab?: `jql` | `labels` | `item-type-playbooks` | `webhook-definitions` | `synced-items`;
+};
+
+export type LoopRepositoriesProps = {
   loopId: string;
   onFeedback: (feedback: Feedback | null) => void;
 };

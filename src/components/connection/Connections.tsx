@@ -1,5 +1,17 @@
-import { Link, useNavigate } from "@tanstack/react-router";
-import { WorkgraphList } from "@components/workgraph/WorkgraphList.js";
+import { useNavigate } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
+
+const LazyRepositoryList = lazy(async () => {
+  const module = await import("@components/repository/RepositoryList.js");
+
+  return { default: module.RepositoryList };
+});
+
+const LazyWorkgraphList = lazy(async () => {
+  const module = await import("@components/workgraph/WorkgraphList.js");
+
+  return { default: module.WorkgraphList };
+});
 
 type ConnectionTab = `workgraphs` | `repositories`;
 
@@ -43,19 +55,16 @@ export function Connections({ tab, create, edit }: ConnectionsProps) {
         </div>
       </nav>
 
-      {tab === `workgraphs` ? <WorkgraphList editor={create ? `create` : edit ? `edit` : undefined} listRoute="/connection" workgraphId={edit} /> : null}
+      {tab === `workgraphs` ? (
+        <Suspense fallback={<p className="p-text--default">Loading workgraphs...</p>}>
+          <LazyWorkgraphList editor={create ? `create` : edit ? `edit` : undefined} listRoute="/connection" workgraphId={edit} />
+        </Suspense>
+      ) : null}
 
       {tab === `repositories` ? (
-        <div className="p-card p-strip is-shallow">
-          <h2 className="p-heading--4">Repositories</h2>
-          <p className="p-text--default">Repository definition and assignment will be implemented in the next phase using the same definition/assignment pattern as workgraphs.</p>
-          <p className="p-text--default">
-            Continue using loop-level Provider and Runner assignments for execution plumbing while repository connections are introduced.
-          </p>
-          <p className="p-text--default">
-            Existing Workgraph definitions remain available under this Connections view, and detail pages are accessible via <Link to="/workgraph/list">Workgraph list</Link>.
-          </p>
-        </div>
+        <Suspense fallback={<p className="p-text--default">Loading repositories...</p>}>
+          <LazyRepositoryList editor={create ? `create` : edit ? `edit` : undefined} repositoryId={edit} />
+        </Suspense>
       ) : null}
     </section>
   );

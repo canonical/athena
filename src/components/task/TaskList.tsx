@@ -88,6 +88,8 @@ const formatDateTime = (value: string): string => {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 };
 
+const formatUsd = (value: number): string => `$${value.toFixed(6)}`;
+
 const timelineCounts = (task: Task): Array<{ type: string; count: number }> => {
   const counts = new Map<string, number>();
 
@@ -187,13 +189,12 @@ export function TaskList({ loopId, onContinueChat }: TaskListProps) {
                 <p className="p-text--small">Created: {formatDateTime(selectedTask.emittedAt)}</p>
                 <p className="p-text--small">Updated: {formatDateTime(selectedTask.updatedAt)}</p>
                 <p className="p-text--small">Completed: {selectedTask.completedAt ? formatDateTime(selectedTask.completedAt) : `n/a`}</p>
-                <p className="p-text--small">
-                  Autonomy iterations: {selectedTask.autonomyIterationCount} / {selectedTask.autonomyMaxIterations}
-                </p>
+                <p className="p-text--small">Autonomy iterations completed: {selectedTask.autonomyIterationCount}</p>
                 <p className="p-text--small">Pinged: {selectedTask.pingedAt ? formatDateTime(selectedTask.pingedAt) : `n/a`}</p>
                 <p className="p-text--small">Claim owner: {selectedTask.claimOwner ?? `n/a`}</p>
                 <p className="p-text--small">Claim token: {selectedTask.claimToken ?? `n/a`}</p>
                 <p className="p-text--small">Claim attempts: {selectedTask.claimAttemptCount}</p>
+                <p className="p-text--small">Total LLM cost: {formatUsd(selectedTask.llmCostUsdTotal ?? 0)}</p>
                 <p className="p-text--small">Timeline entries: {readTimeline(selectedTask).length}</p>
               </article>
             </div>
