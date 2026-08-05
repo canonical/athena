@@ -1,4 +1,5 @@
 import type { TaskKind } from "./task.schema.js";
+import { providerToolNames } from "@components/tool/tool.catalog.js";
 
 export const executionLanes = [`provider-based`, `runner-based`] as const;
 export type ExecutionLane = (typeof executionLanes)[number];
@@ -24,27 +25,16 @@ export const requiresRunnerLaneByTaskKind = (taskKind: TaskKind): boolean => {
   return resolveRequiredExecutionLaneForTaskKind(taskKind) === `runner-based`;
 };
 
-const toolSet = new Set<string>([
-  `task_repositories`,
-  `repo_ls`,
-  `repo_read`,
-  `repo_search`,
-  `repo_find`,
-  `repo_symbol_index`,
-  `jira_read_issue`,
-  `jira_search`,
-  `jira_add_labels`,
-  `jira_remove_labels`,
-  `jira_transition_issue`,
-  `jira_add_comment`,
-  `athena_task_claim`,
-  `athena_task_update_state`,
-  `athena_task_append_timeline`,
-  `athena_task_link_workgraph_item`,
-  `athena_emit_blocker`,
-  `athena_mark_complete`,
-]);
+const toolSet = new Set<string>(providerToolNames);
 
-export const isProviderBasedToolAllowed = (toolName: string): boolean => {
-  return toolSet.has(toolName);
+export const isProviderBasedToolAllowed = (toolName: string, enabledToolNames?: ReadonlyArray<string> | ReadonlySet<string>): boolean => {
+  if (!toolSet.has(toolName)) {
+    return false;
+  }
+
+  if (!enabledToolNames) {
+    return true;
+  }
+
+  return enabledToolNames instanceof Set ? enabledToolNames.has(toolName) : enabledToolNames.includes(toolName);
 };

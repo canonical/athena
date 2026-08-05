@@ -15,7 +15,23 @@ type LoopFormValues = {
   iterationCostLimitUsd: string;
 };
 
-const parseIterationCostLimitUsd = (value: string): number | null => {
+const parseIterationCostLimitUsd = (value: unknown): number | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === `number`) {
+    if (!Number.isFinite(value)) {
+      throw new Error(`Per-iteration cost limit must be a valid number.`);
+    }
+
+    return value;
+  }
+
+  if (typeof value !== `string`) {
+    throw new Error(`Per-iteration cost limit must be a valid number.`);
+  }
+
   const normalized = value.trim();
 
   if (normalized.length === 0) {

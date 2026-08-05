@@ -5,6 +5,14 @@ import type { Loop, LoopInsert, LoopUpdate, ProviderSelectionPolicy, ProviderSel
 const loopColumns = `"id", "name", "description", "iterationCostLimitUsd", "createdAt", "updatedAt"`;
 const loopSelectColumns = `l."id", l."name", l."description", l."iterationCostLimitUsd", l."createdAt", l."updatedAt"`;
 
+const parseStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(new Set(value.filter((entry): entry is string => typeof entry === `string` && entry.trim().length > 0).map((entry) => entry.trim())));
+};
+
 export const queryLoopById = async (loopId: string): Promise<Loop | undefined> => {
   const result = await getPool().query<Loop>(
     `
@@ -182,6 +190,66 @@ export const queryLoopProviderSelectionPolicyUpdate = async (loopId: string, use
   );
 
   return result.rows[0];
+};
+
+export const queryLoopDisabledProviderTools = async (loopId: string, userId: string): Promise<string[] | undefined> => {
+  const result = await getPool().query<{ disabledProviderTools: unknown }>(
+    `
+      SELECT COALESCE(l."disabledProviderTools", '[]'::jsonb) AS "disabledProviderTools"
+      FROM "loop" l
+      JOIN "loopUser" lu ON lu."loop" = l."id"
+      WHERE l."id" = $1
+        AND lu."user" = $2
+      LIMIT 1
+    `,
+    [loopId, userId],
+  );
+
+  const row = result.rows[0];
+
+  if (!row) {
+    return undefined;
+  }
+
+  return parseStringArray(row.disabledProviderTools);
+};
+
+export const queryLoopDisabledProviderToolsById = async (loopId: string): Promise<string[]> => {
+  const result = await getPool().query<{ disabledProviderTools: unknown }>(
+    `
+      SELECT COALESCE("disabledProviderTools", '[]'::jsonb) AS "disabledProviderTools"
+      FROM "loop"
+      WHERE "id" = $1
+      LIMIT 1
+    `,
+    [loopId],
+  );
+
+  return parseStringArray(result.rows[0]?.disabledProviderTools);
+};
+
+export const queryLoopDisabledProviderToolsUpdate = async (loopId: string, userId: string, disabledProviderTools: string[]): Promise<string[] | undefined> => {
+  const result = await getPool().query<{ disabledProviderTools: unknown }>(
+    `
+      UPDATE "loop" AS l
+      SET "disabledProviderTools" = $1::jsonb
+      FROM "loopUser" AS lu
+      WHERE l."id" = $2
+        AND lu."loop" = l."id"
+        AND lu."user" = $3
+        AND lu."isAdmin" = TRUE
+      RETURNING COALESCE(l."disabledProviderTools", '[]'::jsonb) AS "disabledProviderTools"
+    `,
+    [JSON.stringify(disabledProviderTools), loopId, userId],
+  );
+
+  const row = result.rows[0];
+
+  if (!row) {
+    return undefined;
+  }
+
+  return parseStringArray(row.disabledProviderTools);
 };
 
 export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopReadinessCounts> => {

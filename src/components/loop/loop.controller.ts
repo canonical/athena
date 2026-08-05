@@ -1,10 +1,13 @@
 import { LoopForbiddenError, LoopNotFoundError } from "./loop.errors.js";
 import { evaluateLoopReadiness } from "./loop.readiness.js";
-import type { Loop, LoopInsert, LoopReadiness, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
+import type { Loop, LoopInsert, LoopLlmTools, LoopLlmToolsUpdateRequest, LoopReadiness, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
+import { disabledProviderToolNamesFromEnabled, enabledProviderToolNamesFromDisabled, normalizeProviderToolNames, providerToolDefinitions } from "@components/tool/tool.catalog.js";
 import {
   queryLoopAdminMembership,
   queryLoopCreate,
   queryLoopDelete,
+  queryLoopDisabledProviderTools,
+  queryLoopDisabledProviderToolsUpdate,
   queryLoopForUser,
   queryLoopList,
   queryLoopProviderSelectionPolicy,
@@ -80,4 +83,47 @@ export const loopReadinessGet = async (loopId: string, userId: string): Promise<
 
   const counts = await queryLoopReadinessCounts(loopId);
   return evaluateLoopReadiness(loopId, counts);
+};
+
+const buildLoopLlmTools = (loopId: string, disabledProviderTools: string[]): LoopLlmTools => {
+  const enabledNames = new Set(enabledProviderToolNamesFromDisabled(disabledProviderTools));
+
+  return {
+    loop: loopId,
+    tools: providerToolDefinitions.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      enabled: enabledNames.has(tool.name),
+    })),
+  };
+};
+
+export const loopLlmToolsGet = async (loopId: string, userId: string): Promise<LoopLlmTools> => {
+  const disabledProviderTools = await queryLoopDisabledProviderTools(loopId, userId);
+
+  if (!disabledProviderTools) {
+    throw new LoopNotFoundError(`Loop not found.`);
+  }
+
+  return buildLoopLlmTools(loopId, disabledProviderTools);
+};
+
+export const loopLlmToolsUpdate = async (loopId: string, userId: string, input: LoopLlmToolsUpdateRequest): Promise<LoopLlmTools> => {
+  if (!(await queryLoopAdminMembership(loopId, userId))) {
+    if (!(await queryLoopForUser(loopId, userId))) {
+      throw new LoopNotFoundError(`Loop not found.`);
+    }
+
+    throw new LoopForbiddenError(`Only loop admins may update LLM tools.`);
+  }
+
+  const enabledToolNames = normalizeProviderToolNames(input.enabledToolNames);
+  const disabledProviderTools = disabledProviderToolNamesFromEnabled(enabledToolNames);
+  const updatedDisabledProviderTools = await queryLoopDisabledProviderToolsUpdate(loopId, userId, disabledProviderTools);
+
+  if (!updatedDisabledProviderTools) {
+    throw new LoopNotFoundError(`Loop not found.`);
+  }
+
+  return buildLoopLlmTools(loopId, updatedDisabledProviderTools);
 };

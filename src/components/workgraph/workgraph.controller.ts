@@ -1,10 +1,12 @@
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
+import { readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
 import { WorkgraphForbiddenError, WorkgraphNotFoundError, WorkgraphSyncError, WorkgraphValidationError } from "./workgraph.errors.js";
-import { listJiraIssueTypes, syncJiraWorkgraphItems, testJiraWorkgraphConnection } from "./workgraph.jira.service.js";
+import { addJiraIssueLabel, listJiraIssueTypes, syncJiraWorkgraphItems, testJiraWorkgraphConnection } from "./workgraph.jira.service.js";
 import {
   queryLoopWorkgraphAssign,
   queryLoopWorkgraphDelete,
+  queryLoopWorkgraphItemById,
   queryLoopWorkgraphItemList,
   queryLoopWorkgraphList,
   queryLoopWorkgraphMarkSyncFailed,
@@ -23,6 +25,7 @@ import type {
   LoopWorkgraphAdminUpdate,
   LoopWorkgraphAssign,
   LoopWorkgraphItem,
+  LoopWorkgraphStartItemResult,
   LoopWorkgraphSyncResult,
   Workgraph,
   WorkgraphConnectionTest,
@@ -41,6 +44,12 @@ const validateLoopId = (loopId: string): void => {
 const validateWorkgraphId = (workgraphId: string): void => {
   if (!isValidUuid(workgraphId)) {
     throw new WorkgraphValidationError(`workgraphId must be a valid UUID.`);
+  }
+};
+
+const validateItemId = (itemId: string): void => {
+  if (!isValidUuid(itemId)) {
+    throw new WorkgraphValidationError(`itemId must be a valid UUID.`);
   }
 };
 
@@ -297,4 +306,49 @@ export const loopWorkgraphSync = async (loopId: string, workgraphId: string, use
     await queryLoopWorkgraphMarkSyncFailed(loopId, workgraphId, message);
     throw new WorkgraphSyncError(message);
   }
+};
+
+export const loopWorkgraphStartItem = async (loopId: string, workgraphId: string, itemId: string, userId: string): Promise<LoopWorkgraphStartItemResult> => {
+  validateLoopId(loopId);
+  validateWorkgraphId(workgraphId);
+  validateItemId(itemId);
+
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new WorkgraphNotFoundError(`Loop not found.`);
+  }
+
+  const item = await queryLoopWorkgraphItemById(loopId, workgraphId, itemId);
+
+  if (!item) {
+    throw new WorkgraphNotFoundError(`Synced workgraph item not found.`);
+  }
+
+  const connection = await queryLoopWorkgraphSyncConnection(loopId, workgraphId);
+
+  if (!connection) {
+    throw new WorkgraphNotFoundError(`Loop workgraph not found.`);
+  }
+
+  if (!connection.enabled) {
+    throw new WorkgraphValidationError(`Workgraph assignment is disabled.`);
+  }
+
+  enforceJiraOnly(connection.type);
+
+  const workOnLabel = readWorkOnLabelFromAssignmentConfig(connection.assignmentConfig);
+
+  await addJiraIssueLabel({
+    baseUrl: connection.baseUrl,
+    email: connection.email,
+    apiKey: connection.apiKey,
+    issueKey: item.itemKey,
+    label: workOnLabel,
+  });
+
+  return {
+    ok: true,
+    itemKey: item.itemKey,
+    label: workOnLabel,
+    message: `Added label ${workOnLabel} to ${item.itemKey}.`,
+  };
 };

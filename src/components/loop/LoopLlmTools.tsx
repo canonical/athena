@@ -1,0 +1,90 @@
+import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { fetchLoopLlmTools, updateLoopLlmTools } from "@components/loop/loop.client.js";
+import type { LoopLlmToolsProps } from "@components/loop/loop.schema.js";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+
+export function LoopLlmTools({ loopId, onFeedback }: LoopLlmToolsProps) {
+  const queryClient = useQueryClient();
+  const [busyToolName, setBusyToolName] = useState<string | null>(null);
+
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`loopLlmTools`, loopId],
+    queryFn: () => fetchLoopLlmTools(loopId),
+  });
+
+  const handleToggleTool = async (toolName: string) => {
+    if (!data) {
+      return;
+    }
+
+    const currentTool = data.tools.find((tool) => tool.name === toolName);
+
+    if (!currentTool) {
+      return;
+    }
+
+    setBusyToolName(toolName);
+    onFeedback(null);
+
+    const enabledToolNames = data.tools.filter((tool) => tool.enabled).map((tool) => tool.name);
+    const nextEnabledToolNames = currentTool.enabled ? enabledToolNames.filter((name) => name !== toolName) : [...enabledToolNames, toolName];
+
+    try {
+      await updateLoopLlmTools(loopId, { enabledToolNames: nextEnabledToolNames });
+      await queryClient.invalidateQueries({ queryKey: [`loopLlmTools`, loopId] });
+      onFeedback({
+        severity: NotificationSeverity.INFORMATION,
+        title: `LLM tool settings updated`,
+        message: `${toolName} has been ${currentTool.enabled ? `disabled` : `enabled`} for this loop.`,
+      });
+    } catch (updateError) {
+      const message = updateError instanceof Error ? updateError.message : String(updateError);
+      onFeedback({
+        severity: NotificationSeverity.NEGATIVE,
+        title: `Unable to update LLM tool settings`,
+        message,
+      });
+    } finally {
+      setBusyToolName(null);
+    }
+  };
+
+  return (
+    <div className="p-card p-strip is-shallow">
+      <h2 className="p-heading--4">LLM Tools</h2>
+      <p className="p-text--small">Enable or disable provider tools for this loop. Disabled tools are not exposed to provider-based execution.</p>
+
+      {isPending ? <p className="p-text--default">Loading LLM tools...</p> : null}
+
+      {isError ? (
+        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load LLM tools">
+          {error instanceof Error ? error.message : String(error)}
+        </Notification>
+      ) : null}
+
+      {!isPending && !isError && data && data.tools.length === 0 ? <p className="p-text--default">No provider tools are registered.</p> : null}
+
+      {!isPending && !isError && data && data.tools.length > 0 ? (
+        <MainTable
+          headers={[{ content: `Tool` }, { content: `Description` }, { content: `Enabled` }, { content: `Action` }]}
+          rows={data.tools.map((tool) => ({
+            key: tool.name,
+            columns: [
+              { content: tool.name },
+              { content: tool.description },
+              { content: tool.enabled ? `Yes` : `No` },
+              {
+                content: (
+                  <Button appearance={tool.enabled ? `negative` : `positive`} disabled={busyToolName === tool.name} onClick={() => handleToggleTool(tool.name)} type="button">
+                    {busyToolName === tool.name ? `Saving...` : tool.enabled ? `Disable` : `Enable`}
+                  </Button>
+                ),
+              },
+            ],
+          }))}
+        />
+      ) : null}
+    </div>
+  );
+}

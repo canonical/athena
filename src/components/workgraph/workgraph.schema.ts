@@ -52,6 +52,29 @@ export const loopWorkgraphAssignSchema = z.object({
   workgraph: uuid(),
 });
 
+export const workgraphParamsSchema = z.object({
+  workgraph: uuid(`workgraph must be a valid UUID.`),
+});
+
+export const loopParamsSchema = z.object({
+  loop: uuid(`loop must be a valid UUID.`),
+});
+
+export const loopWorkgraphParamsSchema = z.object({
+  loop: uuid(`loop must be a valid UUID.`),
+  workgraph: uuid(`workgraph must be a valid UUID.`),
+});
+
+export const loopWorkgraphItemParamsSchema = z.object({
+  loop: uuid(`loop must be a valid UUID.`),
+  workgraph: uuid(`workgraph must be a valid UUID.`),
+  itemId: uuid(`itemId must be a valid UUID.`),
+});
+
+export const workgraphDeleteBodySchema = z.object({
+  workgraph: uuid(`workgraph must be a valid UUID.`),
+});
+
 export const loopWorkgraphAdminUpdateSchema = z.object({
   enabled: z.boolean().optional(),
   assignmentConfig: z.record(z.string(), z.unknown()).optional(),
@@ -107,6 +130,13 @@ export const loopWorkgraphSyncResultSchema = z.object({
   message: z.string(),
 });
 
+export const loopWorkgraphStartItemResultSchema = z.object({
+  ok: z.literal(true),
+  itemKey: z.string(),
+  label: z.string(),
+  message: z.string(),
+});
+
 export type WorkgraphInsert = z.infer<typeof workgraphInsertSchema>;
 export type WorkgraphUpdate = z.infer<typeof workgraphUpdateSchema>;
 export type WorkgraphConnectionTest = z.infer<typeof workgraphConnectionTestSchema>;
@@ -116,5 +146,6 @@ export type Workgraph = z.infer<typeof workgraphSchema>;
 export type LoopWorkgraph = z.infer<typeof loopWorkgraphSchema>;
 export type LoopWorkgraphItem = z.infer<typeof loopWorkgraphItemSchema>;
 export type LoopWorkgraphSyncResult = z.infer<typeof loopWorkgraphSyncResultSchema>;
+export type LoopWorkgraphStartItemResult = z.infer<typeof loopWorkgraphStartItemResultSchema>;
 export type WorkgraphTypeOption = z.infer<typeof workgraphTypeOptionSchema>;
 export type WorkgraphIssueType = z.infer<typeof workgraphIssueTypeSchema>;

@@ -1,10 +1,11 @@
 import { authenticatedJsonDelete, authenticatedJsonGet, authenticatedJsonPost, authenticatedJsonPut } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
-import type { Loop, LoopInsert, LoopReadiness, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
+import type { Loop, LoopInsert, LoopLlmTools, LoopLlmToolsUpdateRequest, LoopReadiness, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
 
 export const loopApiPaths = {
   list: getApiUrl(`/loop`),
   byId: (loopId: string) => getApiUrl(`/loop/${loopId}`),
+  llmTools: (loopId: string) => getApiUrl(`/loop/${loopId}/llm-tools`),
   providerSelectionPolicy: (loopId: string) => getApiUrl(`/loop/${loopId}/provider-selection-policy`),
   readiness: (loopId: string) => getApiUrl(`/loop/${loopId}/readiness`),
 } as const;
@@ -94,4 +95,24 @@ export const fetchLoopReadiness = async (loopId: string): Promise<LoopReadiness>
   }
 
   return response.json() as Promise<LoopReadiness>;
+};
+
+export const fetchLoopLlmTools = async (loopId: string): Promise<LoopLlmTools> => {
+  const response = await authenticatedJsonGet(loopApiPaths.llmTools(loopId));
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Loop LLM tools request failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<LoopLlmTools>;
+};
+
+export const updateLoopLlmTools = async (loopId: string, payload: LoopLlmToolsUpdateRequest): Promise<LoopLlmTools> => {
+  const response = await authenticatedJsonPut(loopApiPaths.llmTools(loopId), payload);
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Loop LLM tools update failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<LoopLlmTools>;
 };

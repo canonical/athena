@@ -1,4 +1,4 @@
-import { Button, CodeSnippet, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Button, Chip, CodeSnippet, Notification, NotificationSeverity } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import type { LoopWorkgraphItemListState } from "@components/workgraph/workgraph.query.js";
 import type { LoopWorkgraph, LoopWorkgraphItem } from "@components/workgraph/workgraph.schema.js";
@@ -8,11 +8,15 @@ import { useMemo, useState } from "react";
 type LoopWorkgraphDetailsProps = {
   workgraph: LoopWorkgraph;
   syncingWorkgraphId: string | null;
+  startingItemId: string | null;
+  workOnLabel: string;
   onSyncWorkItems: (workgraph: LoopWorkgraph) => Promise<void>;
+  onStartWorkItem: (workgraph: LoopWorkgraph, item: LoopWorkgraphItem) => Promise<void>;
   itemListState: LoopWorkgraphItemListState;
 };
 
 type WorkgraphItemNode = {
+  id: string;
   itemId: string;
   itemKey: string;
   parentKey: string | null;
@@ -34,6 +38,7 @@ const buildItemTree = (state: LoopWorkgraphItemListState): WorkgraphItemNode[] =
 
   for (const item of state.items) {
     byKey.set(item.itemKey, {
+      id: item.id,
       itemId: item.itemId,
       itemKey: item.itemKey,
       parentKey: item.parentKey,
@@ -78,24 +83,95 @@ const buildItemTree = (state: LoopWorkgraphItemListState): WorkgraphItemNode[] =
   return roots.sort((a, b) => a.itemKey.localeCompare(b.itemKey));
 };
 
-const renderNode = (node: WorkgraphItemNode, onSelectItem: (itemKey: string) => void): ReactElement => {
-  const metadata = node.status ? `${node.itemType} - ${node.status}` : node.itemType;
+const extractPayloadLabels = (payload: Record<string, unknown>): string[] => {
+  const fields = payload.fields;
+
+  if (!fields || typeof fields !== `object` || Array.isArray(fields)) {
+    return [];
+  }
+
+  const labels = (fields as Record<string, unknown>).labels;
+
+  if (!Array.isArray(labels)) {
+    return [];
+  }
+
+  return labels.filter((label): label is string => typeof label === `string`).map((label) => label.trim()).filter((label) => label.length > 0);
+};
+
+const hasWorkOnLabel = (node: WorkgraphItemNode, workOnLabel: string): boolean => {
+  const normalizedExpected = workOnLabel.trim().toLowerCase();
+
+  if (normalizedExpected.length === 0) {
+    return false;
+  }
+
+  return extractPayloadLabels(node.payload).some((label) => label.toLowerCase() === normalizedExpected);
+};
+
+const renderNode = (
+  node: WorkgraphItemNode,
+  onSelectItem: (itemKey: string) => void,
+  onStartItem: (id: string) => void,
+  startingItemId: string | null,
+  syncInProgress: boolean,
+  workOnLabel: string,
+): ReactElement => {
+  const title = `${node.itemType}: ${node.itemKey} ${node.title}`;
+  const labels = extractPayloadLabels(node.payload);
+  const alreadyReady = hasWorkOnLabel(node, workOnLabel);
+  const isStarting = startingItemId === node.id;
+  const startDisabled = syncInProgress || isStarting || alreadyReady;
+  const startLabel = alreadyReady ? `Ready` : isStarting ? `Starting...` : `Start Athena`;
+  const statusAppearance = !node.status
+    ? `information`
+    : /done|closed|resolved/i.test(node.status)
+      ? `positive`
+      : /progress|doing|wip/i.test(node.status)
+        ? `caution`
+        : /block|failed|error/i.test(node.status)
+          ? `negative`
+          : `information`;
 
   return (
     <li key={node.itemKey}>
-      <Button appearance="link" onClick={() => onSelectItem(node.itemKey)} type="button">
-        <>
-          <strong>{node.itemKey}</strong> {node.title} <span className="p-text--small">({metadata})</span>
-        </>
-      </Button>
-      {node.children.length > 0 ? <ul>{node.children.map((child) => renderNode(child, onSelectItem))}</ul> : null}
+      <div style={{ alignItems: `center`, display: `flex`, gap: `0.75rem`, justifyContent: `space-between`, width: `100%` }}>
+        <div style={{ alignItems: `center`, display: `flex`, flex: 1, flexWrap: `nowrap`, gap: `0.375rem`, minWidth: 0, overflow: `hidden` }}>
+          <Button appearance="link" onClick={() => onSelectItem(node.itemKey)} style={{ flex: 1, minWidth: 0, overflow: `hidden`, textAlign: `left` }} type="button">
+            <span style={{ display: `inline-block`, maxWidth: `100%`, overflow: `hidden`, textOverflow: `ellipsis`, verticalAlign: `middle`, whiteSpace: `nowrap` }}>{title}</span>
+          </Button>
+          <Chip appearance={statusAppearance} isDense={true} isInline={true} isReadOnly={true} lead="Status" value={node.status ?? `Unknown`} />
+          {labels.map((label) => (
+            <Chip key={`${node.id}-${label}`} isDense={true} isInline={true} isReadOnly={true} value={label} />
+          ))}
+        </div>
+        <div style={{ alignItems: `center`, alignSelf: `center`, display: `flex`, flexShrink: 0 }}>
+          {alreadyReady ? (
+            <span className="p-text--small">
+              <strong>Ready</strong> ({workOnLabel})
+            </span>
+          ) : (
+            <Button appearance={alreadyReady ? `base` : `positive`} disabled={startDisabled} onClick={() => void onStartItem(node.id)} type="button">
+              {startLabel}
+            </Button>
+          )}
+        </div>
+      </div>
+      {node.children.length > 0 ? <ul>{node.children.map((child) => renderNode(child, onSelectItem, onStartItem, startingItemId, syncInProgress, workOnLabel))}</ul> : null}
     </li>
   );
 };
 
-export function LoopWorkgraphDetails({ workgraph, syncingWorkgraphId, onSyncWorkItems, itemListState }: LoopWorkgraphDetailsProps) {
+export function LoopWorkgraphDetails({ workgraph, syncingWorkgraphId, startingItemId, workOnLabel, onSyncWorkItems, onStartWorkItem, itemListState }: LoopWorkgraphDetailsProps) {
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const hierarchyNodes = buildItemTree(itemListState);
+  const byItemId = useMemo(() => {
+    if (itemListState.status !== `success`) {
+      return new Map<string, LoopWorkgraphItem>();
+    }
+
+    return new Map(itemListState.items.map((item) => [item.id, item]));
+  }, [itemListState]);
   const flatItems = useMemo<LoopWorkgraphItem[]>(() => (itemListState.status === `success` ? itemListState.items : []), [itemListState]);
   const selectedItem = useMemo(() => flatItems.find((item) => item.itemKey === selectedItemKey), [flatItems, selectedItemKey]);
   const selectedItemPayloadJson = useMemo(() => {
@@ -105,6 +181,16 @@ export function LoopWorkgraphDetails({ workgraph, syncingWorkgraphId, onSyncWork
 
     return JSON.stringify(selectedItem.payload, null, 2);
   }, [selectedItem]);
+
+  const handleStartItem = async (itemId: string) => {
+    const item = byItemId.get(itemId);
+
+    if (!item) {
+      return;
+    }
+
+    await onStartWorkItem(workgraph, item);
+  };
 
   return (
     <>
@@ -122,7 +208,9 @@ export function LoopWorkgraphDetails({ workgraph, syncingWorkgraphId, onSyncWork
           </Notification>
         ) : null}
         {itemListState.status === `success` && hierarchyNodes.length === 0 ? <p className="p-text--small">No synced items yet.</p> : null}
-        {itemListState.status === `success` && hierarchyNodes.length > 0 ? <ul>{hierarchyNodes.map((node) => renderNode(node, setSelectedItemKey))}</ul> : null}
+        {itemListState.status === `success` && hierarchyNodes.length > 0
+          ? <ul>{hierarchyNodes.map((node) => renderNode(node, setSelectedItemKey, handleStartItem, startingItemId, syncingWorkgraphId === workgraph.workgraph, workOnLabel))}</ul>
+          : null}
       </div>
 
       <EntityDrawer

@@ -108,43 +108,88 @@ type TaskListProps = {
 export function TaskList({ loopId, onContinueChat }: TaskListProps) {
   const { state: tasksState } = useTasks(loopId);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<string>(`all`);
 
-  const loopTasks = useMemo(() => (tasksState.status === `success` ? tasksState.tasks.filter((task) => task.sourceType === `chat-ui`) : []), [tasksState]);
+  const loopTasks = useMemo(() => (tasksState.status === `success` ? tasksState.tasks : []), [tasksState]);
+
+  const sourceTypes = useMemo(() => {
+    return [...new Set(loopTasks.map((task) => task.sourceType))].sort((left, right) => left.localeCompare(right));
+  }, [loopTasks]);
+
+  const filteredTasks = useMemo(() => {
+    if (sourceFilter === `all`) {
+      return loopTasks;
+    }
+
+    return loopTasks.filter((task) => task.sourceType === sourceFilter);
+  }, [loopTasks, sourceFilter]);
 
   useEffect(() => {
-    if (loopTasks.length === 0) {
+    if (sourceFilter === `all`) {
+      return;
+    }
+
+    if (!sourceTypes.includes(sourceFilter)) {
+      setSourceFilter(`all`);
+    }
+  }, [sourceFilter, sourceTypes]);
+
+  useEffect(() => {
+    if (filteredTasks.length === 0) {
       setSelectedTaskId(null);
       return;
     }
 
-    if (!selectedTaskId || !loopTasks.some((task) => task.id === selectedTaskId)) {
-      setSelectedTaskId(loopTasks[0]?.id ?? null);
+    if (!selectedTaskId || !filteredTasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskId(filteredTasks[0]?.id ?? null);
     }
-  }, [loopTasks, selectedTaskId]);
+  }, [filteredTasks, selectedTaskId]);
 
-  const selectedTask = loopTasks.find((task) => task.id === selectedTaskId) ?? null;
+  const selectedTask = filteredTasks.find((task) => task.id === selectedTaskId) ?? null;
   const chatMessages = selectedTask ? toChatMessages(selectedTask) : [];
 
   return (
     <div className="p-card p-strip is-shallow">
-      {tasksState.status === `loading` ? <p className="p-text--default">Loading chat history...</p> : null}
+      {tasksState.status === `loading` ? <p className="p-text--default">Loading tasks...</p> : null}
       {tasksState.status === `error` ? (
-        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load chat">
+        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load tasks">
           {tasksState.message}
         </Notification>
       ) : null}
-      {tasksState.status === `success` && loopTasks.length === 0 ? <p className="p-text--default">No tasks yet. Click "Start Chat" to begin a conversation.</p> : null}
-      {tasksState.status === `success` && loopTasks.length > 0 && selectedTask ? (
+      {tasksState.status === `success` && loopTasks.length === 0 ? <p className="p-text--default">No tasks yet for this loop.</p> : null}
+      {tasksState.status === `success` && loopTasks.length > 0 && (
+        <div className="athena-task-source-filter" role="group" aria-label="Task source filter chips">
+          <button className={`athena-task-source-filter__chip${sourceFilter === `all` ? ` is-selected` : ``}`} onClick={() => setSourceFilter(`all`)} type="button">
+            All ({loopTasks.length})
+          </button>
+          {sourceTypes.map((sourceType) => {
+            const count = loopTasks.filter((task) => task.sourceType === sourceType).length;
+            return (
+              <button
+                className={`athena-task-source-filter__chip${sourceFilter === sourceType ? ` is-selected` : ``}`}
+                key={sourceType}
+                onClick={() => setSourceFilter(sourceType)}
+                type="button"
+              >
+                {sourceType} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {tasksState.status === `success` && loopTasks.length > 0 && filteredTasks.length === 0 ? <p className="p-text--default">No tasks match this source filter.</p> : null}
+      {tasksState.status === `success` && filteredTasks.length > 0 && selectedTask ? (
         <div className="athena-task-inspector">
           <aside className="athena-task-inspector__sidebar">
             <h4 className="p-heading--5">Tasks</h4>
             <ul className="p-list--divided athena-task-list">
-              {loopTasks.map((task, index) => {
+              {filteredTasks.map((task, index) => {
                 const isSelected = task.id === selectedTask.id;
                 return (
                   <li className="athena-task-list__item" key={task.id}>
                     <button className={`athena-task-list__button${isSelected ? ` is-selected` : ``}`} onClick={() => setSelectedTaskId(task.id)} type="button">
-                      <span className="athena-task-list__title">Task {loopTasks.length - index}</span>
+                      <span className="athena-task-list__title">Task {filteredTasks.length - index}</span>
+                      <span className="athena-task-list__source">{task.sourceType}</span>
                       <span className="athena-task-list__meta">
                         {task.phase} / {task.status}
                       </span>
@@ -163,6 +208,7 @@ export function TaskList({ loopId, onContinueChat }: TaskListProps) {
                 <p className="p-text--default athena-task-card__lead">{selectedTask.description}</p>
                 <p className="p-text--small">Phase: {selectedTask.phase}</p>
                 <p className="p-text--small">Status: {selectedTask.status}</p>
+                <p className="p-text--small">Source: {selectedTask.sourceType}</p>
                 <p className="p-text--small">Context: {selectedTask.context}</p>
                 <p className="p-text--small">Requested outcome: {selectedTask.description ?? `n/a`}</p>
                 {selectedTask.status === `requires-user-input` ? (
@@ -201,7 +247,7 @@ export function TaskList({ loopId, onContinueChat }: TaskListProps) {
 
             <div className="athena-chat-history-block">
               <h5 className="p-heading--5">Chat History</h5>
-              {chatMessages.length === 0 ? <p className="p-text--default">No chat turns recorded for this task.</p> : null}
+              {chatMessages.length === 0 ? <p className="p-text--default">No chat turns recorded for this task source.</p> : null}
               {chatMessages.length > 0 ? (
                 <div className="athena-chat-history">
                   {chatMessages.map((message) => {

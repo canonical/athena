@@ -41,6 +41,25 @@ export const providerSelectionPolicySchema = z.object({
 
 export type ProviderSelectionPolicy = z.infer<typeof providerSelectionPolicySchema>;
 
+export const loopLlmToolSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  enabled: z.boolean(),
+});
+
+export const loopLlmToolsSchema = z.object({
+  loop: uuid(),
+  tools: z.array(loopLlmToolSchema),
+});
+
+export const loopLlmToolsUpdateRequestSchema = z.object({
+  enabledToolNames: z.array(z.string().min(1)),
+});
+
+export type LoopLlmTool = z.infer<typeof loopLlmToolSchema>;
+export type LoopLlmTools = z.infer<typeof loopLlmToolsSchema>;
+export type LoopLlmToolsUpdateRequest = z.infer<typeof loopLlmToolsUpdateRequestSchema>;
+
 export const loopReadinessBlockerCodes = [
   `NO_ACTIVE_ROUTING_PERSONA`,
   `MULTIPLE_ACTIVE_ROUTING_PERSONAS`,
@@ -87,7 +106,7 @@ export type Feedback = {
   message: string;
 };
 
-export const loopTabs = [`dashboard`, `details`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
+export const loopTabs = [`dashboard`, `details`, `llm-tools`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
 export const loopTabSchema = z.enum(loopTabs);
 
 export type Tab = z.infer<typeof loopTabSchema>;
@@ -120,6 +139,11 @@ export type LoopPersonasProps = {
 };
 
 export type LoopProvidersProps = {
+  loopId: string;
+  onFeedback: (feedback: Feedback | null) => void;
+};
+
+export type LoopLlmToolsProps = {
   loopId: string;
   onFeedback: (feedback: Feedback | null) => void;
 };

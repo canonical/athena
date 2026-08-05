@@ -80,6 +80,29 @@
   grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
 }
 
+.athena-task-source-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.athena-task-source-filter__chip {
+  background: #ffffff;
+  border: 1px solid #bfc7cf;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  line-height: 1;
+  padding: 0.35rem 0.65rem;
+}
+
+.athena-task-source-filter__chip.is-selected {
+  background: #0b66c3;
+  border-color: #0b66c3;
+  color: #ffffff;
+}
+
 .athena-task-inspector__sidebar {
   border-right: 1px solid #d9d9d9;
   padding-right: 0.75rem;
@@ -113,6 +136,17 @@
 
 .athena-task-list__title {
   font-weight: 600;
+}
+
+.athena-task-list__source {
+  align-self: flex-start;
+  background: #edf4ff;
+  border: 1px solid #b8d5ff;
+  border-radius: 999px;
+  color: #0b4a8b;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.15rem 0.45rem;
 }
 
 .athena-task-list__meta {

@@ -1,10 +1,11 @@
 import { evaluateLoopReadiness } from "@components/loop/loop.readiness.js";
-import { queryLoopById, queryLoopForUser, queryLoopReadinessCounts } from "@components/loop/loop.service.js";
+import { queryLoopById, queryLoopDisabledProviderToolsById, queryLoopForUser, queryLoopReadinessCounts } from "@components/loop/loop.service.js";
 import { resolveLoopSelection, resolveLoopSelectionByAssignment } from "@components/loop/loop-selection.service.js";
 import { fetchOpenRouterChatCompletion, fetchOpenRouterModels, OpenRouterRequestError, parseOpenRouterFirstChoiceJsonObject, readOpenRouterAssistantText, readOpenRouterUsageCostUsd } from "@components/openrouter/openrouter.service.js";
 import type { Persona } from "@components/persona/persona.schema.js";
 import { queryLoopPersonaList } from "@components/persona/persona.service.js";
 import type { ProviderModel } from "@components/provider/provider.schema.js";
+import { enabledProviderToolNamesFromDisabled } from "@components/tool/tool.catalog.js";
 import { buildProcessScopedOwner } from "@components/utilities/process-identity.js";
 import { v7 as uuidv7 } from "uuid";
 import { TaskAccessError, TaskClaimLostError, TaskConflictError, TaskValidationError } from "./task.errors.js";
@@ -38,6 +39,11 @@ const addUsdCost = (current: number, delta: number): number => {
 const readLoopIterationCostLimitUsd = async (loopId: string): Promise<number | null> => {
   const loop = await queryLoopById(loopId);
   return loop?.iterationCostLimitUsd ?? null;
+};
+
+const readLoopEnabledProviderToolNames = async (loopId: string): Promise<string[]> => {
+  const disabledProviderTools = await queryLoopDisabledProviderToolsById(loopId);
+  return enabledProviderToolNamesFromDisabled(disabledProviderTools);
 };
 
 const normalizeString = (value: unknown): string | undefined => {
@@ -741,6 +747,7 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
   const activePersonas = loopPersonas.filter((persona) => persona.lifecycleStatus === `active`);
   const routingPersona = getActiveRoutingPersona(activePersonas);
   const iterationCostLimitUsd = await readLoopIterationCostLimitUsd(task.loop);
+  const enabledProviderToolNames = await readLoopEnabledProviderToolNames(task.loop);
   const routingPayload = task.payload.routing;
 
   if (!task.selectedPersona || !routingPayload) {
@@ -905,6 +912,7 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
       },
       {
         iterationCostLimitUsd,
+        enabledProviderToolNames,
       });
 
       llmTimelineEntries.push(...(finalResult.llmTimelineEntries ?? []));
@@ -913,6 +921,10 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
       attemptsUsed += 1;
 
       if (finalResult.status === `blocked`) {
+        return { result: finalResult, attemptsUsed, llmTimelineEntries, llmCostUsd, llmCallCount };
+      }
+
+      if (finalResult.terminalIntent === `request-chat`) {
         return { result: finalResult, attemptsUsed, llmTimelineEntries, llmCostUsd, llmCallCount };
       }
 
@@ -961,7 +973,13 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
       llmCallCountInRun: autonomyLoopResult.llmCallCount,
     }),
     makeTimelineEntry(`waiting-user-input`, selectedPersona.displayName, {
-      reason: effectiveExecutionResult.status === `blocked` ? `Execution encountered a blocker and needs user intervention.` : `Execution requires user response before continuing.`,
+      reason:
+        effectiveExecutionResult.status === `blocked`
+          ? `Execution encountered a blocker and needs user intervention.`
+          : effectiveExecutionResult.terminalIntent === `request-chat`
+            ? `Execution requested a chat response from the user.`
+            : `Execution requires user response before continuing.`,
+      prompt: effectiveExecutionResult.requestedChatPrompt,
     }),
   ]);
 
@@ -981,6 +999,8 @@ const dispatchRoutedTask = async (task: Task, claimToken?: string): Promise<Task
     context:
       effectiveExecutionResult.status === `blocked`
         ? `${selectedPersona.displayName} execution blocked: ${effectiveExecutionResult.blocker ?? effectiveExecutionResult.summary}`
+        : effectiveExecutionResult.terminalIntent === `request-chat`
+          ? `${selectedPersona.displayName} requested user chat input: ${effectiveExecutionResult.requestedChatPrompt ?? effectiveExecutionResult.output}`
         : `${selectedPersona.displayName} execution output: ${effectiveExecutionResult.output.slice(0, 300)}`,
     completedAt: effectiveExecutionResult.status === `completed` ? new Date().toISOString() : null,
     autonomyIterationCount,

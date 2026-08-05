@@ -9,6 +9,57 @@ const makeJiraBasicAuthHeader = (email: string, apiKey: string): string => {
   return `Basic ${token}`;
 };
 
+type JiraConnection = Awaited<ReturnType<typeof resolveJiraConnectionForLoop>>;
+
+type JiraFetchInput = {
+  path: string;
+  method?: "GET" | "POST" | "PUT" | "DELETE";
+  jsonBody?: unknown;
+  headers?: Record<string, string>;
+};
+
+type JiraFetchRetryOptions = {
+  maxAttempts?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+  allowRetryOnNonIdempotentMethods?: boolean;
+};
+
+const buildJiraApiUrl = (connection: JiraConnection, path: string): string => {
+  return `${connection.baseUrl.replace(/\/+$/u, "")}${path}`;
+};
+
+const fetchJira = async (
+  connection: JiraConnection,
+  input: JiraFetchInput,
+  retryOptions?: JiraFetchRetryOptions,
+): Promise<Response> => {
+  const requestHeaders: Record<string, string> = {
+    Accept: "application/json",
+    Authorization: makeJiraBasicAuthHeader(connection.email, connection.apiKey),
+    ...(input.headers ?? {}),
+  };
+
+  if (typeof input.jsonBody !== "undefined") {
+    requestHeaders["Content-Type"] = requestHeaders["Content-Type"] ?? "application/json";
+  }
+
+  return fetchWithRetry(
+    buildJiraApiUrl(connection, input.path),
+    {
+      method: input.method ?? "GET",
+      headers: requestHeaders,
+      body: typeof input.jsonBody === "undefined" ? undefined : JSON.stringify(input.jsonBody),
+    },
+    {
+      maxAttempts: retryOptions?.maxAttempts ?? 4,
+      baseDelayMs: retryOptions?.baseDelayMs ?? 500,
+      maxDelayMs: retryOptions?.maxDelayMs ?? 8_000,
+      allowRetryOnNonIdempotentMethods: retryOptions?.allowRetryOnNonIdempotentMethods,
+    },
+  );
+};
+
 const parseInteger = (value: unknown, fallback: number): number => {
   if (typeof value === "number" && Number.isFinite(value)) {
     return Math.trunc(value);
@@ -68,6 +119,200 @@ const assertLabelsAllowedForLoop = (labels: string[], assignmentConfig: unknown)
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+};
+
+type JiraRichTextDocument = {
+  type: "doc";
+  version: 1;
+  content: Array<{
+    type: "paragraph";
+    content: Array<{ type: "text"; text: string }>;
+  }>;
+};
+
+const toJiraRichTextDocument = (text: string): JiraRichTextDocument => {
+  const lines = text.split(/\r?\n/u);
+  const paragraphs = lines.length > 0 ? lines : [``];
+
+  return {
+    type: "doc",
+    version: 1,
+    content: paragraphs.map((line) => ({
+      type: "paragraph",
+      content: [{ type: "text", text: line }],
+    })),
+  };
+};
+
+const updateJiraIssueFields = async (input: {
+  connection: JiraConnection;
+  issueRef: string;
+  fields: Record<string, unknown>;
+  operationName: string;
+}): Promise<void> => {
+  const response = await fetchJira(input.connection, {
+    path: `/rest/api/3/issue/${encodeURIComponent(input.issueRef)}`,
+    method: "PUT",
+    jsonBody: { fields: input.fields },
+  }, {
+    maxAttempts: 3,
+    baseDelayMs: 600,
+    maxDelayMs: 8_000,
+    allowRetryOnNonIdempotentMethods: true,
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`${input.operationName} failed (${response.status}): ${detail || response.statusText}`);
+  }
+};
+
+export const executeJiraFieldList = async (context: ProviderToolExecutionContext): Promise<unknown> => {
+  const connection = await resolveJiraConnectionForLoop(context.loopId);
+  const response = await fetchJira(connection, { path: "/rest/api/3/field" });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`jira_field_list failed (${response.status}): ${detail || response.statusText}`);
+  }
+
+  const fields = (await response.json().catch(() => null)) as Array<{
+    id?: unknown;
+    name?: unknown;
+    custom?: unknown;
+    schema?: unknown;
+  }> | null;
+
+  const normalized = (Array.isArray(fields) ? fields : [])
+    .filter((field) => field && typeof field === "object")
+    .map((field) => {
+      const id = typeof field.id === "string" ? field.id.trim() : "";
+      const name = typeof field.name === "string" ? field.name.trim() : "";
+      const custom = field.custom === true;
+      const schema = field.schema && typeof field.schema === "object" ? field.schema as Record<string, unknown> : undefined;
+      const schemaType = typeof schema?.type === "string" ? schema.type : null;
+      const schemaSystem = typeof schema?.system === "string" ? schema.system : null;
+      const schemaCustom = typeof schema?.custom === "string" ? schema.custom : null;
+
+      return {
+        id,
+        name,
+        custom,
+        schemaType,
+        schemaSystem,
+        schemaCustom,
+      };
+    })
+    .filter((field) => field.id.length > 0 && field.name.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    total: normalized.length,
+    fields: normalized,
+  };
+};
+
+export const executeJiraCreateIssue = async (context: ProviderToolExecutionContext, input: Record<string, unknown> | undefined): Promise<unknown> => {
+  const connection = await resolveJiraConnectionForLoop(context.loopId);
+  const summary = typeof input?.summary === "string" ? input.summary.trim() : "";
+  const issueTypeId = typeof input?.issueTypeId === "string" ? input.issueTypeId.trim() : "";
+  const issueType = typeof input?.issueType === "string" ? input.issueType.trim() : "";
+  const explicitProjectKey = typeof input?.projectKey === "string" ? input.projectKey.trim() : "";
+  const projectKey = explicitProjectKey || connection.projectKey?.trim() || "";
+  const description = typeof input?.description === "string" ? input.description.trim() : "";
+  const parentKey = typeof input?.parentKey === "string" ? input.parentKey.trim() : "";
+  const parentId = typeof input?.parentId === "string" ? input.parentId.trim() : "";
+  const labels = Array.isArray(input?.labels)
+    ? input.labels.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0).map((entry) => entry.trim())
+    : [];
+
+  if (!summary || !projectKey || (!issueTypeId && !issueType)) {
+    throw new Error("jira_create_issue requires summary, projectKey (or configured workgraph projectKey), and issueTypeId/issueType. Call jira_field_list first when field mapping is uncertain.");
+  }
+
+  if (labels.length > 0) {
+    assertLabelsAllowedForLoop(labels, connection.assignmentConfig);
+  }
+
+  const fields: Record<string, unknown> = {
+    project: { key: projectKey },
+    issuetype: issueTypeId ? { id: issueTypeId } : { name: issueType },
+    summary,
+  };
+
+  if (description.length > 0) {
+    fields.description = toJiraRichTextDocument(description);
+  }
+
+  if (parentKey.length > 0 || parentId.length > 0) {
+    fields.parent = parentId.length > 0 ? { id: parentId } : { key: parentKey };
+  }
+
+  if (labels.length > 0) {
+    fields.labels = labels;
+  }
+
+  const fieldUpdates = Array.isArray(input?.fieldUpdates)
+    ? input.fieldUpdates
+      .filter((entry): entry is Record<string, unknown> => isRecord(entry))
+      .map((entry) => {
+        const fieldId = typeof entry.fieldId === "string" ? entry.fieldId.trim() : "";
+        return {
+          fieldId,
+          value: entry.value,
+        };
+      })
+      .filter((entry) => entry.fieldId.length > 0 && typeof entry.value !== "undefined")
+    : [];
+
+  for (const update of fieldUpdates) {
+    if (update.fieldId in fields) {
+      continue;
+    }
+
+    fields[update.fieldId] = update.value;
+  }
+
+  const additionalFields = isRecord(input?.fields) ? input.fields : undefined;
+
+  if (additionalFields) {
+    for (const [fieldKey, fieldValue] of Object.entries(additionalFields)) {
+      if (fieldKey in fields) {
+        continue;
+      }
+
+      fields[fieldKey] = fieldValue;
+    }
+  }
+
+  const response = await fetchJira(connection, {
+    path: "/rest/api/3/issue",
+    method: "POST",
+    jsonBody: { fields },
+  }, {
+    maxAttempts: 3,
+    baseDelayMs: 600,
+    maxDelayMs: 8_000,
+    allowRetryOnNonIdempotentMethods: true,
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`jira_create_issue failed (${response.status}): ${detail || response.statusText}`);
+  }
+
+  const payload = (await response.json().catch(() => null)) as { id?: unknown; key?: unknown; self?: unknown } | null;
+
+  return {
+    created: true,
+    issueId: typeof payload?.id === "string" ? payload.id : null,
+    issueKey: typeof payload?.key === "string" ? payload.key : null,
+    self: typeof payload?.self === "string" ? payload.self : null,
+  };
+};
+
 export const executeJiraReadIssue = async (context: ProviderToolExecutionContext, input: Record<string, unknown> | undefined): Promise<unknown> => {
   const issueKey = typeof input?.issueKey === "string" ? input.issueKey.trim() : "";
   const issueId = typeof input?.issueId === "string" ? input.issueId.trim() : "";
@@ -78,16 +323,8 @@ export const executeJiraReadIssue = async (context: ProviderToolExecutionContext
   }
 
   const connection = await resolveJiraConnectionForLoop(context.loopId);
-  const response = await fetchWithRetry(`${connection.baseUrl.replace(/\/+$/u, "")}/rest/api/3/issue/${encodeURIComponent(issueRef)}`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: makeJiraBasicAuthHeader(connection.email, connection.apiKey),
-    },
-  }, {
-    maxAttempts: 4,
-    baseDelayMs: 500,
-    maxDelayMs: 8_000,
+  const response = await fetchJira(connection, {
+    path: `/rest/api/3/issue/${encodeURIComponent(issueRef)}`,
   });
 
   if (!response.ok) {
@@ -128,18 +365,14 @@ export const executeJiraAddLabels = async (context: ProviderToolExecutionContext
 
   const connection = await resolveJiraConnectionForLoop(context.loopId);
   assertLabelsAllowedForLoop(labels, connection.assignmentConfig);
-  const response = await fetchWithRetry(`${connection.baseUrl.replace(/\/+$/u, "")}/rest/api/3/issue/${encodeURIComponent(issueRef)}`, {
+  const response = await fetchJira(connection, {
+    path: `/rest/api/3/issue/${encodeURIComponent(issueRef)}`,
     method: "PUT",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: makeJiraBasicAuthHeader(connection.email, connection.apiKey),
-    },
-    body: JSON.stringify({
+    jsonBody: {
       update: {
         labels: labels.map((label) => ({ add: label })),
       },
-    }),
+    },
   }, {
     maxAttempts: 3,
     baseDelayMs: 600,
@@ -163,18 +396,15 @@ export const executeJiraRemoveLabels = async (context: ProviderToolExecutionCont
   }
 
   const connection = await resolveJiraConnectionForLoop(context.loopId);
-  const response = await fetchWithRetry(`${connection.baseUrl.replace(/\/+$/u, "")}/rest/api/3/issue/${encodeURIComponent(issueRef)}`, {
+  assertLabelsAllowedForLoop(labels, connection.assignmentConfig);
+  const response = await fetchJira(connection, {
+    path: `/rest/api/3/issue/${encodeURIComponent(issueRef)}`,
     method: "PUT",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: makeJiraBasicAuthHeader(connection.email, connection.apiKey),
-    },
-    body: JSON.stringify({
+    jsonBody: {
       update: {
         labels: labels.map((label) => ({ remove: label })),
       },
-    }),
+    },
   }, {
     maxAttempts: 3,
     baseDelayMs: 600,
@@ -189,6 +419,50 @@ export const executeJiraRemoveLabels = async (context: ProviderToolExecutionCont
   return { issue: issueRef, labelsRemoved: labels };
 };
 
+export const executeJiraTransitionList = async (context: ProviderToolExecutionContext, input: Record<string, unknown> | undefined): Promise<unknown> => {
+  const issueRef = typeof input?.issueKey === "string" && input.issueKey.trim().length > 0 ? input.issueKey.trim() : typeof input?.issueId === "string" ? input.issueId.trim() : "";
+
+  if (!issueRef) {
+    throw new Error("issueKey or issueId is required for jira_transition_list.");
+  }
+
+  const connection = await resolveJiraConnectionForLoop(context.loopId);
+  const response = await fetchJira(connection, {
+    path: `/rest/api/3/issue/${encodeURIComponent(issueRef)}/transitions`,
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`jira_transition_list failed (${response.status}): ${detail || response.statusText}`);
+  }
+
+  const payload = (await response.json().catch(() => null)) as { transitions?: unknown[] } | null;
+  const transitions = Array.isArray(payload?.transitions) ? payload.transitions : [];
+
+  const normalized = transitions
+    .filter((transition): transition is Record<string, unknown> => Boolean(transition) && typeof transition === "object")
+    .map((transition) => {
+      const idRaw = transition.id;
+      const labelRaw = transition.name;
+      const toRaw = transition.to;
+      const toStatusRaw = toRaw && typeof toRaw === "object" ? (toRaw as { name?: unknown }).name : null;
+
+      const id = typeof idRaw === "string" ? idRaw.trim() : "";
+      const label = typeof labelRaw === "string" ? labelRaw.trim() : "";
+      const toStatus = typeof toStatusRaw === "string" && toStatusRaw.trim().length > 0 ? toStatusRaw.trim() : null;
+
+      return { id, label, toStatus };
+    })
+    .filter((transition) => transition.id.length > 0 && transition.label.length > 0)
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  return {
+    issue: issueRef,
+    total: normalized.length,
+    transitions: normalized,
+  };
+};
+
 export const executeJiraTransitionIssue = async (context: ProviderToolExecutionContext, input: Record<string, unknown> | undefined): Promise<unknown> => {
   const issueRef = typeof input?.issueKey === "string" && input.issueKey.trim().length > 0 ? input.issueKey.trim() : typeof input?.issueId === "string" ? input.issueId.trim() : "";
   const transitionId = typeof input?.transitionId === "string" ? input.transitionId.trim() : "";
@@ -198,18 +472,14 @@ export const executeJiraTransitionIssue = async (context: ProviderToolExecutionC
   }
 
   const connection = await resolveJiraConnectionForLoop(context.loopId);
-  const response = await fetchWithRetry(`${connection.baseUrl.replace(/\/+$/u, "")}/rest/api/3/issue/${encodeURIComponent(issueRef)}/transitions`, {
+  const response = await fetchJira(connection, {
+    path: `/rest/api/3/issue/${encodeURIComponent(issueRef)}/transitions`,
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: makeJiraBasicAuthHeader(connection.email, connection.apiKey),
-    },
-    body: JSON.stringify({
+    jsonBody: {
       transition: {
         id: transitionId,
       },
-    }),
+    },
   }, {
     maxAttempts: 1,
   });
@@ -222,6 +492,54 @@ export const executeJiraTransitionIssue = async (context: ProviderToolExecutionC
   return { issue: issueRef, transitionId };
 };
 
+export const executeJiraEditField = async (context: ProviderToolExecutionContext, input: Record<string, unknown> | undefined): Promise<unknown> => {
+  const issueRef = typeof input?.issueKey === "string" && input.issueKey.trim().length > 0 ? input.issueKey.trim() : typeof input?.issueId === "string" ? input.issueId.trim() : "";
+  const fieldId = typeof input?.fieldId === "string" ? input.fieldId.trim() : "";
+  const value = typeof input?.value === "string" ? input.value : undefined;
+
+  if (!issueRef || !fieldId || typeof value !== "string") {
+    throw new Error("issueKey/issueId, fieldId, and value are required for jira_edit_field.");
+  }
+
+  const connection = await resolveJiraConnectionForLoop(context.loopId);
+
+  try {
+    await updateJiraIssueFields({
+      connection,
+      issueRef,
+      operationName: "jira_edit_field",
+      fields: {
+        [fieldId]: toJiraRichTextDocument(value),
+      },
+    });
+
+    return {
+      issue: issueRef,
+      fieldId,
+      updated: true,
+      contentFormatUsed: "richText",
+    };
+  } catch (error) {
+    await updateJiraIssueFields({
+      connection,
+      issueRef,
+      operationName: "jira_edit_field",
+      fields: {
+        [fieldId]: value,
+      },
+    }).catch(() => {
+      throw error;
+    });
+
+    return {
+      issue: issueRef,
+      fieldId,
+      updated: true,
+      contentFormatUsed: "plainText",
+    };
+  }
+};
+
 export const executeJiraAddComment = async (context: ProviderToolExecutionContext, input: Record<string, unknown> | undefined): Promise<unknown> => {
   const issueRef = typeof input?.issueKey === "string" && input.issueKey.trim().length > 0 ? input.issueKey.trim() : typeof input?.issueId === "string" ? input.issueId.trim() : "";
   const comment = typeof input?.comment === "string" ? input.comment.trim() : "";
@@ -231,14 +549,10 @@ export const executeJiraAddComment = async (context: ProviderToolExecutionContex
   }
 
   const connection = await resolveJiraConnectionForLoop(context.loopId);
-  const response = await fetchWithRetry(`${connection.baseUrl.replace(/\/+$/u, "")}/rest/api/3/issue/${encodeURIComponent(issueRef)}/comment`, {
+  const response = await fetchJira(connection, {
+    path: `/rest/api/3/issue/${encodeURIComponent(issueRef)}/comment`,
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: makeJiraBasicAuthHeader(connection.email, connection.apiKey),
-    },
-    body: JSON.stringify({
+    jsonBody: {
       body: {
         type: "doc",
         version: 1,
@@ -249,7 +563,7 @@ export const executeJiraAddComment = async (context: ProviderToolExecutionContex
           },
         ],
       },
-    }),
+    },
   }, {
     maxAttempts: 1,
   });

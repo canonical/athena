@@ -58,6 +58,7 @@ const parseLoopDetailSearch = (search: Record<string, unknown>): LoopDetailSearc
   tab:
     search.tab === `dashboard` ||
     search.tab === `details` ||
+    search.tab === `llm-tools` ||
     search.tab === `personas` ||
     search.tab === `providers` ||
     search.tab === `runners` ||

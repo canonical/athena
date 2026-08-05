@@ -339,6 +339,66 @@ export const syncJiraWorkgraphItems = async (input: { baseUrl: string; browseBas
   return Array.from(byKey.values());
 };
 
+export const addJiraIssueLabel = async (input: { baseUrl: string; email: string; apiKey: string; issueKey: string; label: string }): Promise<void> => {
+  const issueKey = input.issueKey.trim();
+  const label = input.label.trim();
+
+  if (issueKey.length === 0) {
+    throw new Error(`Issue key is required.`);
+  }
+
+  if (label.length === 0) {
+    throw new Error(`Label is required.`);
+  }
+
+  const endpoint = `${normalizeBaseUrl(input.baseUrl)}/rest/api/3/issue/${encodeURIComponent(issueKey)}`;
+
+  let response: Response;
+
+  try {
+    response = await fetchWithRetry(
+      endpoint,
+      {
+        method: `PUT`,
+        headers: {
+          Accept: `application/json`,
+          "Content-Type": `application/json`,
+          Authorization: `Basic ${Buffer.from(`${input.email}:${input.apiKey}`, `utf8`).toString(`base64`)}`,
+        },
+        body: JSON.stringify({
+          update: {
+            labels: [{ add: label }],
+          },
+        }),
+      },
+      {
+        maxAttempts: 4,
+        baseDelayMs: 600,
+        maxDelayMs: 8_000,
+        allowRetryOnNonIdempotentMethods: true,
+      },
+    );
+  } catch {
+    throw new Error(`Unable to reach Jira. Verify the base URL and network connectivity.`);
+  }
+
+  if (response.ok) {
+    return;
+  }
+
+  const details = await readJiraErrorMessage(response);
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(details ?? `Jira authentication failed. Verify the API key and permissions.`);
+  }
+
+  if (response.status === 404) {
+    throw new Error(details ?? `Issue ${issueKey} was not found in Jira.`);
+  }
+
+  throw new Error(details ?? `Failed to update Jira labels for ${issueKey} (status ${response.status}).`);
+};
+
 const fetchJiraIssueTypes = async (input: { baseUrl: string; email: string; apiKey: string; projectKey?: string | null }): Promise<unknown> => {
   const normalizedBaseUrl = normalizeBaseUrl(input.baseUrl);
   const normalizedProjectKey = input.projectKey?.trim() || null;

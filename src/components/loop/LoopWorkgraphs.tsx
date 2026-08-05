@@ -1,8 +1,8 @@
 import { Button, Notification, NotificationSeverity } from "@canonical/react-components";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
-import { assignWorkgraphToLoop, removeWorkgraphFromLoop, syncLoopWorkgraphItems, updateLoopWorkgraphByAdmin } from "@components/workgraph/workgraph.client.js";
+import { assignWorkgraphToLoop, removeWorkgraphFromLoop, startLoopWorkgraphItem, syncLoopWorkgraphItems, updateLoopWorkgraphByAdmin } from "@components/workgraph/workgraph.client.js";
 import { useLoopWorkgraphIssueTypes, useLoopWorkgraphItems, useLoopWorkgraphList, useWorkgraphList } from "@components/workgraph/workgraph.query.js";
-import type { LoopWorkgraph } from "@components/workgraph/workgraph.schema.js";
+import type { LoopWorkgraph, LoopWorkgraphItem } from "@components/workgraph/workgraph.schema.js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useFormik } from "formik";
@@ -115,6 +115,7 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
   const { state: assignedWorkgraphState, reload: reloadAssignedWorkgraphs } = useLoopWorkgraphList(loopId);
   const [busyWorkgraphId, setBusyWorkgraphId] = useState<string | null>(null);
   const [syncingWorkgraphId, setSyncingWorkgraphId] = useState<string | null>(null);
+  const [startingItemId, setStartingItemId] = useState<string | null>(null);
   const hydratedWorkgraphIdRef = useRef<string | null>(null);
 
   const availableWorkgraphs = workgraphListState.status === `success` ? workgraphListState.workgraphs : [];
@@ -142,21 +143,6 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
       typeInstructions,
     });
   };
-
-  useEffect(() => {
-    if (!selectedWorkgraphView) {
-      hydratedWorkgraphIdRef.current = null;
-      return;
-    }
-
-    const workgraphChanged = hydratedWorkgraphIdRef.current !== selectedWorkgraphView.workgraph;
-
-    // Preserve in-progress edits; only hydrate on selection change or when form is clean.
-    if (workgraphChanged || !updateFormik.dirty) {
-      applyWorkgraphConfigValues(selectedWorkgraphView);
-      hydratedWorkgraphIdRef.current = selectedWorkgraphView.workgraph;
-    }
-  }, [selectedWorkgraphView, issueTypeState.status, updateFormik.dirty]);
 
   const openDefinitionsSubtab = () => {
     void navigate({
@@ -204,6 +190,32 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
       });
     } finally {
       setSyncingWorkgraphId(null);
+    }
+  };
+
+  const handleStartWorkItem = async (workgraph: LoopWorkgraph, item: LoopWorkgraphItem) => {
+    setStartingItemId(item.id);
+    onFeedback(null);
+
+    try {
+      const result = await startLoopWorkgraphItem(loopId, workgraph.workgraph, item.id);
+      await syncLoopWorkgraphItems(loopId, workgraph.workgraph);
+      reloadAssignedWorkgraphs();
+      reloadWorkgraphItems();
+      onFeedback({
+        severity: NotificationSeverity.INFORMATION,
+        title: `Item marked ready`,
+        message: result.message,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      onFeedback({
+        severity: NotificationSeverity.NEGATIVE,
+        title: `Unable to mark item ready`,
+        message,
+      });
+    } finally {
+      setStartingItemId(null);
     }
   };
 
@@ -312,6 +324,21 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
       }
     },
   });
+
+  useEffect(() => {
+    if (!selectedWorkgraphView) {
+      hydratedWorkgraphIdRef.current = null;
+      return;
+    }
+
+    const workgraphChanged = hydratedWorkgraphIdRef.current !== selectedWorkgraphView.workgraph;
+
+    // Preserve in-progress edits; only hydrate on selection change or when form is clean.
+    if (workgraphChanged || !updateFormik.dirty) {
+      applyWorkgraphConfigValues(selectedWorkgraphView);
+      hydratedWorkgraphIdRef.current = selectedWorkgraphView.workgraph;
+    }
+  }, [selectedWorkgraphView, issueTypeState.status, updateFormik.dirty]);
 
   const handleRemoveAssignment = async (workgraph: LoopWorkgraph) => {
     setBusyWorkgraphId(workgraph.workgraph);
@@ -481,7 +508,15 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
 
           {activeConfigTab === `synced-items` ? (
             <Suspense fallback={<p className="p-text--default">Loading synced items...</p>}>
-              <LazyLoopWorkgraphDetails itemListState={workgraphItemListState} onSyncWorkItems={handleSyncWorkItems} syncingWorkgraphId={syncingWorkgraphId} workgraph={selectedWorkgraphView} />
+              <LazyLoopWorkgraphDetails
+                itemListState={workgraphItemListState}
+                onStartWorkItem={handleStartWorkItem}
+                onSyncWorkItems={handleSyncWorkItems}
+                startingItemId={startingItemId}
+                syncingWorkgraphId={syncingWorkgraphId}
+                workOnLabel={readWorkOnLabelFromAssignmentConfig(selectedWorkgraphView.assignmentConfig)}
+                workgraph={selectedWorkgraphView}
+              />
             </Suspense>
           ) : null}
         </>

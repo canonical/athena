@@ -1,13 +1,12 @@
 import { getAuthenticatedUserId } from "@components/authentication/session.js";
 import { defineRoutes } from "@components/express/express.router.js";
-import { uuid } from "@components/utilities/zod.utilities.js";
 import { Router } from "express";
-import { z } from "zod";
 import {
   loopWorkgraphDelete,
   loopWorkgraphIssueTypes,
   loopWorkgraphItemList,
   loopWorkgraphList,
+  loopWorkgraphStartItem,
   loopWorkgraphSync,
   loopWorkgraphUpdateByAdmin,
   workgraphAssign,
@@ -20,27 +19,21 @@ import {
   workgraphTypeOptions,
   workgraphUpdate,
 } from "./workgraph.controller.js";
-import { loopWorkgraphAdminUpdateSchema, loopWorkgraphAssignSchema, workgraphConnectionTestSchema, workgraphInsertSchema, workgraphUpdateSchema } from "./workgraph.schema.js";
+import {
+  loopParamsSchema,
+  loopWorkgraphAdminUpdateSchema,
+  loopWorkgraphAssignSchema,
+  loopWorkgraphItemParamsSchema,
+  loopWorkgraphParamsSchema,
+  workgraphConnectionTestSchema,
+  workgraphDeleteBodySchema,
+  workgraphInsertSchema,
+  workgraphParamsSchema,
+  workgraphUpdateSchema,
+} from "./workgraph.schema.js";
 
 export const workgraphRouter = Router();
 const route = defineRoutes(workgraphRouter);
-
-const workgraphParamsSchema = z.object({
-  workgraph: uuid(`workgraph must be a valid UUID.`),
-});
-
-const loopParamsSchema = z.object({
-  loop: uuid(`loop must be a valid UUID.`),
-});
-
-const loopWorkgraphParamsSchema = z.object({
-  loop: uuid(`loop must be a valid UUID.`),
-  workgraph: uuid(`workgraph must be a valid UUID.`),
-});
-
-const workgraphDeleteBodySchema = z.object({
-  workgraph: uuid(`workgraph must be a valid UUID.`),
-});
 
 route({
   method: `get`,
@@ -201,6 +194,18 @@ route({
   },
   handler: async ({ params, response, respond }) => {
     const result = await loopWorkgraphSync(params.loop, params.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 200, data: result });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/loop/:loop/:workgraph/items/:itemId/start`,
+  validators: {
+    params: loopWorkgraphItemParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const result = await loopWorkgraphStartItem(params.loop, params.workgraph, params.itemId, getAuthenticatedUserId(response));
     respond({ status: 200, data: result });
   },
 });
