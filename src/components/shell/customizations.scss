@@ -21,6 +21,23 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.athena-side-navigation-shell__selector {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.athena-side-navigation-shell__separator {
+  margin: 0.25rem 0;
+}
+
+.athena-side-navigation-shell__separator hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 0;
 }
 
 .athena-side-navigation-shell__account {
@@ -33,6 +50,8 @@ body {
 }
 
 .p-modal.athena-entity-drawer .p-modal__dialog {
+  display: flex;
+  flex-direction: column;
   border-radius: 0;
   height: 100dvh;
   left: auto;
@@ -48,14 +67,21 @@ body {
   top: 0;
 }
 
+.p-modal.athena-entity-drawer .p-modal__content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .p-modal.athena-entity-drawer--large .p-modal__dialog {
   max-width: min(72rem, 100vw);
   width: min(72rem, 100vw);
 }
 
 .p-modal.athena-entity-drawer--xl .p-modal__dialog {
-  max-width: min(88rem, 100vw);
-  width: min(88rem, 100vw);
+  max-width: min(96rem, 100vw);
+  width: min(96rem, 100vw);
 }
 
 .toast-animate {
@@ -65,4 +91,12 @@ body {
 .toast-notification,
 .toast-notification-list {
   z-index: 1201;
+}
+
+.text-negative {
+  color: var(--vf-color-button-negative-default);
+}
+
+.text-negative[class*='p-icon--'] {
+  filter: brightness(0) saturate(100%) invert(15%) sepia(85%) saturate(4500%) hue-rotate(345deg) brightness(88%) contrast(110%);
 }

@@ -1,7 +1,7 @@
 import { Button, useToastNotification } from "@canonical/react-components";
 import { useEffect, useMemo, useState } from "react";
-import { fetchProviderModels, updateProvider } from "./provider.client.js";
-import type { Provider } from "./provider.schema.js";
+import { fetchProviderModels, updateProvider, validateProviderModels } from "./provider.client.js";
+import type { Provider, ProviderModelValidateResultItem } from "./provider.schema.js";
 
 type ProviderSettingsProps = {
   provider: Provider;
@@ -18,6 +18,7 @@ export function ProviderSettings({ provider, reload }: ProviderSettingsProps) {
   const [modelSearch, setModelSearch] = useState(``);
   const [enabledModels, setEnabledModels] = useState<string[]>([]);
   const [defaultModel, setDefaultModel] = useState<string>(``);
+  const [unavailableModelIds, setUnavailableModelIds] = useState<string[]>([]);
 
   const modelOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -46,6 +47,7 @@ export function ProviderSettings({ provider, reload }: ProviderSettingsProps) {
   useEffect(() => {
     setEnabledModels(persistedEnabledModels);
     setDefaultModel(provider.defaultModel ?? ``);
+    setUnavailableModelIds([]);
   }, [provider.id, provider.updatedAt]);
 
   const filteredModelOptions = useMemo(() => {
@@ -113,22 +115,94 @@ export function ProviderSettings({ provider, reload }: ProviderSettingsProps) {
     setDefaultModel(``);
   };
 
+  const validateSelectedModelsWithProgress = async (modelIds: string[]): Promise<ProviderModelValidateResultItem[]> => {
+    const uniqueModels = Array.from(new Set(modelIds.map((value) => value.trim()).filter((value) => value.length > 0)));
+
+    if (uniqueModels.length === 0) {
+      return [];
+    }
+
+    const concurrency = Math.min(6, uniqueModels.length);
+    const results: ProviderModelValidateResultItem[] = new Array(uniqueModels.length);
+    let nextIndex = 0;
+    let completed = 0;
+
+    const worker = async () => {
+      while (true) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+
+        if (currentIndex >= uniqueModels.length) {
+          return;
+        }
+
+        const model = uniqueModels[currentIndex] as string;
+        const validation = await validateProviderModels(provider.id, [model]);
+        const result = validation.results[0] ?? { model, available: false, reason: `Validation returned no result.` };
+        results[currentIndex] = result;
+
+        completed += 1;
+        toastNotify.info(`${completed}/${uniqueModels.length} validated: ${model}${result.available ? ` (available)` : ` (unavailable)`}`, `Model validation progress`);
+      }
+    };
+
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    return results;
+  };
+
   const saveModelSettings = async () => {
     if (defaultModel && !enabledModels.includes(defaultModel)) {
       toastNotify.failure(`Unable to save model settings`, new Error(`Default model must be included in enabled models.`));
       return;
     }
 
+    if (enabledModels.length === 0) {
+      toastNotify.failure(`Unable to save model settings`, new Error(`Enable at least one model before saving.`));
+      return;
+    }
+
+    const shouldValidate = window.confirm(`Before saving, Athena will send one tiny validation request per selected model to verify availability for this API key. Continue?`);
+
+    if (!shouldValidate) {
+      return;
+    }
+
     setIsSaving(true);
 
     try {
+      toastNotify.info(`Starting validation for ${enabledModels.length} selected models.`, `Model validation progress`);
+      const validationResults = await validateSelectedModelsWithProgress(enabledModels);
+      const unavailable = validationResults.filter((result) => !result.available).map((result) => result.model);
+
+      if (unavailable.length > 0) {
+        const nextEnabledModels = enabledModels.filter((modelId) => !unavailable.includes(modelId));
+
+        setUnavailableModelIds(unavailable);
+        setEnabledModels(nextEnabledModels);
+
+        if (defaultModel && unavailable.includes(defaultModel)) {
+          setDefaultModel(nextEnabledModels[0] ?? ``);
+        }
+
+        toastNotify.failure(`Some models are unavailable`, new Error(`Unavailable models were unchecked: ${unavailable.join(`, `)}.`));
+
+        if (nextEnabledModels.length === 0) {
+          return;
+        }
+      } else {
+        setUnavailableModelIds([]);
+        toastNotify.info(`All ${validationResults.length} selected models are available.`, `Model validation completed`);
+      }
+
+      const sanitizedEnabledModels = enabledModels.filter((modelId) => !unavailable.includes(modelId));
+
       await updateProvider(provider.id, {
         displayName: provider.displayName,
         providerType: provider.providerType,
         baseUrl: provider.baseUrl,
         lifecycleStatus: provider.lifecycleStatus,
-        defaultModel: defaultModel || null,
-        enabledModels: enabledModels.length > 0 ? enabledModels : null,
+        defaultModel: defaultModel && !unavailable.includes(defaultModel) ? defaultModel : (sanitizedEnabledModels[0] ?? null),
+        enabledModels: sanitizedEnabledModels.length > 0 ? sanitizedEnabledModels : null,
       });
 
       toastNotify.info(`Provider model settings have been updated.`, `Saved`);
@@ -192,6 +266,7 @@ export function ProviderSettings({ provider, reload }: ProviderSettingsProps) {
                 <label htmlFor={`provider-enabled-model-${model.id}`}>
                   <input checked={enabledModels.includes(model.id)} id={`provider-enabled-model-${model.id}`} onChange={(event) => toggleModel(model.id, event.target.checked)} type="checkbox" />
                   {model.label}
+                  {unavailableModelIds.includes(model.id) ? <span className="p-chip is-inline u-no-margin--left">Unavailable</span> : null}
                 </label>
               </div>
             ))

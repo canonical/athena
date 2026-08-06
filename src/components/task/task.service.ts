@@ -1,7 +1,7 @@
 import { getPool } from "@components/postgres/postgres.js";
 import { TaskClaimLostError } from "./task.errors.js";
-import type { Task, TaskInsert, TaskUpdateInput } from "./task.schema.js";
-import { taskInsertSchema, taskUpdateInputSchema } from "./task.schema.js";
+import type { Task, TaskCreateInput, TaskInsert, TaskUpdateInput } from "./task.schema.js";
+import { taskCreateInputSchema, taskUpdateInputSchema } from "./task.schema.js";
 
 const taskColumnNames = [
   `id`,
@@ -19,7 +19,6 @@ const taskColumnNames = [
   `routeReasonText`,
   `description`,
   `kind`,
-  `ownerMode`,
   `successCriteria`,
   `externalRefs`,
   `context`,
@@ -43,66 +42,82 @@ const taskColumnNames = [
 
 const getTaskColumns = (tableAlias?: string): string => taskColumnNames.map((column) => `${tableAlias ? `${tableAlias}.` : ``}"${column}"`).join(`, `);
 
-export const queryTaskCreate = async (task: TaskInsert): Promise<Task> => {
-  const v = taskInsertSchema.parse(task);
+const taskInsertSql = `
+  INSERT INTO "task" (
+    "loop", "phase", "sourceType", "sourceRef", "status", "assignee",
+    "selectedPersona", "targetType", "targetId", "workgraphItem", "routeReasonCode", "routeReasonText",
+    "description", "kind", "successCriteria", "externalRefs",
+    "context", "routing", "emittedByPersona", "blocker", "approvals", "payload",
+    "completedAt", "autonomyIterationCount", "autonomyMaxIterations"
+  )
+  VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+    $13, $14, $15::jsonb, $16::jsonb,
+    $17, $18::jsonb, $19, $20, $21::jsonb, $22::jsonb,
+    $23, $24, $25
+  )
+  RETURNING ${getTaskColumns()}
+`;
 
-  const result = await getPool().query<Task>(
-    `
-      INSERT INTO "task" (
-        "loop", "phase", "sourceType", "sourceRef", "status", "assignee",
-        "selectedPersona", "targetType", "targetId", "workgraphItem", "routeReasonCode", "routeReasonText",
-        "description", "kind", "ownerMode", "successCriteria", "externalRefs",
-        "context", "routing", "emittedByPersona", "blocker", "approvals", "payload",
-        "completedAt", "autonomyIterationCount", "autonomyMaxIterations"
-      )
-      VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-        $13, $14, $15, $16::jsonb, $17::jsonb,
-        $18, $19::jsonb, $20, $21, $22::jsonb, $23::jsonb,
-        $24, $25, $26
-      )
-      RETURNING ${getTaskColumns()}
-    `,
-    [
-      v.loop,
-      v.phase,
-      v.sourceType,
-      v.sourceRef,
-      v.status,
-      v.assignee,
-      v.selectedPersona,
-      v.targetType,
-      v.targetId,
-      v.workgraphItem ?? null,
-      v.routeReasonCode,
-      v.routeReasonText,
-      v.description,
-      v.kind,
-      v.ownerMode,
-      JSON.stringify(v.successCriteria),
-      JSON.stringify(v.externalRefs),
-      v.context,
-      JSON.stringify(v.routing),
-      v.emittedByPersona,
-      v.blocker,
-      JSON.stringify(v.approvals),
-      JSON.stringify(v.payload),
-      v.completedAt,
-      v.autonomyIterationCount,
-      v.autonomyMaxIterations,
-    ],
-  );
+const buildTaskInsert = (task: TaskCreateInput): TaskInsert => ({
+  ...task,
+  kind: `other`,
+});
 
+const buildTaskInsertParams = (task: TaskInsert): unknown[] => [
+  task.loop,
+  task.phase,
+  task.sourceType,
+  task.sourceRef,
+  task.status,
+  task.assignee,
+  task.selectedPersona,
+  task.targetType,
+  task.targetId,
+  task.workgraphItem ?? null,
+  task.routeReasonCode,
+  task.routeReasonText,
+  task.description,
+  task.kind,
+  JSON.stringify(task.successCriteria),
+  JSON.stringify(task.externalRefs),
+  task.context,
+  JSON.stringify(task.routing),
+  task.emittedByPersona,
+  task.blocker,
+  JSON.stringify(task.approvals),
+  JSON.stringify(task.payload),
+  task.completedAt,
+  task.autonomyIterationCount,
+  task.autonomyMaxIterations,
+];
+
+type TaskCreateQueryTarget = {
+  query: <T>(text: string, params: unknown[]) => Promise<{ rows: T[] }>;
+};
+
+const insertTaskRow = async (target: TaskCreateQueryTarget, task: TaskInsert): Promise<Task> => {
+  const result = await target.query<Task>(taskInsertSql, buildTaskInsertParams(task));
   const created = result.rows[0];
-  if (!created) throw new Error(`Task was not created.`);
+
+  if (!created) {
+    throw new Error(`Task was not created.`);
+  }
+
   return created;
 };
 
-export const queryTaskCreateForWorkgraphItem = async (input: {
-  task: TaskInsert;
-  workgraphItemId: string;
-}): Promise<Task | null> => {
-  const v = taskInsertSchema.parse(input.task);
+export const queryTaskCreate = async (
+  task: TaskCreateInput,
+  options?: { workgraphItemId?: string },
+): Promise<Task | null> => {
+  const v = taskCreateInputSchema.parse(task);
+  const taskInsert = buildTaskInsert(v);
+
+  if (!options?.workgraphItemId) {
+    return insertTaskRow(getPool(), taskInsert);
+  }
+
   const client = await getPool().connect();
 
   try {
@@ -115,7 +130,7 @@ export const queryTaskCreateForWorkgraphItem = async (input: {
         WHERE "id" = $1::uuid
         FOR UPDATE
       `,
-      [input.workgraphItemId],
+      [options.workgraphItemId],
     );
 
     if (!lockedItem.rows[0]) {
@@ -132,7 +147,7 @@ export const queryTaskCreateForWorkgraphItem = async (input: {
         LIMIT 1
         FOR UPDATE
       `,
-      [input.workgraphItemId],
+      [options.workgraphItemId],
     );
 
     if (existingTask.rows[0]) {
@@ -140,55 +155,13 @@ export const queryTaskCreateForWorkgraphItem = async (input: {
       return null;
     }
 
-    const createdResult = await client.query<Task>(
-      `
-        INSERT INTO "task" (
-          "loop", "phase", "sourceType", "sourceRef", "status", "assignee",
-          "selectedPersona", "targetType", "targetId", "workgraphItem", "routeReasonCode", "routeReasonText",
-          "description", "kind", "ownerMode", "successCriteria", "externalRefs",
-          "context", "routing", "emittedByPersona", "blocker", "approvals", "payload",
-          "completedAt", "autonomyIterationCount", "autonomyMaxIterations"
-        )
-        VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16::jsonb, $17::jsonb,
-          $18, $19::jsonb, $20, $21, $22::jsonb, $23::jsonb,
-          $24, $25, $26
-        )
-        RETURNING ${getTaskColumns()}
-      `,
-      [
-        v.loop,
-        v.phase,
-        v.sourceType,
-        v.sourceRef,
-        v.status,
-        v.assignee,
-        v.selectedPersona,
-        v.targetType,
-        v.targetId,
-        input.workgraphItemId,
-        v.routeReasonCode,
-        v.routeReasonText,
-        v.description,
-        v.kind,
-        v.ownerMode,
-        JSON.stringify(v.successCriteria),
-        JSON.stringify(v.externalRefs),
-        v.context,
-        JSON.stringify(v.routing),
-        v.emittedByPersona,
-        v.blocker,
-        JSON.stringify(v.approvals),
-        JSON.stringify(v.payload),
-        v.completedAt,
-        v.autonomyIterationCount,
-        v.autonomyMaxIterations,
-      ],
-    );
+    const createdResult = await insertTaskRow(client, {
+      ...taskInsert,
+      workgraphItem: options.workgraphItemId,
+    });
 
     await client.query(`COMMIT`);
-    return createdResult.rows[0] ?? null;
+    return createdResult;
   } catch (error) {
     await client.query(`ROLLBACK`);
     throw error;

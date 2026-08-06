@@ -58,12 +58,12 @@ function ProviderDetailContent({ provider, reload, selectedTab }: ProviderDetail
       <nav className="p-tabs">
         <ul className="p-tabs__list">
           <li className="p-tabs__item">
-            <Link className={`p-tabs__link${selectedTab === `details` ? ` is-active` : ``}`} params={{ providerId: provider.id }} search={{ tab: `details` }} to="/provider/$providerId">
+            <Link className={`p-tabs__link${selectedTab === `details` ? ` is-active` : ``}`} params={{ providerId: provider.id }} to="/provider/$providerId">
               Details
             </Link>
           </li>
           <li className="p-tabs__item">
-            <Link className={`p-tabs__link${selectedTab === `settings` ? ` is-active` : ``}`} params={{ providerId: provider.id }} search={{ tab: `settings` }} to="/provider/$providerId">
+            <Link className={`p-tabs__link${selectedTab === `settings` ? ` is-active` : ``}`} params={{ providerId: provider.id }} to="/provider/$providerId/settings">
               Settings
             </Link>
           </li>

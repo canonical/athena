@@ -2,8 +2,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  margin-bottom: 1rem;
-  max-height: 26rem;
+  flex: 1;
+  margin-bottom: 0;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 0.25rem;
 }
@@ -72,6 +73,127 @@
 
 .athena-chat-composer textarea {
   min-height: 7rem;
+}
+
+.athena-tasks-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 100dvh;
+}
+
+.athena-chat-route-selection {
+  border: 1px solid #d9d9d9;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.athena-chat-workbench {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: clamp(28rem, 58dvh, 40rem);
+}
+
+.athena-chat-workbench__context,
+.athena-chat-workbench__actions {
+  border: 1px solid #d9d9d9;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.athena-chat-workbench__context {
+  background: #f8f8f8;
+}
+
+.athena-chat-workbench__surface {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.athena-chat-workbench__history {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.athena-chat-workbench__actions {
+  background: #fafafa;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.athena-chat-workbench__action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.athena-chat-workbench__notes {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.athena-chat-drawer {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 0;
+}
+
+.athena-chat-drawer__context,
+.athena-chat-drawer__actions {
+  border: 1px solid #d9d9d9;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.athena-chat-drawer__context {
+  background: #f8f8f8;
+}
+
+.athena-chat-drawer__surface {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.athena-chat-drawer__history {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.athena-chat-drawer__actions {
+  background: #fafafa;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.athena-chat-drawer__action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.athena-chat-drawer__notes {
+  display: grid;
+  gap: 0.5rem;
 }
 
 .athena-task-inspector {

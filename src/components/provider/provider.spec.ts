@@ -67,7 +67,7 @@ test(`loop providers tab supports assign remove and algorithm save`, async ({ pa
 
   await createProviderViaUi(page, providerName);
 
-  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=providers`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/providers`);
 
   await expect(page.getByRole(`heading`, { name: `Assign an existing provider` })).toBeVisible();
   await page.getByLabel(`Provider`).selectOption({ label: providerName });

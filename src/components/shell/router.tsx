@@ -1,13 +1,13 @@
-import { ApplicationLayout, Card, SideNavigation } from "@canonical/react-components";
+import { ApplicationLayout, Card, Select, SideNavigation } from "@canonical/react-components";
 import { fetchAuthenticationProfile } from "@components/authentication/authentication.client.js";
-import { RouteBreadcrumbs } from "@components/base/RouteBreadcrumbs.js";
-import { createRootRoute, createRoute, createRouter, Outlet, redirect } from "@tanstack/react-router";
-import { lazy, Suspense } from "react";
+import { useLoopList } from "@components/loop/loop.query.js";
+import { loopTabs } from "@components/loop/loop.schema.js";
+import { createRootRoute, createRoute, createRouter, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
+import { type ComponentPropsWithoutRef, lazy, Suspense } from "react";
 
 import athenaLogo from "./athena-logo.svg";
 import favicon from "./favicon.png";
 import { primarySideNavigationItems, SideNavigationLink, useAccountSideNavigationItems } from "./SideNavigation.js";
-import type { AuthenticationSearch, ConnectionListSearch, LoopDetailSearch, LoopListSearch, PersonaListSearch, ProviderDetailSearch, ProviderListSearch, RunnerListSearch, WorkgraphListSearch } from "./shell.schema.js";
 import "./shell.scss";
 
 const rootPath = `/`;
@@ -20,81 +20,44 @@ const providerBasePath = `/provider`;
 const runnerBasePath = `/runner`;
 const workgraphBasePath = `/workgraph`;
 
-const loopListRoutePath = `list`;
-const loopDetailRoutePath = `$loopId`;
 const personaListRoutePath = `list`;
+const loopDetailRoutePath = `$loopId`;
+const loopListCreateRoutePath = `loops/create`;
+const loopListEditRoutePath = `loops/edit/$loopEditorId`;
+const loopTaskListRoutePath = `${loopDetailRoutePath}/task/list`;
+const loopTaskDetailRoutePath = `${loopDetailRoutePath}/task/$taskId`;
+const loopDetailsRoutePath = `${loopDetailRoutePath}/details`;
+const loopToolsRoutePath = `${loopDetailRoutePath}/tools`;
+const loopPersonasRoutePath = `${loopDetailRoutePath}/personas`;
+const loopPersonaCreateRoutePath = `${loopDetailRoutePath}/personas/create`;
+const loopPersonaEditRoutePath = `${loopDetailRoutePath}/personas/edit/$personaId`;
+const loopPersonaCloneRoutePath = `${loopDetailRoutePath}/personas/clone/$personaId`;
+const loopProvidersRoutePath = `${loopDetailRoutePath}/providers`;
+const loopRunnersRoutePath = `${loopDetailRoutePath}/runners`;
+const loopWorkgraphsRoutePath = `${loopDetailRoutePath}/workgraphs`;
+const loopWorkgraphViewRoutePath = `${loopDetailRoutePath}/workgraphs/$workgraphViewWorkgraphId`;
+const loopWorkgraphConfigRoutePath = `${loopDetailRoutePath}/workgraphs/$workgraphViewWorkgraphId/$workgraphConfigTab`;
+const loopRepositoriesRoutePath = `${loopDetailRoutePath}/repositories`;
 const personaDetailRoutePath = `$personaId`;
 const providerListRoutePath = `list`;
+const providerListCreateRoutePath = `list/create`;
+const providerListEditRoutePath = `list/edit/$providerEditorId`;
 const providerDetailRoutePath = `$providerId`;
+const providerSettingsRoutePath = `$providerId/settings`;
 const runnerListRoutePath = `list`;
+const runnerListCreateRoutePath = `list/create`;
+const runnerListEditRoutePath = `list/edit/$runnerEditorId`;
 const runnerDetailRoutePath = `$runnerId`;
+const connectionWorkgraphsRoutePath = `workgraphs`;
+const connectionWorkgraphCreateRoutePath = `workgraphs/create`;
+const connectionWorkgraphEditRoutePath = `workgraphs/edit/$workgraphId`;
+const connectionRepositoriesRoutePath = `repositories`;
+const connectionRepositoryCreateRoutePath = `repositories/create`;
+const connectionRepositoryEditRoutePath = `repositories/edit/$repositoryId`;
 const workgraphListRoutePath = `list`;
+const workgraphListCreateRoutePath = `list/create`;
+const workgraphListEditRoutePath = `list/edit/$workgraphEditorId`;
 const workgraphDetailRoutePath = `$workgraphId`;
-
-const parseCreateFlag = (value: unknown): true | undefined => (value === true || value === `true` ? true : undefined);
-
-const parseLoopListSearch = (search: Record<string, unknown>): LoopListSearch => ({
-  create: parseCreateFlag(search.create),
-  edit: typeof search.edit === `string` ? search.edit : undefined,
-});
-
-const parsePersonaListSearch = (search: Record<string, unknown>): PersonaListSearch => ({
-  tab: search.tab === `my-personas` || search.tab === `catalog` ? search.tab : `my-personas`,
-  create: parseCreateFlag(search.create),
-  edit: typeof search.edit === `string` ? search.edit : undefined,
-  clone: parseCreateFlag(search.clone),
-});
-
-const parseProviderListSearch = (search: Record<string, unknown>): ProviderListSearch => ({
-  create: parseCreateFlag(search.create),
-  edit: typeof search.edit === `string` ? search.edit : undefined,
-});
-
-const parseProviderDetailSearch = (search: Record<string, unknown>): ProviderDetailSearch => ({
-  tab: search.tab === `details` || search.tab === `settings` ? search.tab : `details`,
-});
-
-const parseLoopDetailSearch = (search: Record<string, unknown>): LoopDetailSearch => ({
-  tab:
-    search.tab === `dashboard` ||
-    search.tab === `details` ||
-    search.tab === `tools` ||
-    search.tab === `personas` ||
-    search.tab === `providers` ||
-    search.tab === `runners` ||
-    search.tab === `workgraphs` ||
-    search.tab === `repositories`
-      ? search.tab
-      : `dashboard`,
-  create: parseCreateFlag(search.create),
-  edit: typeof search.edit === `string` ? search.edit : undefined,
-  clone: parseCreateFlag(search.clone),
-  workgraphView: typeof search.workgraphView === `string` ? search.workgraphView : undefined,
-  workgraphConfigTab:
-    search.workgraphConfigTab === `jql` ||
-    search.workgraphConfigTab === `labels` ||
-    search.workgraphConfigTab === `item-type-playbooks` ||
-    search.workgraphConfigTab === `webhook-definitions` ||
-    search.workgraphConfigTab === `synced-items`
-      ? search.workgraphConfigTab
-      : undefined,
-});
-
-const parseRunnerListSearch = (search: Record<string, unknown>): RunnerListSearch => ({
-  create: parseCreateFlag(search.create),
-  edit: typeof search.edit === `string` ? search.edit : undefined,
-});
-
-const parseConnectionListSearch = (search: Record<string, unknown>): ConnectionListSearch => ({
-  tab: search.tab === `workgraphs` || search.tab === `repositories` ? search.tab : `workgraphs`,
-  create: parseCreateFlag(search.create),
-  edit: typeof search.edit === `string` ? search.edit : undefined,
-});
-
-const parseWorkgraphListSearch = (search: Record<string, unknown>): WorkgraphListSearch => ({
-  create: parseCreateFlag(search.create),
-  edit: typeof search.edit === `string` ? search.edit : undefined,
-});
 
 const LazyAuthenticationView = lazy(async () => {
   const module = await import("@components/authentication/Authentication.js");
@@ -130,12 +93,6 @@ const LazyNotFoundView = lazy(async () => {
   const module = await import("./NotFoundView.js");
 
   return { default: module.NotFoundView };
-});
-
-const LazyOverviewView = lazy(async () => {
-  const module = await import("./OverviewView.js");
-
-  return { default: module.OverviewView };
 });
 
 const LazyPersona = lazy(async () => {
@@ -216,8 +173,58 @@ const LazyWorkgraph = lazy(async () => {
   return { default: module.Workgraph };
 });
 
+function capitalize(value: string) {
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
+function LoopSidebarLink({ href, className, ...props }: ComponentPropsWithoutRef<"a">) {
+  const location = useRouterState({ select: (state) => state.location });
+
+  if (!href) {
+    return <a className={className} {...props} />;
+  }
+
+  const pathname = href;
+  const currentPath = location.pathname;
+  const normalizedTarget = pathname.endsWith(`/`) ? pathname.slice(0, -1) : pathname;
+  const normalizedCurrent = currentPath.endsWith(`/`) ? currentPath.slice(0, -1) : currentPath;
+  const isActive = normalizedCurrent === normalizedTarget || normalizedCurrent.startsWith(`${normalizedTarget}/`);
+
+  return <a aria-current={isActive ? `page` : undefined} className={isActive ? `${className ?? ``} is-active`.trim() : className} href={href} {...props} />;
+}
+
+function buildLoopSideNavigationItems(loopId: string) {
+  return [
+    {
+      items: [
+        ...loopTabs.map((tab) => {
+          if (tab === `tasks`) {
+            return {
+              component: LoopSidebarLink,
+              label: `Tasks`,
+              href: `/loop/${loopId}/task/list`,
+            };
+          }
+
+          return {
+            component: LoopSidebarLink,
+            label: capitalize(tab),
+            href: `/loop/${loopId}/${tab}`,
+          };
+        }),
+      ],
+    },
+  ];
+}
+
 function ShellLayout() {
+  const navigate = useNavigate();
+  const location = useRouterState({ select: (state) => state.location });
+  const isAuthenticationRoute = location.pathname.startsWith(authenticationPath);
+  const { state: loopListState } = useLoopList({ enabled: !isAuthenticationRoute });
   const accountSideNavigationItems = useAccountSideNavigationItems();
+  const activeLoopId = location.pathname.startsWith(`/loop/`) ? (location.pathname.split(`/`)[2] ?? ``) : ``;
+  const loopOptions = loopListState.status === `success` ? loopListState.loops.map((loop) => ({ value: loop.id, label: loop.name })) : [];
 
   return (
     <ApplicationLayout
@@ -233,6 +240,34 @@ function ShellLayout() {
       sideNavigation={
         <div className="athena-side-navigation-shell">
           <SideNavigation dark={true} hasIcons={true} items={primarySideNavigationItems} linkComponent={SideNavigationLink} />
+          {activeLoopId ? (
+            <div className="athena-side-navigation-shell__separator" aria-hidden="true">
+              <hr />
+            </div>
+          ) : null}
+          {activeLoopId ? (
+            <>
+              <div className="athena-side-navigation-shell__selector">
+                <Select
+                  disabled={loopListState.status !== `success`}
+                  id="loop-switcher"
+                  name="loop-switcher"
+                  onChange={(event) => {
+                    const nextLoopId = event.target.value;
+
+                    if (!nextLoopId || nextLoopId === activeLoopId) {
+                      return;
+                    }
+
+                    void navigate({ to: `/loop/$loopId/task/list`, params: { loopId: nextLoopId } });
+                  }}
+                  options={[{ value: ``, label: loopListState.status === `loading` ? `Loading loops...` : `Select a loop` }, ...loopOptions]}
+                  value={activeLoopId}
+                />
+              </div>
+              <SideNavigation dark={true} items={buildLoopSideNavigationItems(activeLoopId)} linkComponent={SideNavigationLink} />
+            </>
+          ) : null}
           <div className="athena-side-navigation-shell__account">
             <hr />
             <SideNavigation dark={true} hasIcons={true} items={accountSideNavigationItems} linkComponent={SideNavigationLink} />
@@ -241,7 +276,6 @@ function ShellLayout() {
       }
     >
       <Card style={{ height: `100vh` }} className="u-no-margin">
-        <RouteBreadcrumbs />
         <Outlet />
       </Card>
     </ApplicationLayout>
@@ -289,23 +323,100 @@ const guardAuthenticatedRoute = async (location: { href?: string }) => {
   }
 };
 
-function LoopDetailView() {
-  const { loopId } = loopDetailRoute.useParams();
-  const { tab, create, edit, clone, workgraphView, workgraphConfigTab } = loopDetailRoute.useSearch();
-  const editor = create ? `create` : clone && edit ? `clone` : edit ? `edit` : undefined;
+type LoopTab = (typeof loopTabs)[number];
+type LoopPersonaEditor = `create` | `edit` | `clone`;
+type LoopWorkgraphConfigTab = `jql` | `labels` | `item-type-playbooks` | `webhook-definitions` | `synced-items`;
 
+function LoopViewRoute(props: { loopId: string; tab: LoopTab; taskId?: string; editor?: LoopPersonaEditor; personaId?: string; workgraphViewWorkgraphId?: string; workgraphConfigTab?: LoopWorkgraphConfigTab }) {
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyLoop
-        editor={editor}
-        loopId={loopId}
-        personaId={edit}
-        tab={tab ?? `details`}
-        workgraphViewWorkgraphId={workgraphView}
-        workgraphConfigTab={workgraphConfigTab}
-      />
+      <LazyLoop editor={props.editor} loopId={props.loopId} personaId={props.personaId} tab={props.tab} taskId={props.taskId} workgraphConfigTab={props.workgraphConfigTab} workgraphViewWorkgraphId={props.workgraphViewWorkgraphId} />
     </Suspense>
   );
+}
+
+function LoopTaskListRouteView() {
+  const { loopId } = loopTaskListRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="tasks" />;
+}
+
+function LoopTaskDetailRouteView() {
+  const { loopId, taskId } = loopTaskDetailRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="tasks" taskId={taskId} />;
+}
+
+function LoopDetailsRouteView() {
+  const { loopId } = loopDetailsRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="details" />;
+}
+
+function LoopToolsRouteView() {
+  const { loopId } = loopToolsRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="tools" />;
+}
+
+function LoopPersonasRouteView() {
+  const { loopId } = loopPersonasRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="personas" />;
+}
+
+function LoopPersonaCreateRouteView() {
+  const { loopId } = loopPersonaCreateRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="personas" editor="create" />;
+}
+
+function LoopPersonaEditRouteView() {
+  const { loopId, personaId } = loopPersonaEditRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="personas" editor="edit" personaId={personaId} />;
+}
+
+function LoopPersonaCloneRouteView() {
+  const { loopId, personaId } = loopPersonaCloneRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="personas" editor="clone" personaId={personaId} />;
+}
+
+function LoopProvidersRouteView() {
+  const { loopId } = loopProvidersRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="providers" />;
+}
+
+function LoopRunnersRouteView() {
+  const { loopId } = loopRunnersRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="runners" />;
+}
+
+function LoopWorkgraphsRouteView() {
+  const { loopId } = loopWorkgraphsRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="workgraphs" />;
+}
+
+function LoopWorkgraphViewRouteView() {
+  const { loopId, workgraphViewWorkgraphId } = loopWorkgraphViewRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="workgraphs" workgraphViewWorkgraphId={workgraphViewWorkgraphId} workgraphConfigTab="jql" />;
+}
+
+function LoopWorkgraphConfigRouteView() {
+  const { loopId, workgraphViewWorkgraphId, workgraphConfigTab } = loopWorkgraphConfigRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="workgraphs" workgraphViewWorkgraphId={workgraphViewWorkgraphId} workgraphConfigTab={workgraphConfigTab as LoopWorkgraphConfigTab} />;
+}
+
+function LoopRepositoriesRouteView() {
+  const { loopId } = loopRepositoriesRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="repositories" />;
 }
 
 function PersonaDetailView() {
@@ -320,55 +431,142 @@ function PersonaDetailView() {
 
 function ProviderDetailView() {
   const { providerId } = providerDetailRoute.useParams();
-  const { tab } = providerDetailRoute.useSearch();
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyProvider providerId={providerId} tab={tab ?? `details`} />
+      <LazyProvider providerId={providerId} tab="details" />
+    </Suspense>
+  );
+}
+
+function ProviderSettingsView() {
+  const { providerId } = providerSettingsRoute.useParams();
+
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyProvider providerId={providerId} tab="settings" />
     </Suspense>
   );
 }
 
 function LoopListRouteView() {
-  const { create, edit } = loopListRoute.useSearch();
-  const editor = create ? `create` : edit ? `edit` : undefined;
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyLoopList />
+    </Suspense>
+  );
+}
+
+function LoopListCreateRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyLoopList editor="create" />
+    </Suspense>
+  );
+}
+
+function LoopListEditRouteView() {
+  const { loopEditorId } = loopListEditRoute.useParams();
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyLoopList editor={editor} loopId={edit} />
+      <LazyLoopList editor="edit" loopId={loopEditorId} />
     </Suspense>
   );
 }
 
 function PersonaListRouteView() {
-  const { tab, create, edit, clone } = personaRoute.useSearch();
-  const editor = create ? `create` : clone && edit ? `clone` : edit ? `edit` : undefined;
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyPersonaList tab="my-personas" />
+    </Suspense>
+  );
+}
+
+function PersonaCatalogRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyPersonaList tab="catalog" />
+    </Suspense>
+  );
+}
+
+function PersonaListCreateRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyPersonaList editor="create" tab="my-personas" />
+    </Suspense>
+  );
+}
+
+function PersonaListEditRouteView() {
+  const { personaId } = personaListEditRoute.useParams();
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyPersonaList editor={editor} personaId={edit} tab={tab} />
+      <LazyPersonaList editor="edit" personaId={personaId} tab="my-personas" />
+    </Suspense>
+  );
+}
+
+function PersonaListCloneRouteView() {
+  const { personaId } = personaListCloneRoute.useParams();
+
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyPersonaList editor="clone" personaId={personaId} tab="my-personas" />
     </Suspense>
   );
 }
 
 function ProviderListRouteView() {
-  const { create, edit } = providerRoute.useSearch();
-  const editor = create ? `create` : edit ? `edit` : undefined;
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyProviderList />
+    </Suspense>
+  );
+}
+
+function ProviderListCreateRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyProviderList editor="create" />
+    </Suspense>
+  );
+}
+
+function ProviderListEditRouteView() {
+  const { providerEditorId } = providerListEditRoute.useParams();
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyProviderList editor={editor} providerId={edit} />
+      <LazyProviderList editor="edit" providerId={providerEditorId} />
     </Suspense>
   );
 }
 
 function RunnerListRouteView() {
-  const { create, edit } = runnerRoute.useSearch();
-  const editor = create ? `create` : edit ? `edit` : undefined;
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyRunnerList />
+    </Suspense>
+  );
+}
+
+function RunnerListCreateRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyRunnerList editor="create" />
+    </Suspense>
+  );
+}
+
+function RunnerListEditRouteView() {
+  const { runnerEditorId } = runnerListEditRoute.useParams();
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyRunnerList editor={editor} runnerId={edit} />
+      <LazyRunnerList editor="edit" runnerId={runnerEditorId} />
     </Suspense>
   );
 }
@@ -408,22 +606,79 @@ function RunnerDetailView() {
 }
 
 function ConnectionRouteView() {
-  const { tab, create, edit } = connectionRoute.useSearch();
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyConnections tab="workgraphs" />
+    </Suspense>
+  );
+}
+
+function ConnectionRepositoriesRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyConnections tab="repositories" />
+    </Suspense>
+  );
+}
+
+function ConnectionWorkgraphCreateRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyConnections create={true} tab="workgraphs" />
+    </Suspense>
+  );
+}
+
+function ConnectionWorkgraphEditRouteView() {
+  const { workgraphId } = connectionWorkgraphEditRoute.useParams();
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyConnections tab={tab ?? `workgraphs`} create={create} edit={edit} />
+      <LazyConnections edit={workgraphId} tab="workgraphs" />
+    </Suspense>
+  );
+}
+
+function ConnectionRepositoryCreateRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyConnections create={true} tab="repositories" />
+    </Suspense>
+  );
+}
+
+function ConnectionRepositoryEditRouteView() {
+  const { repositoryId } = connectionRepositoryEditRoute.useParams();
+
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyConnections edit={repositoryId} tab="repositories" />
     </Suspense>
   );
 }
 
 function WorkgraphListRouteView() {
-  const { create, edit } = workgraphRoute.useSearch();
-  const editor = create ? `create` : edit ? `edit` : undefined;
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyWorkgraphList />
+    </Suspense>
+  );
+}
+
+function WorkgraphListCreateRouteView() {
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyWorkgraphList editor="create" />
+    </Suspense>
+  );
+}
+
+function WorkgraphListEditRouteView() {
+  const { workgraphEditorId } = workgraphListEditRoute.useParams();
 
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyWorkgraphList editor={editor} workgraphId={edit} />
+      <LazyWorkgraphList editor="edit" workgraphId={workgraphEditorId} />
     </Suspense>
   );
 }
@@ -454,14 +709,6 @@ function LoopLayoutRouteView() {
   );
 }
 
-function OverviewRouteView() {
-  return (
-    <Suspense fallback={<RouteLoadingView />}>
-      <LazyOverviewView />
-    </Suspense>
-  );
-}
-
 function NotFoundRouteView() {
   return (
     <Suspense fallback={<RouteLoadingView />}>
@@ -475,16 +722,28 @@ const rootRoute = createRootRoute({
   notFoundComponent: NotFoundRouteView,
 });
 
-const overviewRoute = createRoute({
+const homeRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: rootPath,
-  component: OverviewRouteView,
+  component: LoopListRouteView,
+});
+
+const loopListCreateRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: loopListCreateRoutePath,
+  component: LoopListCreateRouteView,
+});
+
+const loopListEditRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: loopListEditRoutePath,
+  component: LoopListEditRouteView,
 });
 
 const authenticationRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: authenticationPath,
-  validateSearch: (search: Record<string, unknown>): AuthenticationSearch => ({
+  validateSearch: (search: Record<string, unknown>) => ({
     returnTo: typeof search.returnTo === "string" ? search.returnTo : undefined,
   }),
   component: AuthenticationRouteView,
@@ -511,25 +770,142 @@ const loopLayoutRoute = createRoute({
   component: LoopLayoutRouteView,
 });
 
-const loopListRoute = createRoute({
-  getParentRoute: () => loopLayoutRoute,
-  path: loopListRoutePath,
-  validateSearch: parseLoopListSearch,
-  component: LoopListRouteView,
-});
-
 const loopDetailRoute = createRoute({
   getParentRoute: () => loopLayoutRoute,
   path: loopDetailRoutePath,
-  validateSearch: parseLoopDetailSearch,
-  component: LoopDetailView,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: `/loop/$loopId/task/list`, params: { loopId: params.loopId } });
+  },
+  component: RouteLoadingView,
+});
+
+const loopTaskListRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopTaskListRoutePath,
+  component: LoopTaskListRouteView,
+});
+
+const loopTaskDetailRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopTaskDetailRoutePath,
+  component: LoopTaskDetailRouteView,
+});
+
+const loopDetailsRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopDetailsRoutePath,
+  component: LoopDetailsRouteView,
+});
+
+const loopToolsRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopToolsRoutePath,
+  component: LoopToolsRouteView,
+});
+
+const loopPersonasRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopPersonasRoutePath,
+  component: LoopPersonasRouteView,
+});
+
+const loopPersonaCreateRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopPersonaCreateRoutePath,
+  component: LoopPersonaCreateRouteView,
+});
+
+const loopPersonaEditRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopPersonaEditRoutePath,
+  component: LoopPersonaEditRouteView,
+});
+
+const loopPersonaCloneRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopPersonaCloneRoutePath,
+  component: LoopPersonaCloneRouteView,
+});
+
+const loopProvidersRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopProvidersRoutePath,
+  component: LoopProvidersRouteView,
+});
+
+const loopRunnersRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopRunnersRoutePath,
+  component: LoopRunnersRouteView,
+});
+
+const loopWorkgraphsRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopWorkgraphsRoutePath,
+  component: LoopWorkgraphsRouteView,
+});
+
+const loopWorkgraphViewRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopWorkgraphViewRoutePath,
+  component: LoopWorkgraphViewRouteView,
+});
+
+const loopWorkgraphConfigRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopWorkgraphConfigRoutePath,
+  component: LoopWorkgraphConfigRouteView,
+});
+
+const loopRepositoriesRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopRepositoriesRoutePath,
+  component: LoopRepositoriesRouteView,
 });
 
 const connectionRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: connectionBasePath,
-  validateSearch: parseConnectionListSearch,
+  beforeLoad: () => {
+    throw redirect({ to: `/connection/workgraphs` });
+  },
   component: ConnectionRouteView,
+});
+
+const connectionWorkgraphsRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: `${connectionBasePath}/${connectionWorkgraphsRoutePath}`,
+  component: ConnectionRouteView,
+});
+
+const connectionWorkgraphCreateRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: `${connectionBasePath}/${connectionWorkgraphCreateRoutePath}`,
+  component: ConnectionWorkgraphCreateRouteView,
+});
+
+const connectionWorkgraphEditRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: `${connectionBasePath}/${connectionWorkgraphEditRoutePath}`,
+  component: ConnectionWorkgraphEditRouteView,
+});
+
+const connectionRepositoriesRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: `${connectionBasePath}/${connectionRepositoriesRoutePath}`,
+  component: ConnectionRepositoriesRouteView,
+});
+
+const connectionRepositoryCreateRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: `${connectionBasePath}/${connectionRepositoryCreateRoutePath}`,
+  component: ConnectionRepositoryCreateRouteView,
+});
+
+const connectionRepositoryEditRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: `${connectionBasePath}/${connectionRepositoryEditRoutePath}`,
+  component: ConnectionRepositoryEditRouteView,
 });
 
 const personaLayoutRoute = createRoute({
@@ -541,8 +917,31 @@ const personaLayoutRoute = createRoute({
 const personaRoute = createRoute({
   getParentRoute: () => personaLayoutRoute,
   path: personaListRoutePath,
-  validateSearch: parsePersonaListSearch,
   component: PersonaListRouteView,
+});
+
+const personaCatalogRoute = createRoute({
+  getParentRoute: () => personaLayoutRoute,
+  path: `${personaListRoutePath}/catalog`,
+  component: PersonaCatalogRouteView,
+});
+
+const personaListCreateRoute = createRoute({
+  getParentRoute: () => personaLayoutRoute,
+  path: `${personaListRoutePath}/create`,
+  component: PersonaListCreateRouteView,
+});
+
+const personaListEditRoute = createRoute({
+  getParentRoute: () => personaLayoutRoute,
+  path: `${personaListRoutePath}/edit/$personaId`,
+  component: PersonaListEditRouteView,
+});
+
+const personaListCloneRoute = createRoute({
+  getParentRoute: () => personaLayoutRoute,
+  path: `${personaListRoutePath}/clone/$personaId`,
+  component: PersonaListCloneRouteView,
 });
 
 const personaDetailRoute = createRoute({
@@ -560,15 +959,31 @@ const providerLayoutRoute = createRoute({
 const providerRoute = createRoute({
   getParentRoute: () => providerLayoutRoute,
   path: providerListRoutePath,
-  validateSearch: parseProviderListSearch,
   component: ProviderListRouteView,
+});
+
+const providerListCreateRoute = createRoute({
+  getParentRoute: () => providerLayoutRoute,
+  path: providerListCreateRoutePath,
+  component: ProviderListCreateRouteView,
+});
+
+const providerListEditRoute = createRoute({
+  getParentRoute: () => providerLayoutRoute,
+  path: providerListEditRoutePath,
+  component: ProviderListEditRouteView,
 });
 
 const providerDetailRoute = createRoute({
   getParentRoute: () => providerLayoutRoute,
   path: providerDetailRoutePath,
-  validateSearch: parseProviderDetailSearch,
   component: ProviderDetailView,
+});
+
+const providerSettingsRoute = createRoute({
+  getParentRoute: () => providerLayoutRoute,
+  path: providerSettingsRoutePath,
+  component: ProviderSettingsView,
 });
 
 const runnerLayoutRoute = createRoute({
@@ -580,8 +995,19 @@ const runnerLayoutRoute = createRoute({
 const runnerRoute = createRoute({
   getParentRoute: () => runnerLayoutRoute,
   path: runnerListRoutePath,
-  validateSearch: parseRunnerListSearch,
   component: RunnerListRouteView,
+});
+
+const runnerListCreateRoute = createRoute({
+  getParentRoute: () => runnerLayoutRoute,
+  path: runnerListCreateRoutePath,
+  component: RunnerListCreateRouteView,
+});
+
+const runnerListEditRoute = createRoute({
+  getParentRoute: () => runnerLayoutRoute,
+  path: runnerListEditRoutePath,
+  component: RunnerListEditRouteView,
 });
 
 const runnerDetailRoute = createRoute({
@@ -599,8 +1025,19 @@ const workgraphLayoutRoute = createRoute({
 const workgraphRoute = createRoute({
   getParentRoute: () => workgraphLayoutRoute,
   path: workgraphListRoutePath,
-  validateSearch: parseWorkgraphListSearch,
   component: WorkgraphListRouteView,
+});
+
+const workgraphListCreateRoute = createRoute({
+  getParentRoute: () => workgraphLayoutRoute,
+  path: workgraphListCreateRoutePath,
+  component: WorkgraphListCreateRouteView,
+});
+
+const workgraphListEditRoute = createRoute({
+  getParentRoute: () => workgraphLayoutRoute,
+  path: workgraphListEditRoutePath,
+  component: WorkgraphListEditRouteView,
 });
 
 const workgraphDetailRoute = createRoute({
@@ -613,13 +1050,37 @@ const routeTree = rootRoute.addChildren([
   authenticationRoute,
   authenticationSignOutRoute,
   protectedRoute.addChildren([
-    overviewRoute,
+    homeRoute,
+    loopListCreateRoute,
+    loopListEditRoute,
     connectionRoute,
-    loopLayoutRoute.addChildren([loopListRoute, loopDetailRoute]),
-    personaLayoutRoute.addChildren([personaRoute, personaDetailRoute]),
-    providerLayoutRoute.addChildren([providerRoute, providerDetailRoute]),
-    runnerLayoutRoute.addChildren([runnerRoute, runnerDetailRoute]),
-    workgraphLayoutRoute.addChildren([workgraphRoute, workgraphDetailRoute]),
+    connectionWorkgraphsRoute,
+    connectionWorkgraphCreateRoute,
+    connectionWorkgraphEditRoute,
+    connectionRepositoriesRoute,
+    connectionRepositoryCreateRoute,
+    connectionRepositoryEditRoute,
+    loopLayoutRoute.addChildren([
+      loopDetailRoute,
+      loopTaskListRoute,
+      loopTaskDetailRoute,
+      loopDetailsRoute,
+      loopToolsRoute,
+      loopPersonasRoute,
+      loopPersonaCreateRoute,
+      loopPersonaEditRoute,
+      loopPersonaCloneRoute,
+      loopProvidersRoute,
+      loopRunnersRoute,
+      loopWorkgraphsRoute,
+      loopWorkgraphViewRoute,
+      loopWorkgraphConfigRoute,
+      loopRepositoriesRoute,
+    ]),
+    personaLayoutRoute.addChildren([personaRoute, personaCatalogRoute, personaListCreateRoute, personaListEditRoute, personaListCloneRoute, personaDetailRoute]),
+    providerLayoutRoute.addChildren([providerRoute, providerListCreateRoute, providerListEditRoute, providerDetailRoute, providerSettingsRoute]),
+    runnerLayoutRoute.addChildren([runnerRoute, runnerListCreateRoute, runnerListEditRoute, runnerDetailRoute]),
+    workgraphLayoutRoute.addChildren([workgraphRoute, workgraphListCreateRoute, workgraphListEditRoute, workgraphDetailRoute]),
   ]),
 ]);
 

@@ -1,4 +1,4 @@
-import { Button, Form, Input, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Button, Form, Icon, Input, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { useCurrentUser } from "@components/authentication/authentication.query.js";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { useFeedbackToast } from "@components/base/toast.js";
@@ -26,8 +26,8 @@ export function PersonaList({ tab = `my-personas`, editor, personaId }: PersonaL
   const navigate = useNavigate();
   const currentUser = useCurrentUser();
   const queryClient = useQueryClient();
-  const { state: personaListState } = usePersonaListAll();
-  const catalogState = usePersonaCatalog();
+  const { state: personaListState } = usePersonaListAll({ enabled: tab === `my-personas` });
+  const catalogState = usePersonaCatalog({ enabled: tab === `catalog` });
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   useFeedbackToast(feedback, setFeedback);
   const [busyPersonaId, setBusyPersonaId] = useState<string | null>(null);
@@ -57,16 +57,16 @@ export function PersonaList({ tab = `my-personas`, editor, personaId }: PersonaL
   const selectedPersona = tab === `my-personas` && personaId ? (ownedPersonas.find((persona) => persona.id === personaId) ?? null) : null;
 
   const closeDrawer = () => {
-    void navigate({ to: `/persona/list`, search: { tab, create: undefined, edit: undefined, clone: undefined } });
+    void navigate({ to: tab === `catalog` ? `/persona/list/catalog` : `/persona/list` });
   };
 
   const openCreateDrawer = () => {
-    void navigate({ to: `/persona/list`, search: { tab: `my-personas`, create: true, edit: undefined, clone: undefined } });
+    void navigate({ to: `/persona/list/create` });
     setFeedback(null);
   };
 
   const openEditDrawer = (persona: Persona) => {
-    void navigate({ to: `/persona/list`, search: { tab: `my-personas`, create: undefined, edit: persona.id, clone: undefined } });
+    void navigate({ to: `/persona/list/edit/$personaId`, params: { personaId: persona.id } });
     setFeedback(null);
   };
 
@@ -111,7 +111,7 @@ export function PersonaList({ tab = `my-personas`, editor, personaId }: PersonaL
   };
 
   const setTab = (newTab: `my-personas` | `catalog`) => {
-    void navigate({ to: `/persona/list`, search: { tab: newTab, create: undefined, edit: undefined, clone: undefined } });
+    void navigate({ to: newTab === `catalog` ? `/persona/list/catalog` : `/persona/list` });
   };
 
   const openCatalogCloneDrawer = (persona: Persona) => {
@@ -151,7 +151,7 @@ export function PersonaList({ tab = `my-personas`, editor, personaId }: PersonaL
       await queryClient.refetchQueries({ queryKey: [`currentUser`] });
 
       // Switch to My Personas tab to show newly cloned persona
-      void navigate({ to: `/persona/list`, search: { tab: `my-personas`, create: undefined, edit: undefined, clone: undefined } });
+      void navigate({ to: `/persona/list` });
       closeCatalogCloneDrawer();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -166,8 +166,7 @@ export function PersonaList({ tab = `my-personas`, editor, personaId }: PersonaL
   };
 
   return (
-    <section className="p-strip is-shallow u-no-max-width">
-      <h1 className="p-heading--2">Personas</h1>
+    <>
       <nav className="p-tabs">
         <div role="tablist">
           <ul className="p-tabs__list">
@@ -184,21 +183,17 @@ export function PersonaList({ tab = `my-personas`, editor, personaId }: PersonaL
           </ul>
         </div>
       </nav>
-      <div className="p-card p-strip is-shallow">
-        <div className="p-grid">
-          <div className="p-grid__row">
-            <div className="p-grid__col-6">
-              <h2 className="p-heading--4">{tab === `catalog` ? `Persona Catalog` : `My Personas`}</h2>
+      <div>
+        <div className="u-clearfix">
+          {tab === `my-personas` ? (
+            <div className="u-float-right">
+              <Button appearance="positive" onClick={openCreateDrawer} type="button">
+                Create persona
+              </Button>
             </div>
-            {tab === `my-personas` ? (
-              <div className="p-grid__col-6 u-align--right">
-                <Button appearance="positive" onClick={openCreateDrawer} type="button">
-                  Create persona
-                </Button>
-              </div>
-            ) : null}
-          </div>
+          ) : null}
         </div>
+        <hr />
         {isLoadingPersonas ? <p className="p-text--default">Loading personas...</p> : null}
         {isErrorPersonas ? (
           <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load personas">
@@ -207,7 +202,13 @@ export function PersonaList({ tab = `my-personas`, editor, personaId }: PersonaL
         ) : null}
         {!isLoadingPersonas && !isErrorPersonas && displayPersonas.length > 0 ? (
           <MainTable
-            headers={[{ content: `Display name` }, { content: `Role` }, { content: `Status` }, ...(tab === `my-personas` ? [{ content: `Actions` }] : tab === `catalog` ? [{ content: `Actions` }] : [])]}
+            className="u-table-layout--auto"
+            headers={[
+              { content: `Display name` },
+              { content: `Role` },
+              { content: `Status` },
+              ...(tab === `my-personas` ? [{ content: `Actions`, className: `u-align--right` }] : tab === `catalog` ? [{ content: `Actions`, className: `u-align--right` }] : []),
+            ]}
             rows={displayPersonas.map((persona) => ({
               key: persona.id,
               columns: [
@@ -228,8 +229,8 @@ export function PersonaList({ tab = `my-personas`, editor, personaId }: PersonaL
                             <Button appearance="base" onClick={() => openEditDrawer(persona)} type="button">
                               {`Edit ${persona.displayName}`}
                             </Button>
-                            <Button appearance="negative" disabled={busyPersonaId === persona.id} onClick={() => void handleDelete(persona)} type="button">
-                              {busyPersonaId === persona.id ? `Deleting ${persona.displayName}...` : `Delete ${persona.displayName}`}
+                            <Button appearance="base" aria-label={`Delete ${persona.displayName}`} disabled={busyPersonaId === persona.id} onClick={() => void handleDelete(persona)} title={`Delete ${persona.displayName}`} type="button">
+                              <Icon aria-hidden="true" className="text-negative" name="delete" />
                             </Button>
                           </div>
                         ),
@@ -240,8 +241,8 @@ export function PersonaList({ tab = `my-personas`, editor, personaId }: PersonaL
                         {
                           content: (
                             <div className="u-align--right">
-                              <Button appearance="positive" onClick={() => openCatalogCloneDrawer(persona)} type="button">
-                                {`Clone ${persona.displayName}`}
+                              <Button appearance="base" aria-label={`Clone ${persona.displayName}`} onClick={() => openCatalogCloneDrawer(persona)} title={`Clone ${persona.displayName}`} type="button">
+                                <Icon aria-hidden="true" name="copy" />
                               </Button>
                             </div>
                           ),
@@ -301,6 +302,6 @@ export function PersonaList({ tab = `my-personas`, editor, personaId }: PersonaL
           </div>
         ) : null}
       </EntityDrawer>
-    </section>
+    </>
   );
 }

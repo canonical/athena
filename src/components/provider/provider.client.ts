@@ -1,11 +1,12 @@
 import { authenticatedJsonDelete, authenticatedJsonGet, authenticatedJsonPost, authenticatedJsonPut } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
-import type { LoopProvider, Provider, ProviderInsert, ProviderModel, ProviderModelPreviewRequest, ProviderUpdate } from "./provider.schema.js";
+import type { LoopProvider, Provider, ProviderInsert, ProviderModel, ProviderModelPreviewRequest, ProviderModelValidateResponse, ProviderUpdate } from "./provider.schema.js";
 
 export const providerApiPaths = {
   list: getApiUrl(`/provider`),
   byId: (providerId: string) => getApiUrl(`/provider/${providerId}`),
   modelsById: (providerId: string) => getApiUrl(`/provider/${providerId}/models`),
+  validateModelsById: (providerId: string) => getApiUrl(`/provider/${providerId}/models/validate`),
   modelsPreview: getApiUrl(`/provider/models/preview`),
   loopList: (loopId: string) => getApiUrl(`/provider/loop/${loopId}/list`),
   assign: getApiUrl(`/provider/assign`),
@@ -70,6 +71,16 @@ export const fetchProviderModels = async (providerId: string): Promise<ProviderM
 
   const payload = (await response.json()) as { models?: ProviderModel[] };
   return Array.isArray(payload.models) ? payload.models : [];
+};
+
+export const validateProviderModels = async (providerId: string, models: string[]): Promise<ProviderModelValidateResponse> => {
+  const response = await authenticatedJsonPost(providerApiPaths.validateModelsById(providerId), { models });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Provider model validation failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<ProviderModelValidateResponse>;
 };
 
 export const previewProviderModels = async (payload: ProviderModelPreviewRequest): Promise<ProviderModel[]> => {

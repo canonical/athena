@@ -4,8 +4,21 @@ import { resolveRequestLogger } from "@components/logging/logging.service.js";
 import { uuid } from "@components/utilities/zod.utilities.js";
 import { Router } from "express";
 import { z } from "zod";
-import { loopProviderDelete, loopProviderList, loopProviderUpdateByAdmin, providerAssign, providerCreate, providerDelete, providerGet, providerList, providerModelPreview, providerModels, providerUpdate } from "./provider.controller.js";
-import { loopProviderAdminUpdateSchema, providerInsertSchema, providerModelPreviewRequestSchema, providerUpdateSchema } from "./provider.schema.js";
+import {
+  loopProviderDelete,
+  loopProviderList,
+  loopProviderUpdateByAdmin,
+  providerAssign,
+  providerCreate,
+  providerDelete,
+  providerGet,
+  providerList,
+  providerModelPreview,
+  providerModels,
+  providerUpdate,
+  providerValidateModels,
+} from "./provider.controller.js";
+import { loopProviderAdminUpdateSchema, providerInsertSchema, providerModelPreviewRequestSchema, providerModelValidateRequestSchema, providerUpdateSchema } from "./provider.schema.js";
 
 export const providerRouter = Router();
 const route = defineRoutes(providerRouter);
@@ -99,6 +112,19 @@ route({
   handler: async ({ params, request, response, respond }) => {
     const models = await providerModels(params.provider, getAuthenticatedUserId(response), resolveRequestLogger(request));
     respond({ status: 200, data: { models } });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/:provider/models/validate`,
+  validators: {
+    params: providerParamsSchema,
+    body: providerModelValidateRequestSchema,
+  },
+  handler: async ({ params, body, request, response, respond }) => {
+    const results = await providerValidateModels(params.provider, getAuthenticatedUserId(response), body.models, resolveRequestLogger(request));
+    respond({ status: 200, data: { results } });
   },
 });
 

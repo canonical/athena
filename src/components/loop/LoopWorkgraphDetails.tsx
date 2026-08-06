@@ -96,7 +96,10 @@ const extractPayloadLabels = (payload: Record<string, unknown>): string[] => {
     return [];
   }
 
-  return labels.filter((label): label is string => typeof label === `string`).map((label) => label.trim()).filter((label) => label.length > 0);
+  return labels
+    .filter((label): label is string => typeof label === `string`)
+    .map((label) => label.trim())
+    .filter((label) => label.length > 0);
 };
 
 const hasWorkOnLabel = (node: WorkgraphItemNode, workOnLabel: string): boolean => {
@@ -109,29 +112,14 @@ const hasWorkOnLabel = (node: WorkgraphItemNode, workOnLabel: string): boolean =
   return extractPayloadLabels(node.payload).some((label) => label.toLowerCase() === normalizedExpected);
 };
 
-const renderNode = (
-  node: WorkgraphItemNode,
-  onSelectItem: (itemKey: string) => void,
-  onStartItem: (id: string) => void,
-  startingItemId: string | null,
-  syncInProgress: boolean,
-  workOnLabel: string,
-): ReactElement => {
+const renderNode = (node: WorkgraphItemNode, onSelectItem: (itemKey: string) => void, onStartItem: (id: string) => void, startingItemId: string | null, syncInProgress: boolean, workOnLabel: string): ReactElement => {
   const title = `${node.itemType}: ${node.itemKey} ${node.title}`;
   const labels = extractPayloadLabels(node.payload);
   const alreadyReady = hasWorkOnLabel(node, workOnLabel);
   const isStarting = startingItemId === node.id;
   const startDisabled = syncInProgress || isStarting || alreadyReady;
   const startLabel = alreadyReady ? `Ready` : isStarting ? `Starting...` : `Start Athena`;
-  const statusAppearance = !node.status
-    ? `information`
-    : /done|closed|resolved/i.test(node.status)
-      ? `positive`
-      : /progress|doing|wip/i.test(node.status)
-        ? `caution`
-        : /block|failed|error/i.test(node.status)
-          ? `negative`
-          : `information`;
+  const statusAppearance = !node.status ? `information` : /done|closed|resolved/i.test(node.status) ? `positive` : /progress|doing|wip/i.test(node.status) ? `caution` : /block|failed|error/i.test(node.status) ? `negative` : `information`;
 
   return (
     <li key={node.itemKey}>
@@ -164,6 +152,7 @@ const renderNode = (
 
 export function LoopWorkgraphDetails({ workgraph, syncInProgress, startingItemId, workOnLabel, onSyncWorkItems, onStartWorkItem, itemListState }: LoopWorkgraphDetailsProps) {
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
+  const [isSyncDrawerOpen, setIsSyncDrawerOpen] = useState(false);
   const hierarchyNodes = buildItemTree(itemListState);
   const byItemId = useMemo(() => {
     if (itemListState.status !== `success`) {
@@ -194,12 +183,15 @@ export function LoopWorkgraphDetails({ workgraph, syncInProgress, startingItemId
 
   return (
     <>
-      <div className="p-card p-strip is-shallow">
-        <div className="u-align--right">
-          <Button appearance="positive" disabled={syncInProgress} onClick={() => void onSyncWorkItems(workgraph)} type="button">
-            {syncInProgress ? `Synchronizing...` : `Sync work items`}
-          </Button>
+      <div>
+        <div className="u-clearfix">
+          <div className="u-float-right">
+            <Button appearance="positive" disabled={syncInProgress} onClick={() => setIsSyncDrawerOpen(true)} type="button">
+              {syncInProgress ? `Synchronizing...` : `Sync work items`}
+            </Button>
+          </div>
         </div>
+        <hr />
         {syncInProgress ? <p className="p-text--small">Synchronizing...</p> : null}
 
         {itemListState.status === `loading` ? <p className="p-text--small">Loading synced items...</p> : null}
@@ -209,10 +201,28 @@ export function LoopWorkgraphDetails({ workgraph, syncInProgress, startingItemId
           </Notification>
         ) : null}
         {itemListState.status === `success` && hierarchyNodes.length === 0 ? <p className="p-text--small">No synced items yet.</p> : null}
-        {itemListState.status === `success` && hierarchyNodes.length > 0
-          ? <ul>{hierarchyNodes.map((node) => renderNode(node, setSelectedItemKey, handleStartItem, startingItemId, syncInProgress, workOnLabel))}</ul>
-          : null}
+        {itemListState.status === `success` && hierarchyNodes.length > 0 ? <ul>{hierarchyNodes.map((node) => renderNode(node, setSelectedItemKey, handleStartItem, startingItemId, syncInProgress, workOnLabel))}</ul> : null}
       </div>
+
+      <EntityDrawer isOpen={isSyncDrawerOpen} onClose={() => setIsSyncDrawerOpen(false)} title="Sync work items">
+        <p className="p-text--default">Schedule synchronization for this workgraph to fetch the latest items.</p>
+        <div className="u-align--right">
+          <Button appearance="base" onClick={() => setIsSyncDrawerOpen(false)} type="button">
+            Cancel
+          </Button>
+          <Button
+            appearance="positive"
+            disabled={syncInProgress}
+            onClick={() => {
+              void onSyncWorkItems(workgraph);
+              setIsSyncDrawerOpen(false);
+            }}
+            type="button"
+          >
+            {syncInProgress ? `Synchronizing...` : `Sync work items`}
+          </Button>
+        </div>
+      </EntityDrawer>
 
       <EntityDrawer
         isOpen={Boolean(selectedItem)}
@@ -237,7 +247,8 @@ export function LoopWorkgraphDetails({ workgraph, syncInProgress, startingItemId
               <strong>Parent:</strong> {selectedItem.parentKey ?? `-`}
             </p>
             <p className="p-text--default">
-              <strong>Jira URL:</strong>{` `}
+              <strong>Jira URL:</strong>
+              {` `}
               {selectedItem.webUrl ? (
                 <a href={selectedItem.webUrl} rel="noreferrer" target="_blank">
                   {selectedItem.webUrl}

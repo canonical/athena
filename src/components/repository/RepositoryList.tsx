@@ -1,12 +1,12 @@
-import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Button, Icon, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { useFeedbackToast } from "@components/base/toast.js";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { RepositoryEditor } from "./RepositoryEditor.js";
 import { deleteRepository } from "./repository.client.js";
 import { useRepositoryList } from "./repository.query.js";
 import type { Repository } from "./repository.schema.js";
-import { RepositoryEditor } from "./RepositoryEditor.js";
 
 type Feedback = {
   severity: (typeof NotificationSeverity)[keyof typeof NotificationSeverity];
@@ -35,17 +35,17 @@ export function RepositoryList({ editor, repositoryId }: RepositoryListProps) {
   useFeedbackToast(feedback, setFeedback);
 
   const openCreateDrawer = () => {
-    void navigate({ to: `/connection`, search: { tab: `repositories`, create: true, edit: undefined } });
+    void navigate({ to: `/connection/repositories/create` });
     setFeedback(null);
   };
 
   const openEditDrawer = (repository: Repository) => {
-    void navigate({ to: `/connection`, search: { tab: `repositories`, create: undefined, edit: repository.id } });
+    void navigate({ to: `/connection/repositories/edit/$repositoryId`, params: { repositoryId: repository.id } });
     setFeedback(null);
   };
 
   const closeDrawer = () => {
-    void navigate({ to: `/connection`, search: { tab: `repositories`, create: undefined, edit: undefined } });
+    void navigate({ to: `/connection/repositories` });
   };
 
   const repositories = state.status === `success` ? state.repositories : [];
@@ -82,14 +82,13 @@ export function RepositoryList({ editor, repositoryId }: RepositoryListProps) {
 
   return (
     <section className="p-strip is-shallow u-no-max-width">
-      <h2 className="p-heading--3">Repositories</h2>
       {state.status === `loading` ? <p className="p-text--default">Loading repositories...</p> : null}
       {state.status === `error` ? (
         <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load repositories">
           {state.message}
         </Notification>
       ) : null}
-      <div className="p-card p-strip is-shallow">
+      <div>
         <div className="p-grid">
           <div className="p-grid__row">
             <div className="p-grid__col-12 u-align--right">
@@ -100,8 +99,9 @@ export function RepositoryList({ editor, repositoryId }: RepositoryListProps) {
           </div>
         </div>
         <MainTable
+          className="u-table-layout--auto"
           emptyStateMsg="No repositories yet."
-          headers={[{ content: `Display name` }, { content: `Type` }, { content: `Repository` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions` }]}
+          headers={[{ content: `Display name` }, { content: `Type` }, { content: `Repository` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions`, className: `u-align--right` }]}
           rows={repositories.map((repository) => ({
             key: repository.id,
             columns: [
@@ -113,11 +113,18 @@ export function RepositoryList({ editor, repositoryId }: RepositoryListProps) {
               {
                 content: (
                   <div className="u-align--right">
-                    <Button appearance="base" onClick={() => openEditDrawer(repository)} type="button">
-                      Edit definition
+                    <Button appearance="base" aria-label={`Edit ${repository.displayName}`} onClick={() => openEditDrawer(repository)} title={`Edit ${repository.displayName}`} type="button">
+                      <Icon aria-hidden="true" name="copy" />
                     </Button>
-                    <Button appearance="negative" disabled={busyRepositoryId === repository.id} onClick={() => void handleDelete(repository)} type="button">
-                      {busyRepositoryId === repository.id ? `Deleting ${repository.displayName}...` : `Delete ${repository.displayName}`}
+                    <Button
+                      appearance="base"
+                      aria-label={`Delete ${repository.displayName}`}
+                      disabled={busyRepositoryId === repository.id}
+                      onClick={() => void handleDelete(repository)}
+                      title={`Delete ${repository.displayName}`}
+                      type="button"
+                    >
+                      <Icon aria-hidden="true" className="text-negative" name="delete" />
                     </Button>
                   </div>
                 ),

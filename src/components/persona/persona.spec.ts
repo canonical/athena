@@ -53,7 +53,7 @@ test(`loop personas tab shows role and supports add and remove`, async ({ page }
   await page.getByRole(`button`, { name: `Add persona` }).click();
   await expect(page.getByText(`${displayName} has been created.`)).toBeVisible();
 
-  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=personas`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/personas`);
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 
   await page.getByLabel(`Persona`).selectOption({ label: displayName });
@@ -73,7 +73,7 @@ test(`loop personas tab can assign catalog personas to loop`, async ({ page }) =
   const loop = await createLoop(page, `Loop catalog personas flow ${Date.now()}`);
 
   // Navigate to loop personas tab
-  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=personas`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/personas`);
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 
   // Open assign drawer
@@ -142,12 +142,12 @@ test(`persona list has two tabs: My Personas and Persona Catalog with deep linki
   await expect(page.getByRole(`button`, { name: `Create persona` })).not.toBeVisible();
 
   // Test deep linking to Persona Catalog tab
-  await page.goto(`http://athena.localhost/persona/list?tab=catalog`);
+  await page.goto(`http://athena.localhost/persona/list/catalog`);
   await expect(page.getByRole(`tab`, { name: `Persona Catalog` })).toHaveAttribute(`aria-selected`, `true`);
   await expect(page.getByRole(`heading`, { name: `Persona Catalog` })).toBeVisible();
 
   // Test deep linking to My Personas tab
-  await page.goto(`http://athena.localhost/persona/list?tab=my-personas`);
+  await page.goto(`http://athena.localhost/persona/list`);
   await expect(page.getByRole(`tab`, { name: `My Personas` })).toHaveAttribute(`aria-selected`, `true`);
   await expect(page.getByRole(`heading`, { name: `My Personas` })).toBeVisible();
   await expect(page.getByRole(`button`, { name: `Create persona` })).toBeVisible();

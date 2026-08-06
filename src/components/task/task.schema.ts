@@ -5,6 +5,10 @@ import { providerModelSchema } from "@components/provider/provider.schema.js";
 import { isoDateTime, normalizedString, requiredString, uuid } from "@components/utilities/zod.utilities.js";
 import { z } from "zod";
 
+// ============================================================================
+// SECTION 1: ENUMS AND CONSTANTS
+// ============================================================================
+
 export const taskPhases = [`routing`, `execution`, `done`] as const;
 export type TaskPhase = (typeof taskPhases)[number];
 
@@ -14,8 +18,39 @@ export type TaskStatus = (typeof taskStatuses)[number];
 export const taskSourceTypes = [`chat-ui`, `workgraph-webhook`] as const;
 export type TaskSourceType = (typeof taskSourceTypes)[number];
 
+export const taskExecutionLanes = [`provider-based`, `runner-based`] as const;
+export type TaskExecutionLane = (typeof taskExecutionLanes)[number];
+
+export const taskKindDefinitions = [
+  { kind: `coding`, requiredExecutionLane: `runner-based` },
+  { kind: `jira-refinement`, requiredExecutionLane: `provider-based` },
+  { kind: `analysis`, requiredExecutionLane: `provider-based` },
+  { kind: `design`, requiredExecutionLane: `provider-based` },
+  { kind: `research`, requiredExecutionLane: `provider-based` },
+  { kind: `other`, requiredExecutionLane: `provider-based` },
+] as const satisfies ReadonlyArray<{ kind: string; requiredExecutionLane: TaskExecutionLane }>;
+
+export const taskKinds = taskKindDefinitions.map((definition) => definition.kind) as unknown as readonly [
+  (typeof taskKindDefinitions)[number][`kind`],
+  ...Array<(typeof taskKindDefinitions)[number][`kind`]>,
+];
+export type TaskKind = (typeof taskKinds)[number];
+
+export const taskKindSchema = z.enum(taskKinds);
+export const taskExecutionLaneSchema = z.enum(taskExecutionLanes);
+
+export const routeReasonCodes = [`ROUTED_FROM_FIRST_MESSAGE`, `ROUTED_FROM_CONVERSATION_CONTEXT`, `REUSED_PREVIOUS_SELECTION`, `MANUAL_OVERRIDE`] as const;
+export type RouteReasonCode = (typeof routeReasonCodes)[number];
+
+export const timelineEntryTypes = [`task-created`, `chat-session`, `routing-decision`, `llm-call`, `system-action-started`, `system-action-result`, `waiting-user-input`, `user-approval`, `task-completed`, `task-blocked`] as const;
+export type TimelineEntryType = (typeof timelineEntryTypes)[number];
+
+// ============================================================================
+// SECTION 2: FOUNDATIONAL PAYLOAD SCHEMAS
+// ============================================================================
+
 export const taskChatPayloadSchema = z.object({
-  messageType: z.enum([`user`, `assistant`]).optional(),
+  messageType: z.enum([`user`, `assistant`, `system`]).optional(),
   message: z.string(),
   channel: z.string().optional(),
 });
@@ -25,20 +60,16 @@ export const taskRoutingPayloadSchema = z.object({
   selectedPersona: uuid().optional(),
   selectedPersonaDisplayName: z.string().optional(),
   selectedModel: z.string().optional(),
+  taskKind: taskKindSchema.optional(),
+  blockedModels: z.array(z.string()).optional(),
   targetType: z.enum([`provider`, `runner`]).optional(),
-  executionLane: z.enum([`provider-based`, `runner-based`]).optional(),
-  requiredExecutionLane: z.enum([`provider-based`, `runner-based`]).optional(),
+  executionLane: taskExecutionLaneSchema.optional(),
+  requiredExecutionLane: taskExecutionLaneSchema.optional(),
   conversationMode: z.string().optional(),
   routeReasonCode: z.string().optional(),
   routeReasonText: z.string().optional(),
 });
 export type TaskRoutingPayload = z.infer<typeof taskRoutingPayloadSchema>;
-
-export const taskKinds = [`coding`, `jira-refinement`, `analysis`, `design`, `research`, `other`] as const;
-export type TaskKind = (typeof taskKinds)[number];
-
-export const taskOwnerModes = [`ai`, `human`, `mixed`] as const;
-export type TaskOwnerMode = (typeof taskOwnerModes)[number];
 
 export const taskRoutingMetaSchema = z.object({
   routeAttempts: z.number().int().nonnegative(),
@@ -47,9 +78,6 @@ export const taskRoutingMetaSchema = z.object({
   lastRouteReasonCode: z.string().nullable(),
 });
 export type TaskRoutingMeta = z.infer<typeof taskRoutingMetaSchema>;
-
-export const timelineEntryTypes = [`task-created`, `chat-session`, `routing-decision`, `llm-call`, `system-action-started`, `system-action-result`, `waiting-user-input`, `user-approval`, `task-completed`, `task-blocked`] as const;
-export type TimelineEntryType = (typeof timelineEntryTypes)[number];
 
 export const timelineChatTurnSchema = z.object({
   speaker: z.enum([`user`, `assistant`, `system`]),
@@ -66,64 +94,66 @@ export const timelineEntrySchema = z.object({
 });
 export type TimelineEntry = z.infer<typeof timelineEntrySchema>;
 
+export const pendingToolApprovalToolCallSchema = z.object({
+  id: z.string().min(1),
+  tool: z.string().min(1),
+  input: z.record(z.string(), z.unknown()).optional(),
+  rawArguments: z.string().optional(),
+});
+export type PendingToolApprovalToolCall = z.infer<typeof pendingToolApprovalToolCallSchema>;
+
+export const pendingToolApprovalRequestSchema = z.object({
+  requestId: uuid(),
+  createdAt: isoDateTime,
+  approvalType: z.literal(`tool-call`),
+  approvalFingerprint: z.string().min(1),
+  selectedPersona: uuid().nullable(),
+  selectedPersonaDisplayName: z.string().nullable(),
+  selectedModel: z.string().nullable(),
+  requestedTools: z.array(z.string().min(1)).min(1),
+  toolCall: pendingToolApprovalToolCallSchema,
+  assistantResponseText: z.string().optional(),
+  approvalDescription: z.string().optional(), // Human-readable description of what this tool call will do
+});
+export type PendingToolApprovalRequest = z.infer<typeof pendingToolApprovalRequestSchema>;
+
+export const taskApprovalDecisionSchema = z.object({
+  decision: z.enum([`approved`, `rejected`]),
+  requestId: uuid(),
+  message: normalizedString,
+});
+export type TaskApprovalDecision = z.infer<typeof taskApprovalDecisionSchema>;
+
+export const workgraphItemPayloadSchema = z.object({
+  id: uuid().optional(),
+  itemKey: z.string().min(1),
+  labels: z.array(z.string()),
+});
+export type WorkgraphItemPayload = z.infer<typeof workgraphItemPayloadSchema>;
+
+export const taskApprovalsSchema = z.array(z.unknown());
+export type TaskApprovals = z.infer<typeof taskApprovalsSchema>;
+
+// Composite payload schema that combines all payload sub-structures
 export const taskPayloadSchema = z
   .object({
     channel: z.string().optional(),
     chat: taskChatPayloadSchema.optional(),
     routing: taskRoutingPayloadSchema.optional(),
+    pendingToolApprovalRequest: pendingToolApprovalRequestSchema.nullable().optional(),
     timeline: z.array(timelineEntrySchema).default([]),
+    workgraphItem: workgraphItemPayloadSchema.optional(),
   })
   .loose();
 export type TaskPayload = z.infer<typeof taskPayloadSchema>;
 
-export const taskApprovalsSchema = z.array(z.unknown());
-export type TaskApprovals = z.infer<typeof taskApprovalsSchema>;
+// ============================================================================
+// SECTION 3: CANONICAL TASK SCHEMA
+// ============================================================================
+// This is the SINGLE SOURCE OF TRUTH for task data shape.
+// All derived schemas reference this schema using .shape, .pick(), or .omit()
+// to prevent drift.
 
-export const routeReasonCodes = [`ROUTED_FROM_FIRST_MESSAGE`, `ROUTED_FROM_CONVERSATION_CONTEXT`, `REUSED_PREVIOUS_SELECTION`, `MANUAL_OVERRIDE`] as const;
-export type RouteReasonCode = (typeof routeReasonCodes)[number];
-
-export const routeDecisionSchema = z.object({
-  selectedPersona: uuid(),
-  selectedModel: z.string().optional(),
-  targetType: z.enum([`provider`, `runner`]),
-  routeReasonCode: z.enum(routeReasonCodes),
-  routeReasonText: z.string(),
-});
-export type RouteDecision = z.infer<typeof routeDecisionSchema>;
-
-export const routingLlmRouteDecisionSchema = z.object({
-  selectedPersona: uuid(),
-  selectedModel: z.string().optional(),
-  targetType: z.enum([`provider`, `runner`]),
-  routeReasonText: z.string(),
-});
-export type RoutingLlmRouteDecision = z.infer<typeof routingLlmRouteDecisionSchema>;
-
-export const routingProviderConnectionSchema = z.object({
-  baseUrl: z.string(),
-  apiKey: z.string(),
-  routingModel: z.string(),
-  defaultModel: z.string().nullable(),
-  enabledModels: z.array(z.string()),
-  availableModels: z.array(providerModelSchema),
-});
-export type RoutingProviderConnection = z.infer<typeof routingProviderConnectionSchema>;
-
-export const routeSelectionOptionSchema = z.object({
-  id: uuid(),
-  displayName: z.string(),
-  role: z.string().nullable(),
-});
-export type RouteSelectionOption = z.infer<typeof routeSelectionOptionSchema>;
-
-export const routeSelectionRequiredSchema = z.object({
-  code: z.literal(`ROUTE_SELECTION_REQUIRED`),
-  message: z.string(),
-  options: z.array(routeSelectionOptionSchema),
-});
-export type RouteSelectionRequired = z.infer<typeof routeSelectionRequiredSchema>;
-
-// Flattened task schema — work fields live at the top level
 export const taskSchema = z.object({
   id: uuid(),
   loop: uuid(),
@@ -140,8 +170,7 @@ export const taskSchema = z.object({
   routeReasonText: z.string().nullable(),
   // Work definition (formerly split between requestedOutcome and task.objective)
   description: z.string().nullable(),
-  kind: z.enum(taskKinds),
-  ownerMode: z.enum(taskOwnerModes),
+  kind: taskKindSchema,
   successCriteria: z.array(z.string()),
   externalRefs: z.array(z.string()),
   // Execution state
@@ -166,71 +195,16 @@ export const taskSchema = z.object({
 });
 export type Task = z.infer<typeof taskSchema>;
 
-export const createTaskRequestSchema = z.object({
-  loop: requiredString(`loop is required.`).pipe(uuid()),
-  resumeTaskId: uuid().optional(),
-  sourceType: z.enum(taskSourceTypes),
-  description: requiredString(`description is required.`),
-  sourceRef: normalizedString,
-  kind: z.enum(taskKinds).optional(),
-  ownerMode: z.enum(taskOwnerModes).optional(),
-  successCriteria: z.array(z.string()).optional(),
-  externalRefs: z.array(z.string()).optional(),
-  assignedPersona: uuid().optional(),
-  approvals: taskApprovalsSchema.optional(),
-  payload: taskPayloadSchema.optional(),
-});
+// ============================================================================
+// SECTION 4: DERIVED SCHEMAS FROM taskSchema
+// ============================================================================
+// All schemas in this section derive from taskSchema to ensure consistency.
+// No duplicate field definitions — everything uses .shape, .pick(), or .omit()
 
-export const validatedCreateTaskRequestSchema = createTaskRequestSchema.extend({
-  approvals: taskApprovalsSchema.default([]),
-  payload: taskPayloadSchema.default({ timeline: [] }),
-  kind: z.enum(taskKinds).default(`other`),
-  ownerMode: z.enum(taskOwnerModes).default(`mixed`),
-  successCriteria: z.array(z.string()).default([]),
-  externalRefs: z.array(z.string()).default([]),
-});
+// --- Database Operation Schemas ---
 
-export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>;
-export type ValidatedCreateTaskRequest = z.infer<typeof validatedCreateTaskRequestSchema>;
-
-export const createTaskResponseSchema = z.object({
-  loop: loopSchema,
-  tasks: z.array(taskSchema),
-  routeDecision: routeDecisionSchema.optional(),
-});
-export type CreateTaskResponse = z.infer<typeof createTaskResponseSchema>;
-
-export const routingProviderConnectionSchemaWithMeta = routingProviderConnectionSchema;
-
-export const routingModelChoiceSchemaExtended = routingLlmRouteDecisionSchema.pick({
-  selectedModel: true,
-  routeReasonText: true,
-});
-
-export const markTaskCompletedRequestSchema = z.object({
-  loop: uuid(),
-  taskId: uuid().optional(),
-  note: z.string().optional(),
-});
-
-export const markTaskBlockedRequestSchema = z.object({
-  loop: uuid(),
-  taskId: uuid().optional(),
-  blocker: requiredString(`blocker is required.`),
-  note: z.string().optional(),
-});
-
-export const updateTaskContextRequestSchema = z.object({
-  loop: uuid(),
-  taskId: uuid().optional(),
-  context: requiredString(`context is required.`),
-  note: z.string().optional(),
-});
-
-export type MarkTaskCompletedRequest = z.infer<typeof markTaskCompletedRequestSchema>;
-export type MarkTaskBlockedRequest = z.infer<typeof markTaskBlockedRequestSchema>;
-export type UpdateTaskContextRequest = z.infer<typeof updateTaskContextRequestSchema>;
-
+// Insertion schema — omits all auto-generated/computed fields
+// This is the shape passed to INSERT operations
 export const taskInsertSchema = taskSchema.omit({
   id: true,
   emittedAt: true,
@@ -244,6 +218,14 @@ export const taskInsertSchema = taskSchema.omit({
 });
 export type TaskInsert = z.infer<typeof taskInsertSchema>;
 
+// Create input schema — derived from taskInsert, kind is set during routing decision
+// This is what queryTaskCreate accepts
+export const taskCreateInputSchema = taskInsertSchema.omit({
+  kind: true,
+});
+export type TaskCreateInput = z.infer<typeof taskCreateInputSchema>;
+
+// Define which task fields are mutable during updates
 const taskUpdateMutableSchema = taskSchema.pick({
   phase: true,
   status: true,
@@ -253,6 +235,7 @@ const taskUpdateMutableSchema = taskSchema.pick({
   targetId: true,
   routeReasonCode: true,
   routeReasonText: true,
+  kind: true,
   blocker: true,
   payload: true,
   context: true,
@@ -273,6 +256,159 @@ export const taskUpdateInputSchema = z
     ...taskUpdateMutableSchema.partial().shape,
   });
 export type TaskUpdateInput = z.infer<typeof taskUpdateInputSchema>;
+
+// --- User Request Schemas ---
+
+// Create request schema derived from taskSchema fields + resume/approval extensions
+export const createTaskRequestSchema = z.object({
+  loop: requiredString(`loop is required.`).pipe(uuid()),
+  sourceType: taskSchema.shape.sourceType,
+  sourceRef: normalizedString,
+  description: requiredString(`description is required.`),
+  successCriteria: taskSchema.shape.successCriteria.optional(),
+  externalRefs: taskSchema.shape.externalRefs.optional(),
+  approvals: taskSchema.shape.approvals.optional(),
+  payload: taskSchema.shape.payload.optional(),
+  // Resume task extensions
+  resumeTaskId: uuid().optional(),
+  approvalDecision: taskApprovalDecisionSchema.optional(),
+});
+
+// Validated version with defaults — all derived from taskSchema defaults
+export const validatedCreateTaskRequestSchema = createTaskRequestSchema.extend({
+  approvals: taskSchema.shape.approvals.default([]),
+  payload: taskSchema.shape.payload.default({ timeline: [] }),
+  successCriteria: taskSchema.shape.successCriteria.default([]),
+  externalRefs: taskSchema.shape.externalRefs.default([]),
+});
+
+export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>;
+export type ValidatedCreateTaskRequest = z.infer<typeof validatedCreateTaskRequestSchema>;
+
+// ============================================================================
+// SECTION 4b: ROUTING AND DECISION SCHEMAS (MUST BE BEFORE createTaskResponseSchema)
+// ============================================================================
+// These define the routing/decision data structures (used by createTaskResponseSchema)
+
+export const routeDecisionSchema = z.object({
+  selectedPersona: uuid(),
+  selectedModel: z.string().optional(),
+  targetType: z.enum([`provider`, `runner`]),
+  taskKind: taskKindSchema,
+  routeReasonCode: z.enum(routeReasonCodes),
+  routeReasonText: z.string(),
+});
+export type RouteDecision = z.infer<typeof routeDecisionSchema>;
+
+export const routingLlmRouteDecisionSchema = z.object({
+  selectedPersona: uuid(),
+  selectedModel: z.string().optional(),
+  targetType: z.enum([`provider`, `runner`]),
+  taskKind: taskKindSchema,
+  routeReasonText: z.string(),
+});
+export type RoutingLlmRouteDecision = z.infer<typeof routingLlmRouteDecisionSchema>;
+
+// Response schema for task creation
+export const createTaskResponseSchema = z.object({
+  loop: loopSchema,
+  tasks: z.array(taskSchema),
+  routeDecision: routeDecisionSchema.optional(),
+});
+export type CreateTaskResponse = z.infer<typeof createTaskResponseSchema>;
+
+// Task operation schemas — derived from taskSchema.shape
+export const markTaskCompletedRequestSchema = z.object({
+  loop: taskSchema.shape.loop,
+  taskId: uuid().optional(),
+  note: z.string().optional(),
+});
+
+export const markTaskBlockedRequestSchema = z.object({
+  loop: taskSchema.shape.loop,
+  taskId: uuid().optional(),
+  blocker: requiredString(`blocker is required.`),
+  note: z.string().optional(),
+});
+
+export const updateTaskContextRequestSchema = z.object({
+  loop: taskSchema.shape.loop,
+  taskId: uuid().optional(),
+  context: requiredString(`context is required.`),
+  note: z.string().optional(),
+});
+
+export type MarkTaskCompletedRequest = z.infer<typeof markTaskCompletedRequestSchema>;
+export type MarkTaskBlockedRequest = z.infer<typeof markTaskBlockedRequestSchema>;
+export type UpdateTaskContextRequest = z.infer<typeof updateTaskContextRequestSchema>;
+
+// Routing context — uses payload shape from taskSchema
+export const routingTaskContextSchema = z.object({
+  request: validatedCreateTaskRequestSchema,
+  sourcePayload: taskSchema.shape.payload,
+  sourceRef: z.string().optional(),
+});
+export type RoutingTaskContext = z.infer<typeof routingTaskContextSchema>;
+
+// ============================================================================
+// SECTION 5: ROUTING AND DECISION SUPPORT SCHEMAS
+// ============================================================================
+// Additional routing-related type definitions and utilities
+
+export type RoutingChoiceAttempt<T> = {
+  choice: T | null;
+  auditEntry: TimelineEntry;
+  error: Error | null;
+};
+
+export type RoutingDecisionChoiceAttempt = RoutingChoiceAttempt<RoutingLlmRouteDecision> & {
+  conversationMode: string;
+  llmCostUsd: number;
+};
+
+export type RouteDecisionAttempt = {
+  routeDecision: RouteDecision | null;
+  llmTimelineEntries: TimelineEntry[];
+  conversationMode: string | null;
+  error: Error | null;
+  llmCostUsd: number;
+  blockedModels: string[];
+};
+
+export const routingProviderConnectionSchema = z.object({
+  baseUrl: z.string(),
+  apiKey: z.string(),
+  routingModel: z.string(),
+  defaultModel: z.string().nullable(),
+  enabledModels: z.array(z.string()),
+  availableModels: z.array(providerModelSchema),
+});
+export type RoutingProviderConnection = z.infer<typeof routingProviderConnectionSchema>;
+
+export const routingProviderConnectionSchemaWithMeta = routingProviderConnectionSchema;
+
+export const routingModelChoiceSchemaExtended = routingLlmRouteDecisionSchema.pick({
+  selectedModel: true,
+  routeReasonText: true,
+});
+
+export const routeSelectionOptionSchema = z.object({
+  id: uuid(),
+  displayName: z.string(),
+  role: z.string().nullable(),
+});
+export type RouteSelectionOption = z.infer<typeof routeSelectionOptionSchema>;
+
+export const routeSelectionRequiredSchema = z.object({
+  code: z.literal(`ROUTE_SELECTION_REQUIRED`),
+  message: z.string(),
+  options: z.array(routeSelectionOptionSchema),
+});
+export type RouteSelectionRequired = z.infer<typeof routeSelectionRequiredSchema>;
+
+// ============================================================================
+// SECTION 6: PERSONA RESULT SCHEMAS
+// ============================================================================
 
 export const loopPersonaRoutedResultSchema = z.object({
   status: z.literal(`routed`),
@@ -301,10 +437,3 @@ export type LoopPersonaHandler = {
   persona: PersonaId;
   handle: (task: Task) => LoopPersonaResult;
 };
-
-export const routingTaskContextSchema = z.object({
-  request: validatedCreateTaskRequestSchema,
-  sourcePayload: taskPayloadSchema,
-  sourceRef: z.string().optional(),
-});
-export type RoutingTaskContext = z.infer<typeof routingTaskContextSchema>;

@@ -45,6 +45,7 @@ export const loopToolSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1),
   enabled: z.boolean(),
+  requiresApproval: z.boolean(),
 });
 
 export const loopToolsSchema = z.object({
@@ -106,7 +107,7 @@ export type Feedback = {
   message: string;
 };
 
-export const loopTabs = [`dashboard`, `details`, `tools`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
+export const loopTabs = [`tasks`, `details`, `tools`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
 export const loopTabSchema = z.enum(loopTabs);
 
 export type Tab = z.infer<typeof loopTabSchema>;
@@ -114,6 +115,7 @@ export type Tab = z.infer<typeof loopTabSchema>;
 export type LoopProps = {
   loopId: string;
   tab: Tab;
+  taskId?: string;
   editor?: `create` | `edit` | `clone`;
   personaId?: string;
   workgraphViewWorkgraphId?: string;

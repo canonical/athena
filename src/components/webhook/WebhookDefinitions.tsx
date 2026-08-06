@@ -1,4 +1,5 @@
-import { Button, CodeSnippet, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Button, CodeSnippet, Icon, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { createLoopWorkgraphWebhook, deleteLoopWorkgraphWebhook, updateLoopWorkgraphWebhook, webhookApiPaths } from "@components/webhook/webhook.client.js";
 import { useLoopWorkgraphWebhooks } from "@components/webhook/webhook.query.js";
 import { useFormik } from "formik";
@@ -13,6 +14,7 @@ type WebhookDefinitionsProps = {
 export function WebhookDefinitions({ loopId, workgraphId, onFeedback }: WebhookDefinitionsProps) {
   const { state: webhookListState, reload } = useLoopWorkgraphWebhooks(loopId, workgraphId);
   const [busyWebhookId, setBusyWebhookId] = useState<string | null>(null);
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [createdWebhookDetails, setCreatedWebhookDetails] = useState<{ endpointUrl: string; headerName: string; secret: string } | null>(null);
 
   const createWebhookFormik = useFormik<{ label: string; authHeaderName: string }>({
@@ -36,6 +38,7 @@ export function WebhookDefinitions({ loopId, workgraphId, onFeedback }: WebhookD
         });
 
         helpers.resetForm();
+        setIsCreateDrawerOpen(false);
         reload();
         onFeedback({
           severity: NotificationSeverity.INFORMATION,
@@ -98,7 +101,8 @@ export function WebhookDefinitions({ loopId, workgraphId, onFeedback }: WebhookD
                 {webhook.active ? `Disable` : `Enable`}
               </Button>
               <Button
-                appearance="negative"
+                appearance="base"
+                aria-label={`Delete ${webhook.label}`}
                 disabled={busyWebhookId === webhook.id}
                 onClick={() => {
                   setBusyWebhookId(webhook.id);
@@ -123,9 +127,10 @@ export function WebhookDefinitions({ loopId, workgraphId, onFeedback }: WebhookD
                       setBusyWebhookId(null);
                     });
                 }}
+                title={`Delete ${webhook.label}`}
                 type="button"
               >
-                Delete
+                <Icon aria-hidden="true" className="text-negative" name="delete" />
               </Button>
             </div>
           ),
@@ -136,19 +141,50 @@ export function WebhookDefinitions({ loopId, workgraphId, onFeedback }: WebhookD
 
   return (
     <>
-      <div className="p-card p-strip is-shallow">
+      <div>
+        <div className="u-clearfix">
+          <div className="u-float-right">
+            <Button appearance="positive" onClick={() => setIsCreateDrawerOpen(true)} type="button">
+              Create webhook
+            </Button>
+          </div>
+        </div>
+        <hr />
+
+        {webhookListState.status === `loading` ? <p className="p-text--default">Loading webhooks...</p> : null}
+        {webhookListState.status === `error` ? (
+          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load webhooks">
+            {webhookListState.message}
+          </Notification>
+        ) : null}
+        {webhookListState.status === `success` && webhookListState.webhooks.length === 0 ? <p className="p-text--default">No webhooks configured yet.</p> : null}
+        {webhookListState.status === `success` && webhookListState.webhooks.length > 0 ? (
+          <MainTable className="u-table-layout--auto" headers={[{ content: `Label` }, { content: `Auth header` }, { content: `Endpoint URL` }, { content: `Status` }, { content: `Actions`, className: `u-align--right` }]} rows={rows} />
+        ) : null}
+      </div>
+
+      <EntityDrawer isOpen={isCreateDrawerOpen} onClose={() => setIsCreateDrawerOpen(false)} title="Create webhook">
         <form onSubmit={createWebhookFormik.handleSubmit}>
           <label htmlFor="workgraph-webhook-label">Label</label>
           <input id="workgraph-webhook-label" name="label" onChange={createWebhookFormik.handleChange} required type="text" value={createWebhookFormik.values.label} />
           <label htmlFor="workgraph-webhook-auth-header">Authentication header</label>
           <input id="workgraph-webhook-auth-header" name="authHeaderName" onChange={createWebhookFormik.handleChange} required type="text" value={createWebhookFormik.values.authHeaderName} />
           <div className="u-align--right">
-            <Button appearance="base" disabled={createWebhookFormik.isSubmitting} type="submit">
-              {createWebhookFormik.isSubmitting ? `Creating...` : `Create webhook`}
+            <Button appearance="base" onClick={() => setIsCreateDrawerOpen(false)} type="button">
+              Cancel
+            </Button>
+            <Button appearance="positive" disabled={createWebhookFormik.isSubmitting} type="submit">
+              {createWebhookFormik.isSubmitting ? (
+                `Creating...`
+              ) : (
+                <>
+                  <Icon aria-hidden="true" light name="success" /> Save
+                </>
+              )}
             </Button>
           </div>
         </form>
-      </div>
+      </EntityDrawer>
 
       {createdWebhookDetails ? (
         <div className="p-card p-strip is-shallow">
@@ -165,29 +201,21 @@ export function WebhookDefinitions({ loopId, workgraphId, onFeedback }: WebhookD
       ) : null}
 
       <div className="p-card p-strip is-shallow">
-        {webhookListState.status === `loading` ? <p className="p-text--default">Loading webhooks...</p> : null}
-        {webhookListState.status === `error` ? (
-          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load webhooks">
-            {webhookListState.message}
-          </Notification>
-        ) : null}
-        {webhookListState.status === `success` && webhookListState.webhooks.length === 0 ? <p className="p-text--default">No webhooks configured yet.</p> : null}
-        {webhookListState.status === `success` && webhookListState.webhooks.length > 0 ? (
-          <MainTable headers={[{ content: `Label` }, { content: `Auth header` }, { content: `Endpoint URL` }, { content: `Status` }, { content: `Actions` }]} rows={rows} />
-        ) : null}
-      </div>
-
-      <div className="p-card p-strip is-shallow">
         <h3 className="p-heading--4">Jira webhook setup</h3>
         <ol>
           <li>Create or choose an active webhook definition above for this workgraph.</li>
           <li>In Jira, go to Project settings, then Automation, and create a new rule.</li>
-          <li>Choose trigger <strong>Multiple work item events</strong>, then select: <strong>Work item created</strong>, <strong>Work item updated</strong>, <strong>Work item assigned</strong>, <strong>Work item transitioned</strong>, <strong>Work item moved</strong>, and <strong>Work item deleted</strong>.</li>
+          <li>
+            Choose trigger <strong>Multiple work item events</strong>, then select: <strong>Work item created</strong>, <strong>Work item updated</strong>, <strong>Work item assigned</strong>, <strong>Work item transitioned</strong>,{" "}
+            <strong>Work item moved</strong>, and <strong>Work item deleted</strong>.
+          </li>
           <li>Add a JQL filter condition in the rule and use the same JQL configured in this workgraph to reduce unnecessary webhook traffic.</li>
           <li>Add the Send web request action.</li>
           <li>Use the Endpoint URL from Athena as the request URL and set method to POST.</li>
           <li>Add one header where name is Auth header from Athena and value is the secret shown at creation time.</li>
-          <li>Set Web request body to <strong>Issue data (Jira format)</strong>.</li>
+          <li>
+            Set Web request body to <strong>Issue data (Jira format)</strong>.
+          </li>
           <li>Publish and test the rule in Jira, then use Synced Items in Athena to verify ingestion.</li>
         </ol>
         <p className="p-text--small">Tip: if the secret was not saved when created, delete that webhook and create a new one to generate a new secret.</p>

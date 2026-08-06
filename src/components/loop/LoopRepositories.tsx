@@ -1,4 +1,5 @@
-import { Button, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
+import { Button, Icon, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
+import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { assignRepositoryToLoop, removeRepositoryFromLoop } from "@components/repository/repository.client.js";
 import { useLoopRepositoryList, useRepositoryList } from "@components/repository/repository.query.js";
 import type { LoopRepository, Repository } from "@components/repository/repository.schema.js";
@@ -20,6 +21,7 @@ export function LoopRepositories({ loopId, onFeedback }: LoopRepositoriesProps) 
   const { state: repositoryListState } = useRepositoryList();
   const { state: assignedRepositoryState, reload: reloadAssignedRepositories } = useLoopRepositoryList(loopId);
   const [busyRepositoryId, setBusyRepositoryId] = useState<string | null>(null);
+  const [isAssignDrawerOpen, setIsAssignDrawerOpen] = useState(false);
 
   const availableRepositories = repositoryListState.status === `success` ? repositoryListState.repositories : [];
   const assignedRepositories = assignedRepositoryState.status === `success` ? assignedRepositoryState.repositories : [];
@@ -44,6 +46,7 @@ export function LoopRepositories({ loopId, onFeedback }: LoopRepositoriesProps) 
           message: `Repository has been assigned to this loop.`,
         });
         helpers.resetForm();
+        setIsAssignDrawerOpen(false);
         await queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
         reloadAssignedRepositories();
       } catch (error) {
@@ -84,35 +87,18 @@ export function LoopRepositories({ loopId, onFeedback }: LoopRepositoriesProps) 
 
   return (
     <>
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Assign an existing repository</h2>
-        {repositoryListState.status === `loading` ? <p className="p-text--default">Loading available repositories...</p> : null}
-        {repositoryListState.status === `error` ? (
-          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load available repositories">
-            {repositoryListState.message}
-          </Notification>
-        ) : null}
-        {repositoryListState.status === `success` && availableRepositories.length === 0 ? <p className="p-text--default">No repositories are available yet. Create a repository connection first, then assign it to this loop.</p> : null}
-        {repositoryListState.status === `success` && availableRepositories.length > 0 && unassignedRepositories.length === 0 ? <p className="p-text--default">All available repositories are already assigned to this loop.</p> : null}
-        <form onSubmit={assignFormik.handleSubmit}>
-          <Select
-            id="assign-repository-select"
-            label="Repository"
-            name="selectedRepositoryId"
-            onChange={assignFormik.handleChange}
-            options={[{ value: ``, label: `- Select a repository -` }, ...unassignedRepositories.map((repository) => ({ value: repository.id, label: repository.displayName }))]}
-            value={assignFormik.values.selectedRepositoryId}
-          />
-          <div className="u-align--right">
-            <Button appearance="base" disabled={!assignFormik.values.selectedRepositoryId || assignFormik.isSubmitting} type="submit">
-              {assignFormik.isSubmitting ? `Assigning...` : `Assign repository`}
+      <div>
+        <div className="u-clearfix">
+          <div className="u-float-left">
+            <h2 className="p-heading--4">Assigned repositories</h2>
+          </div>
+          <div className="u-float-right">
+            <Button appearance="positive" onClick={() => setIsAssignDrawerOpen(true)} type="button">
+              Assign repository
             </Button>
           </div>
-        </form>
-      </div>
-
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Assigned repositories</h2>
+        </div>
+        <hr />
         {assignedRepositoryState.status === `loading` ? <p className="p-text--default">Loading repositories...</p> : null}
         {assignedRepositoryState.status === `error` ? (
           <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load assigned repositories">
@@ -122,7 +108,8 @@ export function LoopRepositories({ loopId, onFeedback }: LoopRepositoriesProps) 
         {assignedRepositoryState.status === `success` && assignedRepositories.length === 0 ? <p className="p-text--default">No repositories assigned to this loop yet.</p> : null}
         {assignedRepositoryState.status === `success` && assignedRepositories.length > 0 ? (
           <MainTable
-            headers={[{ content: `Display name` }, { content: `Type` }, { content: `Repository` }, { content: `Status` }, { content: `Enabled` }, { content: `Updated at` }, { content: `Actions` }]}
+            className="u-table-layout--auto"
+            headers={[{ content: `Display name` }, { content: `Type` }, { content: `Repository` }, { content: `Status` }, { content: `Enabled` }, { content: `Updated at` }, { content: `Actions`, className: `u-align--right` }]}
             rows={assignedRepositories.map((repository) => ({
               key: repository.repository,
               columns: [
@@ -135,8 +122,15 @@ export function LoopRepositories({ loopId, onFeedback }: LoopRepositoriesProps) 
                 {
                   content: (
                     <div className="u-align--right">
-                      <Button appearance="negative" disabled={busyRepositoryId === repository.repository} onClick={() => handleRemoveAssignment(repository)} type="button">
-                        {busyRepositoryId === repository.repository ? `Removing ${repository.displayName}...` : `Remove ${repository.displayName}`}
+                      <Button
+                        appearance="base"
+                        aria-label={`Remove ${repository.displayName}`}
+                        disabled={busyRepositoryId === repository.repository}
+                        onClick={() => handleRemoveAssignment(repository)}
+                        title={`Remove ${repository.displayName}`}
+                        type="button"
+                      >
+                        <Icon aria-hidden="true" className="text-negative" name="delete" />
                       </Button>
                     </div>
                   ),
@@ -146,6 +140,37 @@ export function LoopRepositories({ loopId, onFeedback }: LoopRepositoriesProps) 
           />
         ) : null}
       </div>
+
+      <EntityDrawer isOpen={isAssignDrawerOpen} onClose={() => setIsAssignDrawerOpen(false)} title="Assign repository">
+        {repositoryListState.status === `loading` ? <p className="p-text--default">Loading available repositories...</p> : null}
+        {repositoryListState.status === `error` ? (
+          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load available repositories">
+            {repositoryListState.message}
+          </Notification>
+        ) : null}
+        {repositoryListState.status === `success` && availableRepositories.length === 0 ? <p className="p-text--default">No repositories are available yet. Create a repository connection first, then assign it to this loop.</p> : null}
+        {repositoryListState.status === `success` && availableRepositories.length > 0 && unassignedRepositories.length === 0 ? <p className="p-text--default">All available repositories are already assigned to this loop.</p> : null}
+        {repositoryListState.status === `success` && unassignedRepositories.length > 0 ? (
+          <form onSubmit={assignFormik.handleSubmit}>
+            <Select
+              id="assign-repository-select"
+              label="Repository"
+              name="selectedRepositoryId"
+              onChange={assignFormik.handleChange}
+              options={[{ value: ``, label: `- Select a repository -` }, ...unassignedRepositories.map((repository) => ({ value: repository.id, label: repository.displayName }))]}
+              value={assignFormik.values.selectedRepositoryId}
+            />
+            <div className="u-align--right">
+              <Button appearance="base" onClick={() => setIsAssignDrawerOpen(false)} type="button">
+                Cancel
+              </Button>
+              <Button appearance="positive" disabled={!assignFormik.values.selectedRepositoryId || assignFormik.isSubmitting} type="submit">
+                {assignFormik.isSubmitting ? `Assigning...` : `Assign repository`}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </EntityDrawer>
     </>
   );
 }

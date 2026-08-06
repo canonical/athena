@@ -1,19 +1,18 @@
 import { Notification, NotificationSeverity } from "@canonical/react-components";
 import { useFeedbackToast } from "@components/base/toast.js";
-import { useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
 import { usePersonaList } from "../persona/persona.query.js";
 import { useLoop } from "./loop.query.js";
-import type { Feedback, LoopProps, Tab } from "./loop.schema.js";
+import type { Feedback, LoopProps } from "./loop.schema.js";
 
-const LazyLoopDashboard = lazy(async () => {
-  const module = await import("./LoopDashboard.js");
+const LazyLoopTasks = lazy(async () => {
+  const module = await import("./LoopTasks");
 
-  return { default: module.LoopDashboard };
+  return { default: module.LoopTasks };
 });
 
 const LazyLoopDetails = lazy(async () => {
-  const module = await import("./LoopDetails.js");
+  const module = await import("./LoopDetails");
 
   return { default: module.LoopDetails };
 });
@@ -25,39 +24,38 @@ const LazyLoopTools = lazy(async () => {
 });
 
 const LazyLoopPersonas = lazy(async () => {
-  const module = await import("./LoopPersonas.js");
+  const module = await import("./LoopPersonas");
 
   return { default: module.LoopPersonas };
 });
 
 const LazyLoopProviders = lazy(async () => {
-  const module = await import("./LoopProviders.js");
+  const module = await import("./LoopProviders");
 
   return { default: module.LoopProviders };
 });
 
 const LazyLoopRunners = lazy(async () => {
-  const module = await import("./LoopRunners.js");
+  const module = await import("./LoopRunners");
 
   return { default: module.LoopRunners };
 });
 
 const LazyLoopWorkgraphs = lazy(async () => {
-  const module = await import("./LoopWorkgraphs.js");
+  const module = await import("./LoopWorkgraphs");
 
   return { default: module.LoopWorkgraphs };
 });
 
 const LazyLoopRepositories = lazy(async () => {
-  const module = await import("./LoopRepositories.js");
+  const module = await import("./LoopRepositories");
 
   return { default: module.LoopRepositories };
 });
 
-export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId, workgraphConfigTab }: LoopProps) {
+export function Loop({ loopId, tab, taskId, editor, personaId, workgraphViewWorkgraphId, workgraphConfigTab }: LoopProps) {
   const { state: loopState, reload: reloadLoop } = useLoop(loopId);
   const { state: personaListState, reload: reloadPersonaList } = usePersonaList(loopId);
-  const navigate = useNavigate();
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   useFeedbackToast(feedback, setFeedback);
 
@@ -72,15 +70,6 @@ export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId,
       : activeRoutingCount !== null && activeRoutingCount > 1
         ? `This loop has ${activeRoutingCount} active routing personas and is paused. Exactly one is required. Go to the Personas tab and remove or archive the extras.`
         : null;
-
-  const setTab = (next: Tab) => {
-    void navigate({
-      params: { loopId },
-      search: { tab: next, create: undefined, edit: undefined, clone: undefined, workgraphView: undefined, workgraphConfigTab: undefined },
-      to: `/loop/$loopId`,
-    });
-    setFeedback(null);
-  };
 
   if (loopState.status === `loading`) {
     return (
@@ -103,74 +92,20 @@ export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId,
   }
 
   return (
-    <section className="p-strip is-shallow u-no-max-width">
-      <h1 className="p-heading--2">{loop?.name ?? `Loop`}</h1>
+    <>
       {routingPausedMessage ? (
         <Notification severity={NotificationSeverity.CAUTION} title="Loop is paused">
           {routingPausedMessage}
         </Notification>
       ) : null}
-      <nav aria-label="Loop sections" className="p-tabs">
-        <div role="tablist">
-          <ul className="p-tabs__list">
-            <li className="p-tabs__item" role="presentation">
-              <button aria-selected={tab === `dashboard`} className={`p-tabs__link${tab === `dashboard` ? ` is-active` : ``}`} onClick={() => setTab(`dashboard`)} role="tab" type="button">
-                Dashboard
-              </button>
-            </li>
-            <li className="p-tabs__item" role="presentation">
-              <button aria-selected={tab === `details`} className={`p-tabs__link${tab === `details` ? ` is-active` : ``}`} onClick={() => setTab(`details`)} role="tab" type="button">
-                Details
-              </button>
-            </li>
-            <li className="p-tabs__item" role="presentation">
-              <button aria-selected={tab === `tools`} className={`p-tabs__link${tab === `tools` ? ` is-active` : ``}`} onClick={() => setTab(`tools`)} role="tab" type="button">
-                Tools
-              </button>
-            </li>
-            <li className="p-tabs__item" role="presentation">
-              <button aria-selected={tab === `personas`} className={`p-tabs__link${tab === `personas` ? ` is-active` : ``}`} onClick={() => setTab(`personas`)} role="tab" type="button">
-                Personas
-              </button>
-            </li>
-            <li className="p-tabs__item" role="presentation">
-              <button aria-selected={tab === `providers`} className={`p-tabs__link${tab === `providers` ? ` is-active` : ``}`} onClick={() => setTab(`providers`)} role="tab" type="button">
-                Providers
-              </button>
-            </li>
-            <li className="p-tabs__item" role="presentation">
-              <button aria-selected={tab === `runners`} className={`p-tabs__link${tab === `runners` ? ` is-active` : ``}`} onClick={() => setTab(`runners`)} role="tab" type="button">
-                Runners
-              </button>
-            </li>
-            <li className="p-tabs__item" role="presentation">
-              <button aria-selected={tab === `workgraphs`} className={`p-tabs__link${tab === `workgraphs` ? ` is-active` : ``}`} onClick={() => setTab(`workgraphs`)} role="tab" type="button">
-                Workgraphs
-              </button>
-            </li>
-            <li className="p-tabs__item" role="presentation">
-              <button aria-selected={tab === `repositories`} className={`p-tabs__link${tab === `repositories` ? ` is-active` : ``}`} onClick={() => setTab(`repositories`)} role="tab" type="button">
-                Repositories
-              </button>
-            </li>
-          </ul>
-        </div>
-      </nav>
-      {tab === `dashboard` ? (
-        <Suspense fallback={<div>Loading dashboard...</div>}>
-          <LazyLoopDashboard loopId={loopId} />
+      {tab === `tasks` ? (
+        <Suspense fallback={<div>Loading tasks...</div>}>
+          <LazyLoopTasks loopId={loopId} taskId={taskId} />
         </Suspense>
       ) : null}
       {tab === `details` ? (
         <Suspense fallback={<div>Loading details...</div>}>
-          <LazyLoopDetails
-            loopId={loopId}
-            loopName={loop?.name ?? ``}
-            loopDescription={loop?.description ?? ``}
-            loopIterationCostLimitUsd={loop?.iterationCostLimitUsd ?? null}
-            onFeedback={setFeedback}
-            onSaved={reloadLoop}
-          />
+          <LazyLoopDetails loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} loopIterationCostLimitUsd={loop?.iterationCostLimitUsd ?? null} onFeedback={setFeedback} onSaved={reloadLoop} />
         </Suspense>
       ) : null}
       {tab === `tools` ? (
@@ -195,12 +130,7 @@ export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId,
       ) : null}
       {tab === `workgraphs` ? (
         <Suspense fallback={<div>Loading workgraphs...</div>}>
-          <LazyLoopWorkgraphs
-            loopId={loopId}
-            onFeedback={setFeedback}
-            workgraphViewWorkgraphId={workgraphViewWorkgraphId}
-            workgraphConfigTab={workgraphConfigTab}
-          />
+          <LazyLoopWorkgraphs loopId={loopId} onFeedback={setFeedback} workgraphViewWorkgraphId={workgraphViewWorkgraphId} workgraphConfigTab={workgraphConfigTab} />
         </Suspense>
       ) : null}
       {tab === `repositories` ? (
@@ -208,6 +138,6 @@ export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId,
           <LazyLoopRepositories loopId={loopId} onFeedback={setFeedback} />
         </Suspense>
       ) : null}
-    </section>
+    </>
   );
 }

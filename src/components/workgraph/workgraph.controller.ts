@@ -3,6 +3,7 @@ import { log } from "@components/logging/logging.service.js";
 import { readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
 import { WorkgraphForbiddenError, WorkgraphNotFoundError, WorkgraphSyncError, WorkgraphValidationError } from "./workgraph.errors.js";
+import { synchronizeLoopWorkgraphAndPromoteTasks } from "./workgraph.sync.service.js";
 import { addJiraIssueLabel, listJiraIssueTypes, syncJiraWorkgraphItems, testJiraWorkgraphConnection } from "./workgraph.jira.service.js";
 import {
   queryLoopWorkgraphAssign,
@@ -12,7 +13,6 @@ import {
   queryLoopWorkgraphMarkSynchronizing,
   queryLoopWorkgraphList,
   queryLoopWorkgraphMarkSyncFailed,
-  queryLoopWorkgraphReplaceItems,
   queryLoopWorkgraphSyncConnection,
   queryLoopWorkgraphUpdateByAdmin,
   queryWorkgraphApiConnectionByOwner,
@@ -74,44 +74,6 @@ const activeLoopWorkgraphSyncKeys = new Set<string>();
 
 const makeLoopWorkgraphSyncKey = (loopId: string, workgraphId: string): string => `${loopId}:${workgraphId}`;
 
-const synchronizeLoopWorkgraphItems = async (loopId: string, workgraphId: string): Promise<number> => {
-  const connection = await queryLoopWorkgraphSyncConnection(loopId, workgraphId);
-
-  if (!connection) {
-    throw new WorkgraphNotFoundError(`Loop workgraph not found.`);
-  }
-
-  if (!connection.enabled) {
-    throw new WorkgraphValidationError(`Workgraph assignment is disabled.`);
-  }
-
-  enforceJiraOnly(connection.type);
-
-  const jql = readJqlFromAssignmentConfig(connection.assignmentConfig);
-
-  if (!jql) {
-    throw new WorkgraphValidationError(`JQL is required before syncing.`);
-  }
-
-  try {
-    const syncedItems = await syncJiraWorkgraphItems({
-      baseUrl: connection.baseUrl,
-      browseBaseUrl: connection.browseBaseUrl ?? connection.baseUrl,
-      email: connection.email,
-      apiKey: connection.apiKey,
-      jql,
-    });
-
-    await queryLoopWorkgraphReplaceItems(loopId, workgraphId, syncedItems);
-
-    return syncedItems.length;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await queryLoopWorkgraphMarkSyncFailed(loopId, workgraphId, message);
-    throw new WorkgraphSyncError(message);
-  }
-};
-
 const triggerLoopWorkgraphSync = (loopId: string, workgraphId: string): void => {
   const syncKey = makeLoopWorkgraphSyncKey(loopId, workgraphId);
 
@@ -123,8 +85,10 @@ const triggerLoopWorkgraphSync = (loopId: string, workgraphId: string): void => 
 
   void (async () => {
     try {
-      await synchronizeLoopWorkgraphItems(loopId, workgraphId);
+      await synchronizeLoopWorkgraphAndPromoteTasks(loopId, workgraphId);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await queryLoopWorkgraphMarkSyncFailed(loopId, workgraphId, message).catch(() => undefined);
       log.error(`Loop workgraph sync failed`, {
         loopId,
         workgraphId,

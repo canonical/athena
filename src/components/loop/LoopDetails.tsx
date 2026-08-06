@@ -1,4 +1,4 @@
-import { Button } from "@canonical/react-components";
+import { Button, Icon } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { useState } from "react";
 import { LoopEditor } from "./LoopEditor.js";
@@ -16,8 +16,19 @@ export function LoopDetails({ loopId, loopName, loopDescription, loopIterationCo
   const [isEditorOpen, setIsEditorOpen] = useState(false);
 
   return (
-    <div className="p-card p-strip is-shallow">
-      <h2 className="p-heading--4">Loop details</h2>
+    <>
+      <div className="u-clearfix">
+        <div className="u-float-left">
+          <h2 className="p-heading--4">Loop details</h2>
+        </div>
+        <div className="u-float-right">
+          <Button appearance="positive" onClick={() => setIsEditorOpen(true)} type="button">
+            <Icon aria-hidden="true" light name="edit" />
+            Edit loop
+          </Button>
+        </div>
+      </div>
+      <hr />
       <dl>
         <dt>Name</dt>
         <dd>{loopName}</dd>
@@ -26,11 +37,6 @@ export function LoopDetails({ loopId, loopName, loopDescription, loopIterationCo
         <dt>Per-iteration cost limit</dt>
         <dd>{formatUsd(loopIterationCostLimitUsd)}</dd>
       </dl>
-      <div className="u-align--right">
-        <Button appearance="base" onClick={() => setIsEditorOpen(true)} type="button">
-          Edit loop
-        </Button>
-      </div>
       <EntityDrawer isOpen={isEditorOpen} onClose={() => setIsEditorOpen(false)} title="Edit loop">
         <LoopEditor
           loop={{ createdAt: ``, description: loopDescription, id: loopId, name: loopName, iterationCostLimitUsd: loopIterationCostLimitUsd, updatedAt: `` }}
@@ -41,6 +47,6 @@ export function LoopDetails({ loopId, loopName, loopDescription, loopIterationCo
           }}
         />
       </EntityDrawer>
-    </div>
+    </>
   );
 }

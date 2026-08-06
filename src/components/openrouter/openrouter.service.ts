@@ -208,6 +208,63 @@ export class OpenRouterRequestError extends Error {
   }
 }
 
+export type OpenRouterModelValidationResult = {
+  available: boolean;
+  status: number | null;
+  reason: string | null;
+  usageCostUsd: number;
+  payload: OpenRouterChatCompletionPayload | null;
+  error: OpenRouterRequestError | null;
+};
+
+export const validateOpenRouterModel = async (
+  connection: OpenRouterConnection,
+  request: {
+    model: string;
+    operation: string;
+    timeoutMs?: number;
+    sessionId?: string;
+    logger?: AppLogger;
+    context?: Record<string, unknown>;
+  },
+): Promise<OpenRouterModelValidationResult> => {
+  try {
+    const payload = await fetchOpenRouterChatCompletion(connection, {
+      model: request.model,
+      operation: request.operation,
+      responseFormat: `text`,
+      temperature: 0,
+      timeoutMs: request.timeoutMs ?? 20_000,
+      sessionId: request.sessionId,
+      logger: request.logger,
+      context: request.context,
+      messages: [{ role: `user`, content: `.` }],
+    });
+
+    return {
+      available: true,
+      status: 200,
+      reason: null,
+      usageCostUsd: readOpenRouterUsageCostUsd(payload) ?? 0,
+      payload,
+      error: null,
+    };
+  } catch (error) {
+    if (error instanceof OpenRouterRequestError) {
+      return {
+        available: false,
+        status: error.status,
+        reason: error.payload.error?.message ?? error.message,
+        usageCostUsd: 0,
+        payload: error.payload,
+        error,
+      };
+    }
+
+    throw error;
+  }
+};
+
 export const fetchOpenRouterModels = async (connection: OpenRouterConnection, logger: AppLogger = log): Promise<ProviderModel[]> => {
   const baseUrl = normalizeBaseUrl(connection.baseUrl);
   const modelsEndpoint = `${baseUrl}/models`;
@@ -223,18 +280,22 @@ export const fetchOpenRouterModels = async (connection: OpenRouterConnection, lo
   });
 
   try {
-    const modelsResponse = await fetchWithRetry(modelsEndpoint, {
-      method: `GET`,
-      headers: {
-        Authorization: `Bearer ${connection.apiKey}`,
-        "Content-Type": `application/json`,
+    const modelsResponse = await fetchWithRetry(
+      modelsEndpoint,
+      {
+        method: `GET`,
+        headers: {
+          Authorization: `Bearer ${connection.apiKey}`,
+          "Content-Type": `application/json`,
+        },
+        signal: controller.signal,
       },
-      signal: controller.signal,
-    }, {
-      maxAttempts: 4,
-      baseDelayMs: 400,
-      maxDelayMs: 6_000,
-    });
+      {
+        maxAttempts: 4,
+        baseDelayMs: 400,
+        maxDelayMs: 6_000,
+      },
+    );
 
     const modelsPayload = (await modelsResponse.json().catch(() => ({}))) as unknown;
 
@@ -287,30 +348,34 @@ export const fetchOpenRouterChatCompletion = async (connection: OpenRouterConnec
   });
 
   try {
-    const response = await fetchWithRetry(endpoint, {
-      method: `POST`,
-      headers: {
-        Authorization: `Bearer ${connection.apiKey}`,
-        "Content-Type": `application/json`,
-        ...(request.idempotencyKey ? { "Idempotency-Key": request.idempotencyKey } : {}),
+    const response = await fetchWithRetry(
+      endpoint,
+      {
+        method: `POST`,
+        headers: {
+          Authorization: `Bearer ${connection.apiKey}`,
+          "Content-Type": `application/json`,
+          ...(request.idempotencyKey ? { "Idempotency-Key": request.idempotencyKey } : {}),
+        },
+        body: JSON.stringify({
+          model: request.model,
+          temperature: request.temperature ?? 0,
+          ...(request.responseFormat !== `text` ? { response_format: { type: `json_object` } } : {}),
+          ...(request.sessionId ? { session_id: request.sessionId } : {}),
+          ...(request.tools ? { tools: request.tools } : {}),
+          ...(request.toolChoice ? { tool_choice: request.toolChoice } : {}),
+          ...(request.parallelToolCalls !== undefined ? { parallel_tool_calls: request.parallelToolCalls } : {}),
+          messages: request.messages,
+        }),
+        signal: controller.signal,
       },
-      body: JSON.stringify({
-        model: request.model,
-        temperature: request.temperature ?? 0,
-        ...(request.responseFormat !== `text` ? { response_format: { type: `json_object` } } : {}),
-        ...(request.sessionId ? { session_id: request.sessionId } : {}),
-        ...(request.tools ? { tools: request.tools } : {}),
-        ...(request.toolChoice ? { tool_choice: request.toolChoice } : {}),
-        ...(request.parallelToolCalls !== undefined ? { parallel_tool_calls: request.parallelToolCalls } : {}),
-        messages: request.messages,
-      }),
-      signal: controller.signal,
-    }, {
-      maxAttempts: 4,
-      baseDelayMs: 600,
-      maxDelayMs: 8_000,
-      allowRetryOnNonIdempotentMethods: true,
-    });
+      {
+        maxAttempts: 4,
+        baseDelayMs: 600,
+        maxDelayMs: 8_000,
+        allowRetryOnNonIdempotentMethods: true,
+      },
+    );
 
     const payload = (await response.json().catch(() => ({}))) as OpenRouterChatCompletionPayload;
 

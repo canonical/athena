@@ -1,4 +1,5 @@
-import { Button, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
+import { Button, Icon, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
+import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { updateProviderSelectionPolicy } from "@components/loop/loop.client.js";
 import { useProviderSelectionPolicy } from "@components/loop/loop.query.js";
 import type { loopSelectionAlgorithms } from "@components/loop/loop.schema.js";
@@ -32,6 +33,8 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
   const { state: assignedRunnerState, reload: reloadAssignedRunners } = useLoopRunnerList(loopId);
   const { state: selectionPolicyState, reload: reloadSelectionPolicy } = useProviderSelectionPolicy(loopId);
   const [busyRunnerId, setBusyRunnerId] = useState<string | null>(null);
+  const [isAssignDrawerOpen, setIsAssignDrawerOpen] = useState(false);
+  const [isPolicyDrawerOpen, setIsPolicyDrawerOpen] = useState(false);
 
   const availableRunners = runnerListState.status === `success` ? runnerListState.runners : [];
   const assignedRunners = assignedRunnerState.status === `success` ? assignedRunnerState.runners : [];
@@ -56,6 +59,7 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
           message: `Runner has been assigned to this loop.`,
         });
         helpers.resetForm();
+        setIsAssignDrawerOpen(false);
         await queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
         reloadAssignedRunners();
       } catch (error) {
@@ -72,7 +76,7 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
   const policyFormik = useFormik<{ runnerSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number] }>({
     enableReinitialize: true,
     initialValues: {
-      runnerSelectionAlgorithm: mvpSelectionAlgorithm,
+      runnerSelectionAlgorithm: selectionPolicyState.status === `success` ? selectionPolicyState.policy.runnerSelectionAlgorithm : mvpSelectionAlgorithm,
     },
     onSubmit: async (values, helpers) => {
       onFeedback(null);
@@ -85,6 +89,7 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
           message: `Runner selection algorithm has been updated.`,
         });
         helpers.setSubmitting(false);
+        setIsPolicyDrawerOpen(false);
         reloadSelectionPolicy();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -124,55 +129,21 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
 
   return (
     <>
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Assign an existing runner</h2>
-        {runnerListState.status === `loading` ? <p className="p-text--default">Loading available runners...</p> : null}
-        {runnerListState.status === `error` ? (
-          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load available runners">
-            {runnerListState.message}
-          </Notification>
-        ) : null}
-        {runnerListState.status === `success` && availableRunners.length === 0 ? <p className="p-text--default">No runners are available yet. Create a runner first, then assign it to this loop.</p> : null}
-        {runnerListState.status === `success` && availableRunners.length > 0 && unassignedRunners.length === 0 ? <p className="p-text--default">All available runners are already assigned to this loop.</p> : null}
-        <form onSubmit={assignFormik.handleSubmit}>
-          <Select
-            id="assign-runner-select"
-            label="Runner"
-            name="selectedRunnerId"
-            onChange={assignFormik.handleChange}
-            options={[{ value: ``, label: `— Select a runner —` }, ...unassignedRunners.map((runner) => ({ value: runner.id, label: runner.displayName }))]}
-            value={assignFormik.values.selectedRunnerId}
-          />
-          <div className="u-align--right">
-            <Button appearance="base" disabled={!assignFormik.values.selectedRunnerId || assignFormik.isSubmitting} type="submit">
-              {assignFormik.isSubmitting ? `Assigning...` : `Assign runner`}
+      <div>
+        <div className="u-clearfix">
+          <div className="u-float-left">
+            <h2 className="p-heading--4">Assigned runners</h2>
+          </div>
+          <div className="u-float-right">
+            <Button appearance="positive" onClick={() => setIsPolicyDrawerOpen(true)} type="button">
+              Selection algorithm
+            </Button>
+            <Button appearance="positive" onClick={() => setIsAssignDrawerOpen(true)} type="button">
+              Assign runner
             </Button>
           </div>
-        </form>
-      </div>
-
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Runner selection algorithm</h2>
-        {selectionPolicyState.status === `loading` ? <p className="p-text--default">Loading runner selection policy...</p> : null}
-        {selectionPolicyState.status === `error` ? (
-          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load runner selection policy">
-            {selectionPolicyState.message}
-          </Notification>
-        ) : null}
-        {selectionPolicyState.status === `success` ? (
-          <form onSubmit={policyFormik.handleSubmit}>
-            <Select id="loop-runner-selection-algorithm" label="Algorithm" name="runnerSelectionAlgorithm" onChange={policyFormik.handleChange} options={mvpAlgorithmOptions} value={policyFormik.values.runnerSelectionAlgorithm} />
-            <div className="u-align--right">
-              <Button appearance="base" disabled={policyFormik.isSubmitting} type="submit">
-                {policyFormik.isSubmitting ? `Saving...` : `Save algorithm`}
-              </Button>
-            </div>
-          </form>
-        ) : null}
-      </div>
-
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Assigned runners</h2>
+        </div>
+        <hr />
         {assignedRunnerState.status === `loading` ? <p className="p-text--default">Loading runners...</p> : null}
         {assignedRunnerState.status === `error` ? (
           <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load assigned runners">
@@ -182,7 +153,8 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
         {assignedRunnerState.status === `success` && assignedRunners.length === 0 ? <p className="p-text--default">No runners assigned to this loop yet.</p> : null}
         {assignedRunnerState.status === `success` && assignedRunners.length > 0 ? (
           <MainTable
-            headers={[{ content: `Display name` }, { content: `Runner` }, { content: `Priority` }, { content: `Enabled` }, { content: `Last used` }, { content: `Actions` }]}
+            className="u-table-layout--auto"
+            headers={[{ content: `Display name` }, { content: `Runner` }, { content: `Priority` }, { content: `Enabled` }, { content: `Last used` }, { content: `Actions`, className: `u-align--right` }]}
             rows={assignedRunners.map((runner) => ({
               key: runner.runner,
               columns: [
@@ -194,8 +166,8 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
                 {
                   content: (
                     <div className="u-align--right">
-                      <Button appearance="negative" disabled={busyRunnerId === runner.runner} onClick={() => handleRemoveAssignment(runner)} type="button">
-                        {busyRunnerId === runner.runner ? `Removing ${runner.displayName}...` : `Remove ${runner.displayName}`}
+                      <Button appearance="base" aria-label={`Remove ${runner.displayName}`} disabled={busyRunnerId === runner.runner} onClick={() => handleRemoveAssignment(runner)} title={`Remove ${runner.displayName}`} type="button">
+                        <Icon aria-hidden="true" className="text-negative" name="delete" />
                       </Button>
                     </div>
                   ),
@@ -205,6 +177,59 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
           />
         ) : null}
       </div>
+
+      <EntityDrawer isOpen={isAssignDrawerOpen} onClose={() => setIsAssignDrawerOpen(false)} title="Assign runner">
+        {runnerListState.status === `loading` ? <p className="p-text--default">Loading available runners...</p> : null}
+        {runnerListState.status === `error` ? (
+          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load available runners">
+            {runnerListState.message}
+          </Notification>
+        ) : null}
+        {runnerListState.status === `success` && availableRunners.length === 0 ? <p className="p-text--default">No runners are available yet. Create a runner first, then assign it to this loop.</p> : null}
+        {runnerListState.status === `success` && availableRunners.length > 0 && unassignedRunners.length === 0 ? <p className="p-text--default">All available runners are already assigned to this loop.</p> : null}
+        {runnerListState.status === `success` && unassignedRunners.length > 0 ? (
+          <form onSubmit={assignFormik.handleSubmit}>
+            <Select
+              id="assign-runner-select"
+              label="Runner"
+              name="selectedRunnerId"
+              onChange={assignFormik.handleChange}
+              options={[{ value: ``, label: `— Select a runner —` }, ...unassignedRunners.map((runner) => ({ value: runner.id, label: runner.displayName }))]}
+              value={assignFormik.values.selectedRunnerId}
+            />
+            <div className="u-align--right">
+              <Button appearance="base" onClick={() => setIsAssignDrawerOpen(false)} type="button">
+                Cancel
+              </Button>
+              <Button appearance="positive" disabled={!assignFormik.values.selectedRunnerId || assignFormik.isSubmitting} type="submit">
+                {assignFormik.isSubmitting ? `Assigning...` : `Assign runner`}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </EntityDrawer>
+
+      <EntityDrawer isOpen={isPolicyDrawerOpen} onClose={() => setIsPolicyDrawerOpen(false)} title="Runner selection algorithm">
+        {selectionPolicyState.status === `loading` ? <p className="p-text--default">Loading runner selection policy...</p> : null}
+        {selectionPolicyState.status === `error` ? (
+          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load runner selection policy">
+            {selectionPolicyState.message}
+          </Notification>
+        ) : null}
+        {selectionPolicyState.status === `success` ? (
+          <form onSubmit={policyFormik.handleSubmit}>
+            <Select id="loop-runner-selection-algorithm" label="Algorithm" name="runnerSelectionAlgorithm" onChange={policyFormik.handleChange} options={mvpAlgorithmOptions} value={policyFormik.values.runnerSelectionAlgorithm} />
+            <div className="u-align--right">
+              <Button appearance="base" onClick={() => setIsPolicyDrawerOpen(false)} type="button">
+                Cancel
+              </Button>
+              <Button appearance="positive" disabled={policyFormik.isSubmitting} type="submit">
+                {policyFormik.isSubmitting ? `Saving...` : `Save algorithm`}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </EntityDrawer>
     </>
   );
 }

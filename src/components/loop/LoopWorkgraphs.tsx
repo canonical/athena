@@ -1,14 +1,13 @@
-import { Button, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Notification, NotificationSeverity } from "@canonical/react-components";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { assignWorkgraphToLoop, removeWorkgraphFromLoop, startLoopWorkgraphItem, syncLoopWorkgraphItems, updateLoopWorkgraphByAdmin } from "@components/workgraph/workgraph.client.js";
 import { useLoopWorkgraphIssueTypes, useLoopWorkgraphItems, useLoopWorkgraphList, useWorkgraphList } from "@components/workgraph/workgraph.query.js";
-import type { LoopWorkgraph, LoopWorkgraphItem } from "@components/workgraph/workgraph.schema.js";
+import type { LoopWorkgraph, LoopWorkgraphItem, WorkgraphIssueType } from "@components/workgraph/workgraph.schema.js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useFormik } from "formik";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { LoopWorkgraphsProps } from "./loop.schema.js";
-import type { WorkgraphIssueType } from "@components/workgraph/workgraph.schema.js";
 
 const LazyLoopWorkgraphDefinitions = lazy(async () => {
   const module = await import("./LoopWorkgraphDefinitions.js");
@@ -148,27 +147,15 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
   };
 
   const openDefinitionsSubtab = () => {
-    void navigate({
-      to: `/loop/$loopId`,
-      params: { loopId },
-      search: (previous) => ({ ...previous, tab: `workgraphs`, workgraphView: undefined, workgraphConfigTab: undefined }),
-    });
+    void navigate({ to: `/loop/$loopId/workgraphs`, params: { loopId } });
   };
 
   const openWorkgraphSubtab = (workgraphId: string) => {
-    void navigate({
-      to: `/loop/$loopId`,
-      params: { loopId },
-      search: (previous) => ({ ...previous, tab: `workgraphs`, workgraphView: workgraphId, workgraphConfigTab: `jql` }),
-    });
+    void navigate({ to: `/loop/$loopId/workgraphs/$workgraphViewWorkgraphId`, params: { loopId, workgraphViewWorkgraphId: workgraphId } });
   };
 
   const openWorkgraphConfigTab = (workgraphId: string, tab: `jql` | `labels` | `item-type-playbooks` | `webhook-definitions` | `synced-items`) => {
-    void navigate({
-      to: `/loop/$loopId`,
-      params: { loopId },
-      search: (previous) => ({ ...previous, tab: `workgraphs`, workgraphView: workgraphId, workgraphConfigTab: tab }),
-    });
+    void navigate({ to: `/loop/$loopId/workgraphs/$workgraphViewWorkgraphId/$workgraphConfigTab`, params: { loopId, workgraphViewWorkgraphId: workgraphId, workgraphConfigTab: tab } });
   };
 
   const handleSyncWorkItems = async (workgraph: LoopWorkgraph) => {
@@ -365,9 +352,8 @@ export function LoopWorkgraphs({ loopId, onFeedback, workgraphViewWorkgraphId, w
       reloadAssignedWorkgraphs();
       if (selectedWorkgraphId === workgraph.workgraph) {
         void navigate({
-          to: `/loop/$loopId`,
+          to: `/loop/$loopId/workgraphs`,
           params: { loopId },
-          search: (previous) => ({ ...previous, tab: `workgraphs`, workgraphView: undefined, workgraphConfigTab: undefined }),
         });
       }
     } catch (error) {

@@ -81,6 +81,20 @@ export const providerModelPreviewRequestSchema = z.object({
   apiKey: requiredString(`apiKey is required.`),
 });
 
+export const providerModelValidateRequestSchema = z.object({
+  models: z.array(z.string().trim().min(1)).min(1),
+});
+
+export const providerModelValidateResultItemSchema = z.object({
+  model: z.string(),
+  available: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const providerModelValidateResponseSchema = z.object({
+  results: z.array(providerModelValidateResultItemSchema),
+});
+
 export const loopProviderSchema = providerSchema.pick({ displayName: true, providerType: true, baseUrl: true }).extend({
   loop: uuid(),
   provider: uuid(),
@@ -111,3 +125,6 @@ export type Provider = z.infer<typeof providerSchema>;
 export type LoopProvider = z.infer<typeof loopProviderSchema>;
 export type ProviderModel = z.infer<typeof providerModelSchema>;
 export type ProviderModelPreviewRequest = z.infer<typeof providerModelPreviewRequestSchema>;
+export type ProviderModelValidateRequest = z.infer<typeof providerModelValidateRequestSchema>;
+export type ProviderModelValidateResultItem = z.infer<typeof providerModelValidateResultItemSchema>;
+export type ProviderModelValidateResponse = z.infer<typeof providerModelValidateResponseSchema>;

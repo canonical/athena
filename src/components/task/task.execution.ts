@@ -1,16 +1,17 @@
+import { createHash } from "node:crypto";
 import { log } from "@components/logging/logging.service.js";
 import type { OpenRouterMessage, OpenRouterTool } from "@components/openrouter/openrouter.schema.js";
 import { fetchOpenRouterChatCompletion, OpenRouterRequestError, readOpenRouterContentText, readOpenRouterUsageCostUsd } from "@components/openrouter/openrouter.service.js";
 import type { Persona } from "@components/persona/persona.schema.js";
-import { executeProviderToolBatch } from "@components/tool/tool.service.js";
+import { isProviderToolRequiringApproval, providerToolNames } from "@components/tool/tool.catalog.js";
 import type { ProviderToolRequest, ProviderToolResult } from "@components/tool/tool.schema.js";
-import { isProviderHighImpactTool, isProviderMutationTool, providerToolNames } from "@components/tool/tool.catalog.js";
+import { executeProviderToolBatch } from "@components/tool/tool.service.js";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { queryLoopWorkgraphList } from "@components/workgraph/workgraph.pg.service.js";
 import { v7 as uuidv7 } from "uuid";
-import { buildTaskConversationMessages, buildTaskOpenRouterSessionId } from "./task.history.js";
 import { isProviderBasedToolAllowed } from "./task.execution-lane.js";
-import type { Task, TimelineEntry } from "./task.schema.js";
+import { buildTaskConversationMessages, buildTaskOpenRouterSessionId } from "./task.history.js";
+import type { PendingToolApprovalRequest, Task, TimelineEntry } from "./task.schema.js";
 
 type ProviderExecutionTarget = {
   targetType: `provider`;
@@ -41,6 +42,7 @@ export type TaskExecutionResult = {
   nextContext?: string;
   terminalIntent?: `mark-complete` | `emit-blocker` | `request-chat`;
   requestedChatPrompt?: string;
+  pendingToolApprovalRequest?: PendingToolApprovalRequest | null;
   llmTimelineEntries?: TimelineEntry[];
   llmCostUsd: number;
   llmCallCount: number;
@@ -66,12 +68,10 @@ type ProviderExecutionOptions = {
   iteration: number;
   iterationCostLimitUsd: number | null;
   enabledProviderToolNames: string[];
+  onTimelineEntry?: (entry: TimelineEntry, progress: { iteration: number; toolRound: number; llmCostUsd: number; llmCallCount: number }) => Promise<void> | void;
 };
 
-type AthenaTerminalIntent =
-  | { intent: `mark-complete`; note: string }
-  | { intent: `emit-blocker`; blocker: string }
-  | { intent: `request-chat`; prompt: string };
+type AthenaTerminalIntent = { intent: `mark-complete`; note: string } | { intent: `emit-blocker`; blocker: string } | { intent: `request-chat`; prompt: string };
 
 const parseProviderAutonomyResponse = (rawMessage: string): ProviderAutonomyResponse | null => {
   const normalized = rawMessage.trim();
@@ -445,44 +445,142 @@ const readTimeline = (task: Task): TimelineEntry[] => {
   return Array.isArray(task.payload.timeline) ? task.payload.timeline : [];
 };
 
-const readProviderMutationApprovalDecision = (task: Task): { decision: `approved` | `rejected`; note?: string } | null => {
-  const timeline = readTimeline(task);
-  let lastApprovalRequiredTimestamp: string | null = null;
-  let lastApprovalDecision: { timestamp: string; decision: `approved` | `rejected`; note?: string } | null = null;
+type RequestedApprovalToolRequest = {
+  tool: string;
+  input?: Record<string, unknown>;
+};
+
+const stableSerialize = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return `null`;
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableSerialize(entry)).join(`,`)}]`;
+  }
+
+  if (typeof value === `object`) {
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort((left, right) => left.localeCompare(right));
+
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(`,`)}}`;
+  }
+
+  return JSON.stringify(value);
+};
+
+const buildToolApprovalFingerprint = (requests: RequestedApprovalToolRequest[]): string => {
+  const normalized = requests
+    .map((request) => ({
+      tool: request.tool,
+      input: request.input ?? {},
+    }))
+    .map((entry) => stableSerialize(entry))
+    .sort((left, right) => left.localeCompare(right));
+
+  return createHash(`sha256`).update(normalized.join(`|`)).digest(`hex`);
+};
+
+const buildPendingToolApprovalRequestFingerprint = (approvalRequest: PendingToolApprovalRequest): string =>
+  buildToolApprovalFingerprint([{ tool: approvalRequest.toolCall.tool, input: approvalRequest.toolCall.input }]);
+
+type ToolApprovalDecision = {
+  decision: `approved` | `rejected`;
+  note?: string;
+  approvalRequestId: string;
+};
+
+type PendingToolApprovalReplay = {
+  approvalRequest: PendingToolApprovalRequest;
+  decision: ToolApprovalDecision;
+  toolCall: OpenRouterToolCall;
+  toolRequest: ProviderToolRequest;
+  assistantResponseText: string;
+};
+
+const readToolApprovalDecision = (task: Task, approvalRequest: PendingToolApprovalRequest, runtimeTimelineEntries: TimelineEntry[]): ToolApprovalDecision | null => {
+  const timeline = [...readTimeline(task), ...runtimeTimelineEntries];
+  const matchingDecisions: Array<{ timestamp: string; requestId: string; decision: `approved` | `rejected`; note?: string }> = [];
+  let consumed = false;
 
   for (const entry of timeline) {
-    if (entry.type === `llm-call` && isRecord(entry.data) && entry.data.status === `approval-required` && entry.data.approvalType === `provider-mutation`) {
-      lastApprovalRequiredTimestamp = entry.timestamp;
+    if (entry.type === `llm-call` && isRecord(entry.data) && entry.data.approvalType === `tool-call` && entry.data.status === `approval-consumed`) {
+      const requestId = readString(entry.data.approvalRequestId);
+
+      if (requestId === approvalRequest.requestId && entry.timestamp > approvalRequest.createdAt) {
+        consumed = true;
+      }
     }
 
-    if (entry.type === `user-approval` && isRecord(entry.data) && entry.data.approvalType === `provider-mutation`) {
+    if (entry.type === `user-approval` && isRecord(entry.data) && entry.data.approvalType === `tool-call`) {
       const rawDecision = readString(entry.data.decision);
 
       if (rawDecision === `approved` || rawDecision === `rejected`) {
-        lastApprovalDecision = {
-          timestamp: entry.timestamp,
-          decision: rawDecision,
-          note: readString(entry.data.note),
-        };
+        const requestId = readString(entry.data.approvalRequestId);
+
+        if (requestId && requestId === approvalRequest.requestId && entry.timestamp > approvalRequest.createdAt) {
+          matchingDecisions.push({
+            timestamp: entry.timestamp,
+            requestId,
+            decision: rawDecision,
+            note: readString(entry.data.note),
+          });
+        }
       }
     }
   }
 
-  if (!lastApprovalRequiredTimestamp) {
+  if (consumed) {
     return null;
   }
 
-  if (!lastApprovalDecision) {
+  const explicitDecision = matchingDecisions.at(-1);
+
+  if (explicitDecision) {
+    return {
+      decision: explicitDecision.decision,
+      note: explicitDecision.note,
+      approvalRequestId: approvalRequest.requestId,
+    };
+  }
+
+  return null;
+};
+
+const readPendingToolApprovalReplay = (task: Task, runtimeTimelineEntries: TimelineEntry[]): PendingToolApprovalReplay | null => {
+  const approvalRequest = task.payload.pendingToolApprovalRequest;
+
+  if (!approvalRequest) {
     return null;
   }
 
-  if (lastApprovalDecision.timestamp <= lastApprovalRequiredTimestamp) {
+  const decision = readToolApprovalDecision(task, approvalRequest, runtimeTimelineEntries);
+
+  if (!decision) {
     return null;
   }
+
+  const toolCalls: OpenRouterToolCall[] = [
+    {
+      id: approvalRequest.toolCall.id,
+      type: `function`,
+      function: {
+        name: approvalRequest.toolCall.tool,
+        arguments: approvalRequest.toolCall.rawArguments ?? JSON.stringify(approvalRequest.toolCall.input ?? {}),
+      },
+    },
+  ];
+  const toolRequest: ProviderToolRequest = {
+    tool: approvalRequest.toolCall.tool,
+    ...(approvalRequest.toolCall.input ? { input: approvalRequest.toolCall.input } : {}),
+  };
 
   return {
-    decision: lastApprovalDecision.decision,
-    note: lastApprovalDecision.note,
+    approvalRequest,
+    decision,
+    toolCall: toolCalls[0],
+    toolRequest,
+    assistantResponseText: approvalRequest.assistantResponseText ?? ``,
   };
 };
 
@@ -646,6 +744,29 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
   let llmCostUsd = 0;
   let llmCallCount = 0;
   let toolRound = 0;
+  const emitTimelineEntry = async (entry: TimelineEntry): Promise<void> => {
+    llmTimelineEntries.push(entry);
+
+    if (!options.onTimelineEntry) {
+      return;
+    }
+
+    try {
+      await options.onTimelineEntry(entry, {
+        iteration: options.iteration,
+        toolRound,
+        llmCostUsd,
+        llmCallCount,
+      });
+    } catch (error) {
+      log.warn(`Unable to persist live task timeline entry`, {
+        taskId: task.id,
+        iteration: options.iteration,
+        toolRound,
+        error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) },
+      });
+    }
+  };
   const jiraLabelGuidance = await readJiraLabelGuidanceForLoop(task.loop).catch((error) => {
     log.warn(`Unable to read Jira label guidance for provider execution`, {
       loopId: task.loop,
@@ -657,6 +778,197 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
   let messages = buildProviderMessages(task, selectedPersona, options, jiraLabelGuidance);
 
   try {
+    const pendingToolApprovalReplay = readPendingToolApprovalReplay(task, llmTimelineEntries);
+
+    if (task.payload.pendingToolApprovalRequest) {
+      const savedApprovalFingerprint = buildPendingToolApprovalRequestFingerprint(task.payload.pendingToolApprovalRequest);
+
+      if (savedApprovalFingerprint !== task.payload.pendingToolApprovalRequest.approvalFingerprint) {
+        return {
+          status: `blocked`,
+          summary: `Pending tool approval request payload failed integrity validation.`,
+          output: `Saved pending tool approval request fingerprint does not match the persisted tool-call payload.`,
+          blocker: `Pending tool approval request integrity mismatch`,
+          llmTimelineEntries,
+          llmCostUsd,
+          llmCallCount,
+        };
+      }
+    }
+
+    if (task.payload.pendingToolApprovalRequest && !pendingToolApprovalReplay) {
+      const pendingRequest = task.payload.pendingToolApprovalRequest;
+      const requestedToolsLabel = pendingRequest.requestedTools.join(`, `);
+
+      return {
+        status: `requires-user-approval`,
+        summary: `User approval required before queued tool calls can run.`,
+        output: `Approval request ${pendingRequest.requestId} is pending for tools: ${requestedToolsLabel}. Use Approve or Reject for this request id.`,
+        pendingToolApprovalRequest: pendingRequest,
+        llmTimelineEntries,
+        llmCostUsd,
+        llmCallCount,
+      };
+    }
+
+    if (pendingToolApprovalReplay) {
+      const disallowedTool = isProviderBasedToolAllowed(pendingToolApprovalReplay.toolRequest.tool, enabledProviderToolNameSet)
+        ? null
+        : pendingToolApprovalReplay.toolRequest;
+
+      if (disallowedTool) {
+        return {
+          status: `blocked`,
+          summary: `Approved tool request contains a disallowed tool.`,
+          output: `Tool ${disallowedTool.tool} is not allowed in provider-based lane.`,
+          blocker: `Disallowed provider-based tool request`,
+          llmTimelineEntries,
+          llmCostUsd,
+          llmCallCount,
+        };
+      }
+
+      await emitTimelineEntry(
+        makeLlmCallTimelineEntry(selectedPersona.displayName, {
+          operation: `task-provider-tool-approval`,
+          status: `approval-consumed`,
+          approvalType: `tool-call`,
+          approvalRequestId: pendingToolApprovalReplay.approvalRequest.requestId,
+          approvalRequestFingerprint: pendingToolApprovalReplay.approvalRequest.approvalFingerprint,
+          requestedTools: pendingToolApprovalReplay.approvalRequest.requestedTools,
+          requestedToolCall: pendingToolApprovalReplay.approvalRequest.toolCall,
+          replayedDeterministically: true,
+          approvalDecision: pendingToolApprovalReplay.decision.decision,
+        }),
+      );
+
+      const replayApprovalRequiredToolNames = new Set(pendingToolApprovalReplay.approvalRequest.requestedTools);
+      let replayToolBatch: { results: ProviderToolResult[]; hadError: boolean };
+
+      if (pendingToolApprovalReplay.decision.decision === `rejected`) {
+        const rejectionMessage = pendingToolApprovalReplay.decision.note
+          ? `User rejected tool approval request ${pendingToolApprovalReplay.approvalRequest.requestId}. Message: ${pendingToolApprovalReplay.decision.note}`
+          : `User rejected tool approval request ${pendingToolApprovalReplay.approvalRequest.requestId}.`;
+
+        replayToolBatch = {
+          results: [
+            {
+              tool: pendingToolApprovalReplay.toolRequest.tool,
+              ok: false,
+              error: rejectionMessage,
+              result: {
+                status: `rejected-by-user`,
+                approvalType: `tool-call`,
+                approvalRequestId: pendingToolApprovalReplay.approvalRequest.requestId,
+                note: pendingToolApprovalReplay.decision.note,
+              },
+            },
+          ],
+          hadError: true,
+        };
+      } else {
+        replayToolBatch = await executeProviderToolBatch(
+          {
+            taskId: task.id,
+            loopId: task.loop,
+            claimToken: task.claimToken,
+          },
+          [pendingToolApprovalReplay.toolRequest],
+        );
+      }
+
+      await emitTimelineEntry(
+        makeLlmCallTimelineEntry(selectedPersona.displayName, {
+          operation: `task-provider-tool-batch`,
+          status: replayToolBatch.hadError ? `completed-with-errors` : `completed`,
+          toolRound,
+          toolCalls: [pendingToolApprovalReplay.toolCall],
+          toolRequests: [pendingToolApprovalReplay.toolRequest],
+          toolResults: replayToolBatch.results,
+          replayedFromApprovalRequestId: pendingToolApprovalReplay.approvalRequest.requestId,
+          replayedDeterministically: true,
+        }),
+      );
+
+      const terminalIntents = replayToolBatch.results
+        .filter((entry) => entry.ok)
+        .map((entry) => parseAthenaTerminalIntent(entry.tool, entry.result))
+        .filter((entry): entry is AthenaTerminalIntent => entry !== null);
+
+      if (terminalIntents.length > 1) {
+        const emitted = terminalIntents.map((entry) => entry.intent);
+        return {
+          status: `blocked`,
+          summary: `Provider emitted multiple terminal Athena intents in one iteration.`,
+          output: `Only one of athena_emit_blocker, athena_mark_complete, or athena_request_chat may be emitted per iteration. Received: ${emitted.join(`, `)}.`,
+          blocker: `Conflicting terminal Athena intents`,
+          llmTimelineEntries,
+          llmCostUsd,
+          llmCallCount,
+        };
+      }
+
+      const terminalIntent = terminalIntents[0];
+
+      if (terminalIntent) {
+        if (terminalIntent.intent === `mark-complete`) {
+          return {
+            status: `completed`,
+            summary: terminalIntent.note,
+            output: terminalIntent.note,
+            achieved: true,
+            terminalIntent: terminalIntent.intent,
+            llmTimelineEntries,
+            llmCostUsd,
+            llmCallCount,
+          };
+        }
+
+        if (terminalIntent.intent === `emit-blocker`) {
+          return {
+            status: `blocked`,
+            summary: `Provider emitted blocker via Athena tool.`,
+            output: terminalIntent.blocker,
+            blocker: terminalIntent.blocker,
+            terminalIntent: terminalIntent.intent,
+            llmTimelineEntries,
+            llmCostUsd,
+            llmCallCount,
+          };
+        }
+
+        return {
+          status: `requires-user-input`,
+          summary: `Provider requested user chat input via Athena tool.`,
+          output: terminalIntent.prompt,
+          terminalIntent: terminalIntent.intent,
+          requestedChatPrompt: terminalIntent.prompt,
+          llmTimelineEntries,
+          llmCostUsd,
+          llmCallCount,
+        };
+      }
+
+      const replayToolMessages: OpenRouterMessage[] = replayToolBatch.results.map((result, index) => ({
+        role: `tool`,
+        name: result.tool,
+        tool_call_id: index === 0 ? pendingToolApprovalReplay.toolCall.id : undefined,
+        content: JSON.stringify({ ok: result.ok, result: result.result, error: result.error }),
+      }));
+
+      messages = [
+        ...messages,
+        {
+          role: `assistant`,
+          content: pendingToolApprovalReplay.assistantResponseText.length > 0 ? pendingToolApprovalReplay.assistantResponseText : null,
+          tool_calls: [pendingToolApprovalReplay.toolCall],
+        },
+        ...replayToolMessages,
+      ];
+
+      toolRound += 1;
+    }
+
     while (true) {
       const payload = await fetchOpenRouterChatCompletion(
         {
@@ -711,7 +1023,7 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
       });
 
       if (options.iterationCostLimitUsd !== null && llmCostUsd > options.iterationCostLimitUsd) {
-        llmTimelineEntries.push({
+        await emitTimelineEntry({
           ...llmTimelineEntry,
           data: {
             ...llmTimelineEntry.data,
@@ -732,7 +1044,7 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
       }
 
       if (toolCalls.length === 0 && !message) {
-        llmTimelineEntries.push({
+        await emitTimelineEntry({
           ...llmTimelineEntry,
           data: {
             ...llmTimelineEntry.data,
@@ -768,108 +1080,55 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
           };
         }
 
-        const requestedMutationTools = Array.from(new Set(toolRequests.filter((request) => isProviderMutationTool(request.tool)).map((request) => request.tool)));
-        const requestedHighImpactTools = requestedMutationTools.filter((toolName) => isProviderHighImpactTool(toolName));
+        const approvalToolIndex = toolRequests.findIndex((request) => isProviderToolRequiringApproval(request.tool));
 
-        if (requestedMutationTools.length > 0) {
-          const approvalDecision = readProviderMutationApprovalDecision(task);
+        if (approvalToolIndex >= 0) {
+          const approvalToolRequest = toolRequests[approvalToolIndex];
+          const approvalToolCall = toolCalls[approvalToolIndex];
+          const approvalRequestId = uuidv7();
+          const approvalRequestFingerprint = buildToolApprovalFingerprint([{ tool: approvalToolRequest.tool, input: approvalToolRequest.input }]);
+          const pendingToolApprovalRequest: PendingToolApprovalRequest = {
+            requestId: approvalRequestId,
+            createdAt: new Date().toISOString(),
+            approvalType: `tool-call`,
+            approvalFingerprint: approvalRequestFingerprint,
+            selectedPersona: task.selectedPersona,
+            selectedPersonaDisplayName: selectedPersona.displayName,
+            selectedModel: target.model,
+            requestedTools: [approvalToolRequest.tool],
+            toolCall: {
+              id: approvalToolCall?.id ?? approvalToolRequest.tool,
+              tool: approvalToolRequest.tool,
+              input: approvalToolRequest.input,
+              rawArguments: approvalToolCall?.function.arguments,
+            },
+            assistantResponseText: message,
+          };
 
-          if (!approvalDecision) {
-            const needsHighImpactApproval = requestedHighImpactTools.length > 0;
+          await emitTimelineEntry({
+            ...llmTimelineEntry,
+            data: {
+              ...llmTimelineEntry.data,
+              status: `approval-required`,
+              approvalType: `tool-call`,
+              approvalRequestId,
+              approvalRequestFingerprint,
+                requestedTools: [approvalToolRequest.tool],
+                requestedToolRequests: [{ tool: approvalToolRequest.tool, ...(approvalToolRequest.input ? { input: approvalToolRequest.input } : {}) }],
+                pendingToolCall: pendingToolApprovalRequest.toolCall,
+            },
+          });
 
-            llmTimelineEntries.push({
-              ...llmTimelineEntry,
-              data: {
-                ...llmTimelineEntry.data,
-                status: `approval-required`,
-                approvalType: `provider-mutation`,
-                requestedMutationTools,
-                requestedHighImpactTools,
-              },
-            });
-
-            return {
-              status: `requires-user-approval`,
-              summary: `User approval required before LLM tool mutations can run.`,
-              output: needsHighImpactApproval
-                ? `Approval required for high-impact Jira mutations: ${requestedHighImpactTools.join(`, `)}. Use Approve or Reject and optionally include a message.`
-                : `Approval required for LLM mutation tools: ${requestedMutationTools.join(`, `)}. Use Approve or Reject and optionally include a message.`,
-              achieved: false,
-              llmTimelineEntries,
-              llmCostUsd,
-              llmCallCount,
-            };
-          }
-
-          if (approvalDecision.decision === `rejected`) {
-            const nonMutationRequests = toolRequests.filter((request) => !isProviderMutationTool(request.tool));
-            const nonMutationBatch =
-              nonMutationRequests.length > 0
-                ? await executeProviderToolBatch(
-                    {
-                      taskId: task.id,
-                      loopId: task.loop,
-                      claimToken: task.claimToken,
-                    },
-                    nonMutationRequests,
-                  )
-                : { results: [], hadError: false };
-
-            let nonMutationResultIndex = 0;
-            const toolResults: ProviderToolResult[] = toolRequests.map((request) => {
-              if (!isProviderMutationTool(request.tool)) {
-                const passthrough = nonMutationBatch.results[nonMutationResultIndex];
-                nonMutationResultIndex += 1;
-                return passthrough ?? { tool: request.tool, ok: false, error: `Tool result missing.` };
-              }
-
-              const rejectionMessage = approvalDecision.note
-                ? `User rejected mutation approval. Message: ${approvalDecision.note}`
-                : `User rejected mutation approval.`;
-
-              return {
-                tool: request.tool,
-                ok: false,
-                error: rejectionMessage,
-                result: {
-                  status: `rejected-by-user`,
-                  approvalType: `provider-mutation`,
-                  note: approvalDecision.note,
-                },
-              };
-            });
-
-            llmTimelineEntries.push(
-              makeLlmCallTimelineEntry(selectedPersona.displayName, {
-                operation: `task-provider-tool-batch`,
-                status: `completed-with-user-rejection`,
-                toolRound,
-                toolCalls,
-                toolRequests,
-                toolResults,
-              }),
-            );
-
-            const toolMessages: OpenRouterMessage[] = toolResults.map((result, index) => ({
-              role: `tool`,
-              name: result.tool,
-              tool_call_id: toolCalls[index]?.id,
-              content: JSON.stringify({ ok: result.ok, result: result.result, error: result.error }),
-            }));
-
-            messages = [
-              ...messages,
-              {
-                role: `assistant`,
-                content: responseMessage?.content === null ? null : message,
-                tool_calls: toolCalls,
-              },
-              ...toolMessages,
-            ];
-
-            toolRound += 1;
-            continue;
-          }
+          return {
+            status: `requires-user-approval`,
+            summary: `User approval required before the queued tool call can run.`,
+            output: `Approval request ${approvalRequestId} created for tool: ${approvalToolRequest.tool}. Use Approve or Reject with request id ${approvalRequestId}.`,
+            achieved: false,
+            pendingToolApprovalRequest,
+            llmTimelineEntries,
+            llmCostUsd,
+            llmCallCount,
+          };
         }
 
         const toolBatch = await executeProviderToolBatch(
@@ -881,7 +1140,7 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
           toolRequests,
         );
 
-        llmTimelineEntries.push(
+        await emitTimelineEntry(
           makeLlmCallTimelineEntry(selectedPersona.displayName, {
             operation: `task-provider-tool-batch`,
             status: toolBatch.hadError ? `completed-with-errors` : `completed`,
@@ -977,7 +1236,7 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
       const autonomyResponse = parseProviderAutonomyResponse(message);
 
       if (!autonomyResponse) {
-        llmTimelineEntries.push({
+        await emitTimelineEntry({
           ...llmTimelineEntry,
           data: {
             ...llmTimelineEntry.data,
@@ -997,7 +1256,7 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
         };
       }
 
-      llmTimelineEntries.push({
+      await emitTimelineEntry({
         ...llmTimelineEntry,
         data: {
           ...llmTimelineEntry.data,
@@ -1016,7 +1275,6 @@ const executeProviderRequest = async (task: Task, selectedPersona: Persona, targ
         llmCallCount,
       };
     }
-
   } catch (error) {
     const llmTimelineEntry = makeLlmCallTimelineEntry(selectedPersona.displayName, {
       operation: `task-provider-execution`,
@@ -1083,7 +1341,11 @@ export const executeTaskTarget = async (
   task: Task,
   selectedPersona: Persona,
   target: ExecutionTarget,
-  controls?: { iterationCostLimitUsd?: number | null; enabledProviderToolNames?: string[] },
+  controls?: {
+    iterationCostLimitUsd?: number | null;
+    enabledProviderToolNames?: string[];
+    onTimelineEntry?: (entry: TimelineEntry, progress: { iteration: number; toolRound: number; llmCostUsd: number; llmCallCount: number }) => Promise<void> | void;
+  },
 ): Promise<TaskExecutionResult> => {
   if (target.targetType === `provider`) {
     const iteration = Math.max(1, task.autonomyIterationCount + 1);
@@ -1091,6 +1353,7 @@ export const executeTaskTarget = async (
       iteration,
       iterationCostLimitUsd: controls?.iterationCostLimitUsd ?? null,
       enabledProviderToolNames: controls?.enabledProviderToolNames ?? [...providerToolNames],
+      onTimelineEntry: controls?.onTimelineEntry,
     });
   }
 

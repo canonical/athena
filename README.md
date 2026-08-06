@@ -31,9 +31,7 @@ See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rul
 
 ## Task processing
 
-Athena task queue lifecycle, rerouting, and dispatch behavior are documented in [docs/task-processing.md](./docs/task-processing.md).
-
-The authoritative task phase and status model (routing vs execution, per-phase statuses, queue claims, and blocked re-evaluation) is documented in [docs/task-lifecycle.md](./docs/task-lifecycle.md).
+Athena task lifecycle, queue processing, rerouting, dispatch behavior, and approval flow are documented in [docs/task-lifecycle.md](./docs/task-lifecycle.md).
 
 ## PR publishing and updating standards
 

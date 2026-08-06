@@ -25,19 +25,11 @@ export function Connections({ tab, create, edit }: ConnectionsProps) {
   const navigate = useNavigate();
 
   const setTab = (nextTab: ConnectionTab) => {
-    void navigate({
-      to: `/connection`,
-      search: {
-        tab: nextTab,
-        create: undefined,
-        edit: undefined,
-      },
-    });
+    void navigate({ to: nextTab === `repositories` ? `/connection/repositories` : `/connection/workgraphs` });
   };
 
   return (
     <section className="p-strip is-shallow u-no-max-width">
-      <h1 className="p-heading--2">Connections</h1>
       <nav aria-label="Connection sections" className="p-tabs">
         <div role="tablist">
           <ul className="p-tabs__list">
@@ -57,7 +49,7 @@ export function Connections({ tab, create, edit }: ConnectionsProps) {
 
       {tab === `workgraphs` ? (
         <Suspense fallback={<p className="p-text--default">Loading workgraphs...</p>}>
-          <LazyWorkgraphList editor={create ? `create` : edit ? `edit` : undefined} listRoute="/connection" workgraphId={edit} />
+          <LazyWorkgraphList editor={create ? `create` : edit ? `edit` : undefined} listRoute="/connection/workgraphs" workgraphId={edit} />
         </Suspense>
       ) : null}
 

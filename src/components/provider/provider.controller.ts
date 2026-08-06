@@ -1,9 +1,9 @@
 import type { AppLogger } from "@components/logging/logging.schema.js";
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
-import { fetchOpenRouterModels } from "@components/openrouter/openrouter.service.js";
+import { fetchOpenRouterModels, validateOpenRouterModel } from "@components/openrouter/openrouter.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
 import { ProviderForbiddenError, ProviderNotFoundError, ProviderValidationError } from "./provider.errors.js";
-import type { LoopProvider, LoopProviderAdminUpdate, LoopProviderInsert, Provider, ProviderInsert, ProviderModel, ProviderModelPreviewRequest, ProviderUpdate } from "./provider.schema.js";
+import type { LoopProvider, LoopProviderAdminUpdate, LoopProviderInsert, Provider, ProviderInsert, ProviderModel, ProviderModelPreviewRequest, ProviderModelValidateResultItem, ProviderUpdate } from "./provider.schema.js";
 import {
   queryLoopProviderAssign,
   queryLoopProviderDelete,
@@ -121,6 +121,77 @@ export const providerModelPreview = async (input: ProviderModelPreviewRequest, l
     },
     logger,
   );
+};
+
+export const providerValidateModels = async (providerId: string, ownerId: string, models: string[], logger?: AppLogger): Promise<ProviderModelValidateResultItem[]> => {
+  validateProviderId(providerId);
+
+  const connection = await queryProviderApiConnectionByOwner(providerId, ownerId);
+
+  if (!connection) {
+    throw new ProviderNotFoundError(`Provider not found.`);
+  }
+
+  if (connection.providerType !== `openrouter`) {
+    throw new ProviderValidationError(`Model validation is only supported for openrouter providers.`);
+  }
+
+  const uniqueModels = Array.from(new Set(models.map((value) => value.trim()).filter((value) => value.length > 0)));
+
+  if (uniqueModels.length === 0) {
+    return [];
+  }
+
+  const results: ProviderModelValidateResultItem[] = [];
+  const validationConcurrency = 8;
+
+  for (let index = 0; index < uniqueModels.length; index += validationConcurrency) {
+    const batchModels = uniqueModels.slice(index, index + validationConcurrency);
+    const batchValidations = await Promise.all(
+      batchModels.map(async (model) => ({
+        model,
+        validation: await validateOpenRouterModel(
+          {
+            baseUrl: connection.baseUrl,
+            apiKey: connection.apiKey,
+          },
+          {
+            model,
+            operation: `provider-model-validate`,
+            timeoutMs: 20_000,
+            logger,
+            context: {
+              providerId,
+              model,
+            },
+          },
+        ),
+      })),
+    );
+
+    for (const { model, validation } of batchValidations) {
+      if (validation.available) {
+        results.push({
+          model,
+          available: true,
+        });
+        continue;
+      }
+
+      if (validation.status === 404) {
+        results.push({
+          model,
+          available: false,
+          reason: validation.reason ?? `Model unavailable.`,
+        });
+        continue;
+      }
+
+      throw validation.error ?? new Error(validation.reason ?? `Model validation failed.`);
+    }
+  }
+
+  return results;
 };
 
 export const loopProviderList = async (loopId: string, userId: string): Promise<LoopProvider[]> => {

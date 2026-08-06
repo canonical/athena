@@ -8,6 +8,10 @@ export type PersonaState = { status: "loading" } | { status: "error"; message: s
 
 export type CatalogState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; catalog: Persona[] };
 
+type UseQueryOptions = {
+  enabled?: boolean;
+};
+
 export const usePersonaList = (loopId: string | null) => {
   const queryClient = useQueryClient();
   const { isPending, isError, data, error } = useQuery({
@@ -31,14 +35,22 @@ export const usePersonaList = (loopId: string | null) => {
   return { state, reload };
 };
 
-export const usePersonaListAll = () => {
+export const usePersonaListAll = (options: UseQueryOptions = {}) => {
+  const { enabled = true } = options;
   const queryClient = useQueryClient();
   const { isPending, isError, data, error } = useQuery({
     queryKey: [`personas`],
     queryFn: fetchPersonaList,
+    enabled,
   });
 
-  const state: PersonaListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, personas: data };
+  const state: PersonaListState = !enabled
+    ? { status: `success`, personas: [] }
+    : isPending
+      ? { status: `loading` }
+      : isError
+        ? { status: `error`, message: error instanceof Error ? error.message : String(error) }
+        : { status: `success`, personas: data };
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`personas`] });
@@ -63,12 +75,15 @@ export const usePersonaById = (personaId: string) => {
   return { state, reload };
 };
 
-export const usePersonaCatalog = (): CatalogState => {
+export const usePersonaCatalog = (options: UseQueryOptions = {}): CatalogState => {
+  const { enabled = true } = options;
   const { isPending, isError, data, error } = useQuery({
     queryKey: [`personaCatalog`],
     queryFn: fetchPersonaCatalog,
+    enabled,
   });
 
+  if (!enabled) return { status: `success`, catalog: [] };
   if (isPending) return { status: `loading` };
   if (isError) return { status: `error`, message: error instanceof Error ? error.message : String(error) };
   return { status: `success`, catalog: data };

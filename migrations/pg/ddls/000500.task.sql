@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS "task" (
   -- Work definition (was requestedOutcome + task.objective)
   "description" TEXT,
   "kind" TEXT NOT NULL DEFAULT 'other',
-  "ownerMode" TEXT NOT NULL DEFAULT 'mixed',
   "successCriteria" JSONB NOT NULL DEFAULT '[]'::jsonb,
   "externalRefs" JSONB NOT NULL DEFAULT '[]'::jsonb,
   -- Execution state (was task.currentContext)

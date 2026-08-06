@@ -12,8 +12,8 @@ export const useTasks = (loopId?: string): { state: TasksState; reload: () => vo
     // Auto-refresh while queue-processed work is in-flight so chat/task state updates quickly.
     refetchInterval: (query) => {
       const tasks = query.state.data ?? [];
-      const hasInFlightWork = tasks.some((task) => task.status === `active` || task.status === `queued` || task.status === `processing` || task.status === `blocked`);
-      return hasInFlightWork ? 3000 : false;
+      const hasInFlightWork = tasks.some((task) => task.status === `active` || task.status === `queued` || task.status === `processing`);
+      return hasInFlightWork ? 2500 : false;
     },
   });
 

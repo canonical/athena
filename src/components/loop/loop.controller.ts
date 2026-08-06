@@ -94,6 +94,7 @@ const buildLoopTools = (loopId: string, disabledProviderTools: string[]): LoopTo
       name: tool.name,
       description: tool.description,
       enabled: enabledNames.has(tool.name),
+      requiresApproval: tool.requiresApproval,
     })),
   };
 };

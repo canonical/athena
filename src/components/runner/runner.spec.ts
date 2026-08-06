@@ -52,7 +52,7 @@ test(`loop runners tab supports assign remove and algorithm save`, async ({ page
 
   await createRunnerViaUi(page, runnerName);
 
-  await page.goto(`http://athena.localhost/loop/${loop.id}?tab=runners`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/runners`);
 
   await expect(page.getByRole(`heading`, { name: `Assign an existing runner` })).toBeVisible();
   await page.getByLabel(`Runner`).selectOption({ label: runnerName });

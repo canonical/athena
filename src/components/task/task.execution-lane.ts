@@ -1,24 +1,25 @@
-import type { TaskKind } from "./task.schema.js";
+import { taskKindDefinitions, type TaskExecutionLane, type TaskKind } from "./task.schema.js";
 import { providerToolNames } from "@components/tool/tool.catalog.js";
 
 export const executionLanes = [`provider-based`, `runner-based`] as const;
-export type ExecutionLane = (typeof executionLanes)[number];
+export type ExecutionLane = TaskExecutionLane;
 
 export const executionLaneForTargetType = (targetType: `provider` | `runner`): ExecutionLane => {
   return targetType === `runner` ? `runner-based` : `provider-based`;
 };
 
-export const requiredExecutionLaneByTaskKind: Record<TaskKind, ExecutionLane> = {
-  coding: `runner-based`,
-  "jira-refinement": `provider-based`,
-  analysis: `provider-based`,
-  design: `provider-based`,
-  research: `provider-based`,
-  other: `provider-based`,
-};
+const taskKindRequirementByKind = new Map<TaskKind, ExecutionLane>(taskKindDefinitions.map((definition) => [definition.kind, definition.requiredExecutionLane]));
+
+export const taskKindRequirementCatalog = taskKindDefinitions;
 
 export const resolveRequiredExecutionLaneForTaskKind = (taskKind: TaskKind): ExecutionLane => {
-  return requiredExecutionLaneByTaskKind[taskKind];
+  const requiredLane = taskKindRequirementByKind.get(taskKind);
+
+  if (!requiredLane) {
+    throw new Error(`Unknown task kind: ${taskKind}`);
+  }
+
+  return requiredLane;
 };
 
 export const requiresRunnerLaneByTaskKind = (taskKind: TaskKind): boolean => {

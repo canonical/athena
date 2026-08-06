@@ -1,4 +1,4 @@
-import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Button, Icon, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { useFeedbackToast } from "@components/base/toast.js";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -25,7 +25,7 @@ const lifecycleLabel: Record<Workgraph["lifecycleStatus"], string> = {
 type WorkgraphListProps = {
   editor?: `create` | `edit`;
   workgraphId?: string;
-  listRoute?: `/workgraph/list` | `/connection`;
+  listRoute?: `/workgraph/list` | `/connection/workgraphs`;
 };
 
 export function WorkgraphList({ editor, workgraphId, listRoute = `/workgraph/list` }: WorkgraphListProps) {
@@ -37,17 +37,27 @@ export function WorkgraphList({ editor, workgraphId, listRoute = `/workgraph/lis
   useFeedbackToast(feedback, setFeedback);
 
   const openCreateDrawer = () => {
-    void navigate({ to: listRoute, search: { create: true, edit: undefined } });
+    if (listRoute === `/connection/workgraphs`) {
+      void navigate({ to: `/connection/workgraphs/create` });
+    } else {
+      void navigate({ to: `/workgraph/list/create` });
+    }
+
     setFeedback(null);
   };
 
   const openEditDrawer = (workgraph: Workgraph) => {
-    void navigate({ to: listRoute, search: { create: undefined, edit: workgraph.id } });
+    if (listRoute === `/connection/workgraphs`) {
+      void navigate({ to: `/connection/workgraphs/edit/$workgraphId`, params: { workgraphId: workgraph.id } });
+    } else {
+      void navigate({ to: `/workgraph/list/edit/$workgraphEditorId`, params: { workgraphEditorId: workgraph.id } });
+    }
+
     setFeedback(null);
   };
 
   const closeDrawer = () => {
-    void navigate({ to: listRoute, search: { create: undefined, edit: undefined } });
+    void navigate({ to: listRoute });
   };
 
   const workgraphs = state.status === `success` ? state.workgraphs : [];
@@ -84,14 +94,13 @@ export function WorkgraphList({ editor, workgraphId, listRoute = `/workgraph/lis
 
   return (
     <section className="p-strip is-shallow u-no-max-width">
-      <h1 className="p-heading--2">Workgraphs</h1>
       {state.status === `loading` ? <p className="p-text--default">Loading workgraphs...</p> : null}
       {state.status === `error` ? (
         <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load workgraphs">
           {state.message}
         </Notification>
       ) : null}
-      <div className="p-card p-strip is-shallow">
+      <div>
         <div className="p-grid">
           <div className="p-grid__row">
             <div className="p-grid__col-12 u-align--right">
@@ -102,8 +111,9 @@ export function WorkgraphList({ editor, workgraphId, listRoute = `/workgraph/lis
           </div>
         </div>
         <MainTable
+          className="u-table-layout--auto"
           emptyStateMsg="No workgraphs yet."
-          headers={[{ content: `Name` }, { content: `Type` }, { content: `Project key` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions` }]}
+          headers={[{ content: `Name` }, { content: `Type` }, { content: `Project key` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions`, className: `u-align--right` }]}
           rows={workgraphs.map((workgraph: Workgraph) => ({
             key: workgraph.id,
             columns: [
@@ -121,11 +131,11 @@ export function WorkgraphList({ editor, workgraphId, listRoute = `/workgraph/lis
               {
                 content: (
                   <div className="u-align--right">
-                    <Button appearance="base" onClick={() => openEditDrawer(workgraph)} type="button">
-                      {`Edit definition`}
+                    <Button appearance="base" aria-label={`Edit ${workgraph.name}`} onClick={() => openEditDrawer(workgraph)} title={`Edit ${workgraph.name}`} type="button">
+                      <Icon aria-hidden="true" name="copy" />
                     </Button>
-                    <Button appearance="negative" disabled={busyWorkgraphId === workgraph.id} onClick={() => handleDelete(workgraph)} type="button">
-                      {busyWorkgraphId === workgraph.id ? `Deleting ${workgraph.name}...` : `Delete ${workgraph.name}`}
+                    <Button appearance="base" aria-label={`Delete ${workgraph.name}`} disabled={busyWorkgraphId === workgraph.id} onClick={() => handleDelete(workgraph)} title={`Delete ${workgraph.name}`} type="button">
+                      <Icon aria-hidden="true" className="text-negative" name="delete" />
                     </Button>
                   </div>
                 ),

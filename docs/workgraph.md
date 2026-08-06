@@ -18,7 +18,6 @@ Workgraph is not responsible for Athena routing decisions. Routing/execution int
 Related runtime references:
 
 - [task-lifecycle.md](./task-lifecycle.md)
-- [task-processing.md](./task-processing.md)
 - [task.controller.ts](../src/components/task/task.controller.ts)
 - [task.schema.ts](../src/components/task/task.schema.ts)
 
@@ -157,11 +156,11 @@ Out of scope for first POC:
 
 Workgraph complements existing task/loop runtime behavior rather than replacing it:
 
-1. Loop/task states remain in Athena runtime: [task-lifecycle.md](./task-lifecycle.md).
-2. Queue processing remains in Athena runtime: [task-processing.md](./task-processing.md).
-3. Routing and target selection remain Athena-internal: [task.controller.ts](../src/components/task/task.controller.ts).
-4. UI task visibility remains in loop dashboard/task inspector:
-	 - [LoopDashboard.tsx](../src/components/loop/LoopDashboard.tsx)
+1. Loop/task states and queue processing remain in Athena runtime: [task-lifecycle.md](./task-lifecycle.md).
+
+2. Routing and target selection remain Athena-internal: [task.controller.ts](../src/components/task/task.controller.ts).
+3. UI task visibility remains in loop tasks view/task inspector:
+	 - [LoopTasks.tsx](../src/components/loop/LoopTasks.tsx)
 	 - [TaskList.tsx](../src/components/task/TaskList.tsx)
 
 ## Open Questions

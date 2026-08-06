@@ -1,4 +1,4 @@
-import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Button, Icon, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { useFeedbackToast } from "@components/base/toast.js";
 import { useNavigate } from "@tanstack/react-router";
@@ -35,17 +35,17 @@ export function RunnerList({ editor, runnerId }: RunnerListProps) {
   useFeedbackToast(feedback, setFeedback);
 
   const openCreateDrawer = () => {
-    void navigate({ to: `/runner/list`, search: { create: true, edit: undefined } });
+    void navigate({ to: `/runner/list/create` });
     setFeedback(null);
   };
 
   const openEditDrawer = (runner: Runner) => {
-    void navigate({ to: `/runner/list`, search: { create: undefined, edit: runner.id } });
+    void navigate({ to: `/runner/list/edit/$runnerEditorId`, params: { runnerEditorId: runner.id } });
     setFeedback(null);
   };
 
   const closeDrawer = () => {
-    void navigate({ to: `/runner/list`, search: { create: undefined, edit: undefined } });
+    void navigate({ to: `/runner/list` });
   };
 
   const runners = state.status === `success` ? state.runners : [];
@@ -82,14 +82,13 @@ export function RunnerList({ editor, runnerId }: RunnerListProps) {
 
   return (
     <section className="p-strip is-shallow u-no-max-width">
-      <h1 className="p-heading--2">Runners</h1>
       {state.status === `loading` ? <p className="p-text--default">Loading runners...</p> : null}
       {state.status === `error` ? (
         <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load runners">
           {state.message}
         </Notification>
       ) : null}
-      <div className="p-card p-strip is-shallow">
+      <div>
         <div className="p-grid">
           <div className="p-grid__row">
             <div className="p-grid__col-12 u-align--right">
@@ -100,8 +99,9 @@ export function RunnerList({ editor, runnerId }: RunnerListProps) {
           </div>
         </div>
         <MainTable
+          className="u-table-layout--auto"
           emptyStateMsg="No runners yet."
-          headers={[{ content: `Display name` }, { content: `Runner` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions` }]}
+          headers={[{ content: `Display name` }, { content: `Runner` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions`, className: `u-align--right` }]}
           rows={runners.map((runner: Runner) => ({
             key: runner.id,
             columns: [
@@ -112,11 +112,11 @@ export function RunnerList({ editor, runnerId }: RunnerListProps) {
               {
                 content: (
                   <div className="u-align--right">
-                    <Button appearance="base" onClick={() => openEditDrawer(runner)} type="button">
-                      {`Edit ${runner.displayName}`}
+                    <Button appearance="base" aria-label={`Edit ${runner.displayName}`} onClick={() => openEditDrawer(runner)} title={`Edit ${runner.displayName}`} type="button">
+                      <Icon aria-hidden="true" name="copy" />
                     </Button>
-                    <Button appearance="negative" disabled={busyRunnerId === runner.id} onClick={() => handleDelete(runner)} type="button">
-                      {busyRunnerId === runner.id ? `Deleting ${runner.displayName}...` : `Delete ${runner.displayName}`}
+                    <Button appearance="base" aria-label={`Delete ${runner.displayName}`} disabled={busyRunnerId === runner.id} onClick={() => handleDelete(runner)} title={`Delete ${runner.displayName}`} type="button">
+                      <Icon aria-hidden="true" className="text-negative" name="delete" />
                     </Button>
                   </div>
                 ),

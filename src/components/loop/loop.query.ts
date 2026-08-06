@@ -9,11 +9,17 @@ export type LoopState = { status: "loading" } | { status: "error"; message: stri
 export type ProviderSelectionPolicyState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; policy: ProviderSelectionPolicy };
 export type LoopReadinessState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; readiness: LoopReadiness };
 
-export const useLoopList = () => {
+type UseLoopListOptions = {
+  enabled?: boolean;
+};
+
+export const useLoopList = (options: UseLoopListOptions = {}) => {
+  const { enabled = true } = options;
   const queryClient = useQueryClient();
   const { isPending, isError, data, error } = useQuery({
     queryKey: [`loops`],
     queryFn: fetchLoopList,
+    enabled,
   });
 
   const state: LoopListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, loops: data };

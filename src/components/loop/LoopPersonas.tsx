@@ -1,4 +1,4 @@
-import { Button, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
+import { Button, Icon, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { usePersonaCatalog, usePersonaListAll } from "@components/persona/persona.query.js";
 import { useFormik } from "formik";
@@ -96,19 +96,18 @@ export function LoopPersonas({ loopId, personaListState, reloadPersonaList, onFe
           {routingPausedReason}
         </Notification>
       ) : null}
-      <div className="p-card p-strip is-shallow">
-        <div className="p-grid">
-          <div className="p-grid__row">
-            <div className="p-grid__col-6">
-              <h2 className="p-heading--4">Assigned personas</h2>
-            </div>
-            <div className="p-grid__col-6 u-align--right">
-              <Button appearance="positive" onClick={() => setIsAssignDrawerOpen(true)} type="button">
-                Assign persona
-              </Button>
-            </div>
+      <div>
+        <div className="u-clearfix">
+          <div className="u-float-left">
+            <h2 className="p-heading--4">Assigned personas</h2>
+          </div>
+          <div className="u-float-right">
+            <Button appearance="positive" onClick={() => setIsAssignDrawerOpen(true)} type="button">
+              Assign persona
+            </Button>
           </div>
         </div>
+        <hr />
         {personaListState.status === `loading` ? <p className="p-text--default">Loading personas...</p> : null}
         {personaListState.status === `error` ? (
           <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load personas">
@@ -118,7 +117,8 @@ export function LoopPersonas({ loopId, personaListState, reloadPersonaList, onFe
         {personaListState.status === `success` && personaListState.personas.length === 0 ? <p className="p-text--default">No personas assigned to this loop yet.</p> : null}
         {personaListState.status === `success` && personaListState.personas.length > 0 ? (
           <MainTable
-            headers={[{ content: `Display name` }, { content: `Role` }, { content: `Status` }, { content: `Actions` }]}
+            className="u-table-layout--auto"
+            headers={[{ content: `Display name` }, { content: `Role` }, { content: `Status` }, { content: `Actions`, className: `u-align--right` }]}
             rows={personaListState.personas.map((persona) => ({
               key: persona.id,
               columns: [
@@ -128,8 +128,8 @@ export function LoopPersonas({ loopId, personaListState, reloadPersonaList, onFe
                 {
                   content: (
                     <div className="u-align--right">
-                      <Button appearance="negative" disabled={busyPersonaId === persona.id} onClick={() => handleRemove(persona)} type="button">
-                        {busyPersonaId === persona.id ? `Removing ${persona.displayName}...` : `Remove ${persona.displayName}`}
+                      <Button appearance="base" aria-label={`Remove ${persona.displayName}`} disabled={busyPersonaId === persona.id} onClick={() => handleRemove(persona)} title={`Remove ${persona.displayName}`} type="button">
+                        <Icon aria-hidden="true" className="text-negative" name="delete" />
                       </Button>
                     </div>
                   ),

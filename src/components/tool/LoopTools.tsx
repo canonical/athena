@@ -51,9 +51,13 @@ export function LoopTools({ loopId, onFeedback }: LoopToolsProps) {
   };
 
   return (
-    <div className="p-card p-strip is-shallow">
-      <h2 className="p-heading--4">Tools</h2>
-      <p className="p-text--small">Enable or disable provider tools for this loop. Disabled tools are not exposed to provider-based execution.</p>
+    <>
+      <div className="u-clearfix">
+        <div className="u-float-left">
+          <h2 className="p-heading--4">Tools</h2>
+        </div>
+      </div>
+      <hr />
 
       {isPending ? <p className="p-text--default">Loading tools...</p> : null}
 
@@ -67,24 +71,28 @@ export function LoopTools({ loopId, onFeedback }: LoopToolsProps) {
 
       {!isPending && !isError && data && data.tools.length > 0 ? (
         <MainTable
-          headers={[{ content: `Tool` }, { content: `Description` }, { content: `Enabled` }, { content: `Action` }]}
+          className="u-table-layout--auto"
+          headers={[{ content: `Tool` }, { content: `Description` }, { content: `Enabled` }, { content: `Requires approval` }, { content: `Actions`, className: `u-align--right` }]}
           rows={data.tools.map((tool) => ({
             key: tool.name,
             columns: [
               { content: tool.name },
               { content: tool.description },
               { content: tool.enabled ? `Yes` : `No` },
+              { content: tool.requiresApproval ? `Yes` : `No` },
               {
                 content: (
-                  <Button appearance={tool.enabled ? `negative` : `positive`} disabled={busyToolName === tool.name} onClick={() => handleToggleTool(tool.name)} type="button">
-                    {busyToolName === tool.name ? `Saving...` : tool.enabled ? `Disable` : `Enable`}
-                  </Button>
+                  <div className="u-align--right">
+                    <Button appearance={tool.enabled ? `negative` : `positive`} disabled={busyToolName === tool.name} onClick={() => handleToggleTool(tool.name)} type="button">
+                      {busyToolName === tool.name ? `Saving...` : tool.enabled ? `Disable` : `Enable`}
+                    </Button>
+                  </div>
                 ),
               },
             ],
           }))}
         />
       ) : null}
-    </div>
+    </>
   );
 }
