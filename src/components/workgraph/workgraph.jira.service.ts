@@ -1,5 +1,5 @@
-import type { WorkgraphConnectionTest } from "./workgraph.schema.js";
 import { fetchWithRetry } from "@components/utilities/http-retry.js";
+import type { WorkgraphConnectionTest } from "./workgraph.schema.js";
 
 export type JiraIssueType = {
   id: string;
@@ -211,25 +211,29 @@ const fetchJiraSearchPage = async (input: { baseUrl: string; email: string; apiK
   let response: Response;
 
   try {
-    response = await fetchWithRetry(endpoint, {
-      method: `POST`,
-      headers: {
-        Accept: `application/json`,
-        "Content-Type": `application/json`,
-        Authorization: `Basic ${Buffer.from(`${input.email}:${input.apiKey}`, `utf8`).toString(`base64`)}`,
+    response = await fetchWithRetry(
+      endpoint,
+      {
+        method: `POST`,
+        headers: {
+          Accept: `application/json`,
+          "Content-Type": `application/json`,
+          Authorization: `Basic ${Buffer.from(`${input.email}:${input.apiKey}`, `utf8`).toString(`base64`)}`,
+        },
+        body: JSON.stringify({
+          jql: input.jql,
+          maxResults: input.maxResults,
+          nextPageToken: input.nextPageToken,
+          fields: [`*all`],
+        }),
       },
-      body: JSON.stringify({
-        jql: input.jql,
-        maxResults: input.maxResults,
-        nextPageToken: input.nextPageToken,
-        fields: [`*all`],
-      }),
-    }, {
-      maxAttempts: 4,
-      baseDelayMs: 600,
-      maxDelayMs: 8_000,
-      allowRetryOnNonIdempotentMethods: true,
-    });
+      {
+        maxAttempts: 4,
+        baseDelayMs: 600,
+        maxDelayMs: 8_000,
+        allowRetryOnNonIdempotentMethods: true,
+      },
+    );
   } catch {
     throw new Error(`Unable to reach Jira. Verify the base URL and network connectivity.`);
   }
@@ -260,24 +264,28 @@ export const testJiraWorkgraphConnection = async (input: WorkgraphConnectionTest
   let response: Response;
 
   try {
-    response = await fetchWithRetry(endpoint, {
-      method: `POST`,
-      headers: {
-        Accept: `application/json`,
-        "Content-Type": `application/json`,
-        Authorization: `Basic ${Buffer.from(`${input.email}:${input.apiKey}`, `utf8`).toString(`base64`)}`,
+    response = await fetchWithRetry(
+      endpoint,
+      {
+        method: `POST`,
+        headers: {
+          Accept: `application/json`,
+          "Content-Type": `application/json`,
+          Authorization: `Basic ${Buffer.from(`${input.email}:${input.apiKey}`, `utf8`).toString(`base64`)}`,
+        },
+        body: JSON.stringify({
+          jql: normalizedProjectKey ? `project=${normalizedProjectKey}` : ``,
+          maxResults: 1,
+          fields: [`id`],
+        }),
       },
-      body: JSON.stringify({
-        jql: normalizedProjectKey ? `project=${normalizedProjectKey}` : ``,
-        maxResults: 1,
-        fields: [`id`],
-      }),
-    }, {
-      maxAttempts: 4,
-      baseDelayMs: 600,
-      maxDelayMs: 8_000,
-      allowRetryOnNonIdempotentMethods: true,
-    });
+      {
+        maxAttempts: 4,
+        baseDelayMs: 600,
+        maxDelayMs: 8_000,
+        allowRetryOnNonIdempotentMethods: true,
+      },
+    );
   } catch {
     throw new Error(`Unable to reach Jira. Verify the base URL and network connectivity.`);
   }
@@ -407,17 +415,21 @@ const fetchJiraIssueTypes = async (input: { baseUrl: string; email: string; apiK
   let response: Response;
 
   try {
-    response = await fetchWithRetry(endpoint, {
-      method: `GET`,
-      headers: {
-        Accept: `application/json`,
-        Authorization: `Basic ${Buffer.from(`${input.email}:${input.apiKey}`, `utf8`).toString(`base64`)}`,
+    response = await fetchWithRetry(
+      endpoint,
+      {
+        method: `GET`,
+        headers: {
+          Accept: `application/json`,
+          Authorization: `Basic ${Buffer.from(`${input.email}:${input.apiKey}`, `utf8`).toString(`base64`)}`,
+        },
       },
-    }, {
-      maxAttempts: 4,
-      baseDelayMs: 500,
-      maxDelayMs: 8_000,
-    });
+      {
+        maxAttempts: 4,
+        baseDelayMs: 500,
+        maxDelayMs: 8_000,
+      },
+    );
   } catch {
     throw new Error(`Unable to reach Jira. Verify the base URL and network connectivity.`);
   }

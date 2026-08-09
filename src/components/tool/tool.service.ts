@@ -1,58 +1,75 @@
-import {
-  executeAthenaEmitBlocker,
-  executeAthenaMarkComplete,
-  executeAthenaRequestChat,
-} from "./tool.athena.service.js";
-import { executeRepoFind, executeRepoLs, executeRepoRead, executeRepoSearch, executeRepoSymbolIndex, executeTaskRepositories } from "./tool.github.service.js";
-import { executeJiraAddComment, executeJiraAddLabels, executeJiraCreateIssue, executeJiraEditField, executeJiraFieldList, executeJiraReadIssue, executeJiraRemoveLabels, executeJiraSearch, executeJiraTransitionIssue, executeJiraTransitionList } from "./tool.jira.service.js";
+import * as athenaExecutors from "./tool.athena.service.js";
+import { providerToolInputSchemas } from "./tool.catalog.js";
+import * as githubExecutors from "./tool.github.service.js";
 import type { ProviderToolBatchResult, ProviderToolExecutionContext, ProviderToolRequest, ProviderToolResult } from "./tool.schema.js";
+import * as workgraphExecutors from "./tool.workgraph.service.js";
+
+type ProviderToolExecutor = (context: ProviderToolExecutionContext, input: Record<string, unknown> | undefined) => Promise<unknown>;
+
+const validateToolInput = (request: ProviderToolRequest): string[] => {
+  const schema = providerToolInputSchemas[request.tool];
+
+  if (!schema) {
+    return [];
+  }
+
+  const result = schema.safeParse(request.input ?? {});
+
+  if (result.success) {
+    return [];
+  }
+
+  return result.error.issues.map((issue: (typeof result.error.issues)[number]) => {
+    const path = issue.path.length > 0 ? `input.${issue.path.join(`.`)}` : `input`;
+    return `${path} ${issue.message}`;
+  });
+};
+
+const providerToolExecutors: Record<string, ProviderToolExecutor> = {
+  task_repositories: async (context) => githubExecutors.executeTaskRepositories(context),
+  task_workgraphs: async (context) => workgraphExecutors.executeTaskWorkgraphs(context),
+  repo_ls: async (context, input) => githubExecutors.executeRepoLs(context, input),
+  repo_read: async (context, input) => githubExecutors.executeRepoRead(context, input),
+  repo_search: async (context, input) => githubExecutors.executeRepoSearch(context, input),
+  repo_find: async (context, input) => githubExecutors.executeRepoFind(context, input),
+  repo_symbol_index: async (context, input) => githubExecutors.executeRepoSymbolIndex(context, input),
+  workgraph_refresh: async (context, input) => workgraphExecutors.executeWorkgraphRefresh(context, input),
+  workgraph_read_item: async (context, input) => workgraphExecutors.executeWorkgraphReadItem(context, input),
+  workgraph_assign_task_item: async (context, input) => workgraphExecutors.executeWorkgraphAssignTaskItem(context, input),
+  workgraph_search_items: async (context, input) => workgraphExecutors.executeWorkgraphSearchItems(context, input),
+  workgraph_create_item: async (context, input) => workgraphExecutors.executeWorkgraphCreateItem(context, input),
+  workgraph_add_labels: async (context, input) => workgraphExecutors.executeWorkgraphAddLabels(context, input),
+  workgraph_remove_labels: async (context, input) => workgraphExecutors.executeWorkgraphRemoveLabels(context, input),
+  workgraph_list_transitions: async (context, input) => workgraphExecutors.executeWorkgraphListTransitions(context, input),
+  workgraph_transition_item: async (context, input) => workgraphExecutors.executeWorkgraphTransitionItem(context, input),
+  workgraph_list_fields: async (context, input) => workgraphExecutors.executeWorkgraphFieldList(context, input),
+  workgraph_edit_field: async (context, input) => workgraphExecutors.executeWorkgraphEditField(context, input),
+  workgraph_add_comment: async (context, input) => workgraphExecutors.executeWorkgraphAddComment(context, input),
+  athena_emit_blocker: async (context, input) => athenaExecutors.executeAthenaEmitBlocker(context, input),
+  athena_mark_complete: async (context, input) => athenaExecutors.executeAthenaMarkComplete(context, input),
+  athena_request_chat: async (context, input) => athenaExecutors.executeAthenaRequestChat(context, input),
+};
 
 const executeSingleTool = async (context: ProviderToolExecutionContext, request: ProviderToolRequest): Promise<ProviderToolResult> => {
   const input = request.input;
+  const executor = providerToolExecutors[request.tool];
 
   try {
-    switch (request.tool) {
-      case "task_repositories":
-        return { tool: request.tool, ok: true, result: await executeTaskRepositories(context) };
-      case "repo_ls":
-        return { tool: request.tool, ok: true, result: await executeRepoLs(context, input) };
-      case "repo_read":
-        return { tool: request.tool, ok: true, result: await executeRepoRead(context, input) };
-      case "repo_search":
-        return { tool: request.tool, ok: true, result: await executeRepoSearch(context, input) };
-      case "jira_field_list":
-        return { tool: request.tool, ok: true, result: await executeJiraFieldList(context) };
-      case "jira_edit_field":
-        return { tool: request.tool, ok: true, result: await executeJiraEditField(context, input) };
-      case "repo_find":
-        return { tool: request.tool, ok: true, result: await executeRepoFind(context, input) };
-      case "repo_symbol_index":
-        return { tool: request.tool, ok: true, result: await executeRepoSymbolIndex(context, input) };
-      case "jira_read_issue":
-        return { tool: request.tool, ok: true, result: await executeJiraReadIssue(context, input) };
-      case "jira_search":
-        return { tool: request.tool, ok: true, result: await executeJiraSearch(context, input) };
-      case "jira_create_issue":
-        return { tool: request.tool, ok: true, result: await executeJiraCreateIssue(context, input) };
-      case "jira_add_labels":
-        return { tool: request.tool, ok: true, result: await executeJiraAddLabels(context, input) };
-      case "jira_remove_labels":
-        return { tool: request.tool, ok: true, result: await executeJiraRemoveLabels(context, input) };
-      case "jira_transition_list":
-        return { tool: request.tool, ok: true, result: await executeJiraTransitionList(context, input) };
-      case "jira_transition_issue":
-        return { tool: request.tool, ok: true, result: await executeJiraTransitionIssue(context, input) };
-      case "jira_add_comment":
-        return { tool: request.tool, ok: true, result: await executeJiraAddComment(context, input) };
-      case "athena_emit_blocker":
-        return { tool: request.tool, ok: true, result: await executeAthenaEmitBlocker(context, input) };
-      case "athena_mark_complete":
-        return { tool: request.tool, ok: true, result: await executeAthenaMarkComplete(context, input) };
-      case "athena_request_chat":
-        return { tool: request.tool, ok: true, result: await executeAthenaRequestChat(context, input) };
-      default:
-        return { tool: request.tool, ok: false, error: `Tool ${request.tool} is not implemented.` };
+    if (!executor) {
+      return { tool: request.tool, ok: false, error: `Tool ${request.tool} is not implemented.` };
     }
+
+    const validationErrors = validateToolInput(request);
+
+    if (validationErrors.length > 0) {
+      return {
+        tool: request.tool,
+        ok: false,
+        error: `Invalid input for ${request.tool}: ${validationErrors.join(" ")}`,
+      };
+    }
+
+    return { tool: request.tool, ok: true, result: await executor(context, input) };
   } catch (error) {
     return {
       tool: request.tool,

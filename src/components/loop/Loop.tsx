@@ -5,10 +5,10 @@ import { usePersonaList } from "../persona/persona.query.js";
 import { useLoop } from "./loop.query.js";
 import type { Feedback, LoopProps } from "./loop.schema.js";
 
-const LazyLoopTasks = lazy(async () => {
-  const module = await import("./LoopTasks");
+const LazyTaskList = lazy(async () => {
+  const module = await import("@components/task/TaskList.js");
 
-  return { default: module.LoopTasks };
+  return { default: module.TaskList };
 });
 
 const LazyLoopDetails = lazy(async () => {
@@ -53,7 +53,7 @@ const LazyLoopRepositories = lazy(async () => {
   return { default: module.LoopRepositories };
 });
 
-export function Loop({ loopId, tab, taskId, editor, personaId, workgraphViewWorkgraphId, workgraphConfigTab }: LoopProps) {
+export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId, workgraphConfigTab }: LoopProps) {
   const { state: loopState, reload: reloadLoop } = useLoop(loopId);
   const { state: personaListState, reload: reloadPersonaList } = usePersonaList(loopId);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -100,7 +100,7 @@ export function Loop({ loopId, tab, taskId, editor, personaId, workgraphViewWork
       ) : null}
       {tab === `tasks` ? (
         <Suspense fallback={<div>Loading tasks...</div>}>
-          <LazyLoopTasks loopId={loopId} taskId={taskId} />
+          <LazyTaskList loopId={loopId} />
         </Suspense>
       ) : null}
       {tab === `details` ? (

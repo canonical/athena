@@ -1,4 +1,3 @@
-import { log } from "@components/logging/logging.service.js";
 import { taskCreate } from "@components/task/task.controller.js";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { syncJiraWorkgraphItems } from "@components/workgraph/workgraph.jira.service.js";
@@ -37,7 +36,10 @@ const extractLabels = (value: unknown): string[] => {
     return [];
   }
 
-  return value.filter((label): label is string => typeof label === `string`).map((label) => label.trim()).filter((label) => label.length > 0);
+  return value
+    .filter((label): label is string => typeof label === `string`)
+    .map((label) => label.trim())
+    .filter((label) => label.length > 0);
 };
 
 const parseLabelsFromWorkgraphItemPayload = (payload: unknown): string[] => {
@@ -71,33 +73,10 @@ const parseLabelsFromWorkgraphItemPayload = (payload: unknown): string[] => {
   return extractLabels(payloadRecord.labels);
 };
 
-const normalizeBaseUrl = (value: string): string => value.replace(/\/+$/, ``);
-
-const makeJiraBasicAuthHeader = (email: string, apiKey: string): string => {
-  return `Basic ${Buffer.from(`${email}:${apiKey}`, `utf8`).toString(`base64`)}`;
-};
-
-const addLabelToJiraIssue = async (input: { baseUrl: string; email: string; apiKey: string; issueId: string; label: string }): Promise<void> => {
-  const response = await fetch(`${normalizeBaseUrl(input.baseUrl)}/rest/api/3/issue/${encodeURIComponent(input.issueId)}`, {
-    method: `PUT`,
-    headers: {
-      Authorization: makeJiraBasicAuthHeader(input.email, input.apiKey),
-      Accept: `application/json`,
-      "Content-Type": `application/json`,
-    },
-    body: JSON.stringify({
-      update: {
-        labels: [{ add: input.label }],
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const responseText = await response.text();
-    const trimmedResponseText = responseText.trim();
-    const message = trimmedResponseText.length > 0 ? trimmedResponseText : response.statusText;
-    throw new Error(`Unable to update Jira labels: ${response.status} ${message}`);
-  }
+const readPromotedTaskTitle = (itemTitle: string | null, mode: "created" | "updated"): string => {
+  const normalizedTitle = typeof itemTitle === "string" ? itemTitle.trim() : "";
+  const baseTitle = normalizedTitle.length > 0 ? normalizedTitle : "Workgraph Item";
+  return `${baseTitle} ${mode === "updated" ? "Updated" : "Created"}`;
 };
 
 export const synchronizeLoopWorkgraphAndPromoteTasks = async (loopId: string, workgraphId: string): Promise<{ syncedCount: number; createdTaskCount: number }> => {
@@ -129,6 +108,19 @@ export const synchronizeLoopWorkgraphAndPromoteTasks = async (loopId: string, wo
     jql,
   });
 
+  const existingItemsBeforeSync = await queryLoopWorkgraphItemList(loopId, workgraphId);
+  const existingItemKeySet = new Set<string>();
+
+  for (const item of existingItemsBeforeSync) {
+    const itemKey = item.itemKey.trim().toLowerCase();
+
+    if (!itemKey) {
+      continue;
+    }
+
+    existingItemKeySet.add(itemKey);
+  }
+
   await queryLoopWorkgraphReplaceItems(loopId, workgraphId, syncedItems);
 
   const workgraphItems = await queryLoopWorkgraphItemList(loopId, workgraphId);
@@ -141,53 +133,24 @@ export const synchronizeLoopWorkgraphAndPromoteTasks = async (loopId: string, wo
   for (const workgraphItem of workgraphItems) {
     const labels = parseLabelsFromWorkgraphItemPayload(workgraphItem.payload);
 
-    if (hasLabel(labels, workDoneLabel) || hasLabel(labels, workInProgressLabel) || !hasLabel(labels, workOnLabel)) {
+    if (!hasLabel(labels, workOnLabel) || hasLabel(labels, workInProgressLabel) || hasLabel(labels, workDoneLabel)) {
       continue;
     }
 
-    const result = await taskCreate(
-      {
-        loop: loopId,
-        sourceType: `workgraph-webhook`,
-        sourceRef: workgraphItem.itemKey,
-        description: `Analyze and process Jira item ${workgraphItem.itemKey}: ${workgraphItem.title}`,
-        externalRefs: workgraphItem.webUrl ? [workgraphItem.webUrl] : [],
-        approvals: [],
-        successCriteria: [],
-        payload: {
-          timeline: [],
-          workgraphItem: {
-            id: workgraphItem.id,
-            itemKey: workgraphItem.itemKey,
-            labels,
-          },
-        },
-      },
-      undefined, // no userId for system operation
-    );
+    const itemKey = workgraphItem.itemKey.trim().toLowerCase();
+    const existedBeforeSync = itemKey.length > 0 && existingItemKeySet.has(itemKey);
+    const titleMode: "created" | "updated" = existedBeforeSync ? "updated" : "created";
 
-    if (!result?.tasks?.[0]) {
-      continue;
+    const createdTask = await taskCreate({
+      loop: loopId,
+      source: `workgraphItem`,
+      workgraphItem: workgraphItem.id,
+      title: readPromotedTaskTitle(workgraphItem.title, titleMode),
+    });
+
+    if (createdTask) {
+      createdTaskCount += 1;
     }
-
-    try {
-      await addLabelToJiraIssue({
-        baseUrl: syncConnection.baseUrl,
-        email: syncConnection.email,
-        apiKey: syncConnection.apiKey,
-        issueId: workgraphItem.itemId,
-        label: workInProgressLabel,
-      });
-    } catch (error) {
-      log.warn(`Unable to apply in-progress Jira label after creating task`, {
-        loopId,
-        workgraphId,
-        itemKey: workgraphItem.itemKey,
-        error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) },
-      });
-    }
-
-    createdTaskCount += 1;
   }
 
   return { syncedCount: syncedItems.length, createdTaskCount };

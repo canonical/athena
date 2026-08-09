@@ -50,16 +50,14 @@ export const loopRepositoryAssignSchema = z.object({
   repository: uuid(),
 });
 
-export const loopRepositorySchema = repositorySchema
-  .pick({ displayName: true, repositoryType: true, apiBaseUrl: true, repositoryOwner: true, repositoryName: true, defaultBranch: true, lifecycleStatus: true })
-  .extend({
-    loop: uuid(),
-    repository: uuid(),
-    owner: uuid(),
-    enabled: z.boolean(),
-    createdAt: isoDateTime,
-    updatedAt: isoDateTime,
-  });
+export const loopRepositorySchema = repositorySchema.pick({ displayName: true, repositoryType: true, apiBaseUrl: true, repositoryOwner: true, repositoryName: true, defaultBranch: true, lifecycleStatus: true }).extend({
+  loop: uuid(),
+  repository: uuid(),
+  owner: uuid(),
+  enabled: z.boolean(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+});
 
 export type Repository = z.infer<typeof repositorySchema>;
 export type RepositoryInsert = z.infer<typeof repositoryInsertSchema>;

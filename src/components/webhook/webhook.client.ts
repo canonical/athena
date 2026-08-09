@@ -37,12 +37,7 @@ export const createLoopWorkgraphWebhook = async (loopId: string, workgraphId: st
   return response.json() as Promise<LoopWorkgraphWebhookCreateResult>;
 };
 
-export const updateLoopWorkgraphWebhook = async (
-  loopId: string,
-  workgraphId: string,
-  webhookId: string,
-  payload: LoopWorkgraphWebhookUpdate,
-): Promise<LoopWorkgraphWebhook> => {
+export const updateLoopWorkgraphWebhook = async (loopId: string, workgraphId: string, webhookId: string, payload: LoopWorkgraphWebhookUpdate): Promise<LoopWorkgraphWebhook> => {
   const response = await authenticatedJsonPut(webhookApiPaths.loopWorkgraphById(loopId, workgraphId, webhookId), payload);
 
   if (!response.ok) {

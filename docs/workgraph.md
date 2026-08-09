@@ -17,9 +17,8 @@ Workgraph is not responsible for Athena routing decisions. Routing/execution int
 
 Related runtime references:
 
-- [task-lifecycle.md](./task-lifecycle.md)
-- [task.controller.ts](../src/components/task/task.controller.ts)
 - [task.schema.ts](../src/components/task/task.schema.ts)
+- [Workgraph Sync Task Promotion Decision Tree](./workgraph-sync-task-promotion-decision-tree.md)
 
 ## Boundaries
 
@@ -34,9 +33,9 @@ flowchart LR
 
 		subgraph ATH[Athena Runtime]
 			E[Loop]
-			F[Task Lifecycle]
-			G[Routing and Target Selection]
-			H[Execution and Tooling]
+			F[Task Records]
+			G[UI Routing]
+			H[Tooling]
 			I[Context Pack Builder]
 		end
 
@@ -129,11 +128,6 @@ For POC, Athena should build a deterministic context pack from Workgraph subtree
 
 This context pack feeds LLM calls while keeping routing decisions internal to Athena.
 
-Related code references:
-
-- [task.history.ts](../src/components/task/task.history.ts)
-- [task.execution.ts](../src/components/task/task.execution.ts)
-
 ## POC Scope
 
 Must-have:
@@ -154,14 +148,12 @@ Out of scope for first POC:
 
 ## Relationship to Existing Athena Concepts
 
-Workgraph complements existing task/loop runtime behavior rather than replacing it:
+Workgraph complements existing loop and task UI behavior rather than replacing it:
 
-1. Loop/task states and queue processing remain in Athena runtime: [task-lifecycle.md](./task-lifecycle.md).
-
-2. Routing and target selection remain Athena-internal: [task.controller.ts](../src/components/task/task.controller.ts).
-3. UI task visibility remains in loop tasks view/task inspector:
-	 - [LoopTasks.tsx](../src/components/loop/LoopTasks.tsx)
+1. Task schema remains runtime-owned in Athena: [task.schema.ts](../src/components/task/task.schema.ts).
+2. UI task visibility remains in task views:
 	 - [TaskList.tsx](../src/components/task/TaskList.tsx)
+	 - [TaskDetails.tsx](../src/components/task/TaskDetails.tsx)
 
 ## Open Questions
 

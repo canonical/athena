@@ -87,7 +87,6 @@ export const fetchWithRetry = async (input: string | URL | Request, init?: Reque
       const retryAfterMs = parseRetryAfterMs(response.headers.get("Retry-After"));
       const delayMs = retryAfterMs ?? computeBackoffMs(attempt, baseDelayMs, maxDelayMs, jitterRatio);
       await delay(delayMs);
-      continue;
     } catch (error) {
       if (!canRetryMethod || !isRetryableError(error) || attempt >= maxAttempts || signal?.aborted) {
         throw error;

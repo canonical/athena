@@ -1,6 +1,17 @@
 import { authenticatedJsonDelete, authenticatedJsonGet, authenticatedJsonPost, authenticatedJsonPut } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
-import type { LoopWorkgraph, LoopWorkgraphItem, LoopWorkgraphStartItemResult, LoopWorkgraphSyncResult, Workgraph, WorkgraphConnectionTest, WorkgraphInsert, WorkgraphIssueType, WorkgraphTypeOption, WorkgraphUpdate } from "./workgraph.schema.js";
+import type {
+  LoopWorkgraph,
+  LoopWorkgraphItem,
+  LoopWorkgraphStartItemResult,
+  LoopWorkgraphSyncResult,
+  Workgraph,
+  WorkgraphConnectionTest,
+  WorkgraphInsert,
+  WorkgraphIssueType,
+  WorkgraphTypeOption,
+  WorkgraphUpdate,
+} from "./workgraph.schema.js";
 
 export const workgraphApiPaths = {
   list: getApiUrl(`/workgraph`),

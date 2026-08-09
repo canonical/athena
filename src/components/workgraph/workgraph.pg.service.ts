@@ -2,14 +2,7 @@ import { getPool } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
 import type { LoopWorkgraphWebhook, LoopWorkgraphWebhookUpdate } from "@components/webhook/webhook.schema.js";
 import type { JiraSyncedItem } from "./workgraph.jira.service.js";
-import type {
-  LoopWorkgraph,
-  LoopWorkgraphAdminUpdate,
-  LoopWorkgraphItem,
-  Workgraph,
-  WorkgraphInsert,
-  WorkgraphUpdate,
-} from "./workgraph.schema.js";
+import type { LoopWorkgraph, LoopWorkgraphAdminUpdate, LoopWorkgraphItem, Workgraph, WorkgraphInsert, WorkgraphUpdate } from "./workgraph.schema.js";
 
 const workgraphColumns = `"id", "owner", "name", "type", "baseUrl", "browseBaseUrl", "projectKey", "email", "lifecycleStatus", "createdAt", "updatedAt"`;
 
@@ -572,13 +565,7 @@ export const queryLoopWorkgraphWebhookList = async (loopWorkgraphId: string): Pr
   return result.rows;
 };
 
-export const queryLoopWorkgraphWebhookCreate = async (input: {
-  loopWorkgraphId: string;
-  label: string;
-  receiverId: string;
-  authHeaderName: string;
-  authSecretHash: string;
-}): Promise<LoopWorkgraphWebhook> => {
+export const queryLoopWorkgraphWebhookCreate = async (input: { loopWorkgraphId: string; label: string; receiverId: string; authHeaderName: string; authSecretHash: string }): Promise<LoopWorkgraphWebhook> => {
   const result = await getPool().query<LoopWorkgraphWebhook>(
     `
       INSERT INTO "webhook" (
@@ -660,7 +647,9 @@ export const queryLoopWorkgraphWebhookDelete = async (webhookId: string, loopWor
   return Boolean(result.rowCount);
 };
 
-export const queryWebhookByReceiverId = async (receiverId: string): Promise<
+export const queryWebhookByReceiverId = async (
+  receiverId: string,
+): Promise<
   | {
       id: string;
       type: string;

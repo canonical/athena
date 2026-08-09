@@ -1,7 +1,7 @@
+import { disabledProviderToolNamesFromEnabled, enabledProviderToolNamesFromDisabled, normalizeProviderToolNames, providerToolDefinitions } from "@components/tool/tool.catalog.js";
 import { LoopForbiddenError, LoopNotFoundError } from "./loop.errors.js";
 import { evaluateLoopReadiness } from "./loop.readiness.js";
 import type { Loop, LoopInsert, LoopReadiness, LoopTools, LoopToolsUpdateRequest, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
-import { disabledProviderToolNamesFromEnabled, enabledProviderToolNamesFromDisabled, normalizeProviderToolNames, providerToolDefinitions } from "@components/tool/tool.catalog.js";
 import {
   queryLoopAdminMembership,
   queryLoopCreate,
@@ -13,6 +13,7 @@ import {
   queryLoopProviderSelectionPolicy,
   queryLoopProviderSelectionPolicyUpdate,
   queryLoopReadinessCounts,
+  queryLoopReadinessCountsAll,
   queryLoopUpdate,
 } from "./loop.service.js";
 
@@ -83,6 +84,12 @@ export const loopReadinessGet = async (loopId: string, userId: string): Promise<
 
   const counts = await queryLoopReadinessCounts(loopId);
   return evaluateLoopReadiness(loopId, counts);
+};
+
+export const readyLoops = async (): Promise<string[]> => {
+  const readinessCounts = await queryLoopReadinessCountsAll();
+
+  return readinessCounts.filter((counts) => !evaluateLoopReadiness(counts.loopId, counts).blocked).map((counts) => counts.loopId);
 };
 
 const buildLoopTools = (loopId: string, disabledProviderTools: string[]): LoopTools => {

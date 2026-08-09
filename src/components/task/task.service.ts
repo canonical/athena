@@ -1,454 +1,557 @@
 import { getPool } from "@components/postgres/postgres.js";
-import { TaskClaimLostError } from "./task.errors.js";
-import type { Task, TaskCreateInput, TaskInsert, TaskUpdateInput } from "./task.schema.js";
-import { taskCreateInputSchema, taskUpdateInputSchema } from "./task.schema.js";
+import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
+import { v7 as uuidv7 } from "uuid";
+import type { Task, TaskCreate, TaskQueueItemInput } from "./task.schema.js";
+import { taskCreateSchema } from "./task.schema.js";
 
-const taskColumnNames = [
-  `id`,
-  `loop`,
-  `phase`,
-  `sourceType`,
-  `sourceRef`,
-  `status`,
-  `assignee`,
-  `selectedPersona`,
-  `targetType`,
-  `targetId`,
-  `workgraphItem`,
-  `routeReasonCode`,
-  `routeReasonText`,
-  `description`,
-  `kind`,
-  `successCriteria`,
-  `externalRefs`,
-  `context`,
-  `routing`,
-  `emittedByPersona`,
-  `blocker`,
-  `approvals`,
-  `payload`,
-  `emittedAt`,
-  `completedAt`,
-  `claimToken`,
-  `claimOwner`,
-  `pingedAt`,
-  `processingSourceStatus`,
-  `claimAttemptCount`,
-  `autonomyIterationCount`,
-  `autonomyMaxIterations`,
-  `llmCostUsdTotal`,
-  `updatedAt`,
-] as const;
+const taskColumnNames = ["id", "loop", "currentPersona", "currentProvider", "currentModel", "source", "status", "processorUnit", "processorPingedAt", "workgraphItem", "title", "queue", "createdAt", "updatedAt"] as const;
 
-const getTaskColumns = (tableAlias?: string): string => taskColumnNames.map((column) => `${tableAlias ? `${tableAlias}.` : ``}"${column}"`).join(`, `);
+const taskColumns = taskColumnNames.map((column) => `"${column}"`).join(`, `);
 
-const taskInsertSql = `
-  INSERT INTO "task" (
-    "loop", "phase", "sourceType", "sourceRef", "status", "assignee",
-    "selectedPersona", "targetType", "targetId", "workgraphItem", "routeReasonCode", "routeReasonText",
-    "description", "kind", "successCriteria", "externalRefs",
-    "context", "routing", "emittedByPersona", "blocker", "approvals", "payload",
-    "completedAt", "autonomyIterationCount", "autonomyMaxIterations"
-  )
-  VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-    $13, $14, $15::jsonb, $16::jsonb,
-    $17, $18::jsonb, $19, $20, $21::jsonb, $22::jsonb,
-    $23, $24, $25
-  )
-  RETURNING ${getTaskColumns()}
-`;
-
-const buildTaskInsert = (task: TaskCreateInput): TaskInsert => ({
-  ...task,
-  kind: `other`,
-});
-
-const buildTaskInsertParams = (task: TaskInsert): unknown[] => [
-  task.loop,
-  task.phase,
-  task.sourceType,
-  task.sourceRef,
-  task.status,
-  task.assignee,
-  task.selectedPersona,
-  task.targetType,
-  task.targetId,
-  task.workgraphItem ?? null,
-  task.routeReasonCode,
-  task.routeReasonText,
-  task.description,
-  task.kind,
-  JSON.stringify(task.successCriteria),
-  JSON.stringify(task.externalRefs),
-  task.context,
-  JSON.stringify(task.routing),
-  task.emittedByPersona,
-  task.blocker,
-  JSON.stringify(task.approvals),
-  JSON.stringify(task.payload),
-  task.completedAt,
-  task.autonomyIterationCount,
-  task.autonomyMaxIterations,
-];
-
-type TaskCreateQueryTarget = {
-  query: <T>(text: string, params: unknown[]) => Promise<{ rows: T[] }>;
+const scopeTaskColumns = (scope: string): string => {
+  return taskColumnNames.map((column) => `${scope}."${column}"`).join(`, `);
 };
 
-const insertTaskRow = async (target: TaskCreateQueryTarget, task: TaskInsert): Promise<Task> => {
-  const result = await target.query<Task>(taskInsertSql, buildTaskInsertParams(task));
-  const created = result.rows[0];
+export const queryTaskList = async (loopId: string): Promise<Task[]> => {
+  const result = await getPool().query<Task>(
+    `
+      SELECT ${taskColumns}
+      FROM "task"
+      WHERE "loop" = $1
+      ORDER BY "id" DESC
+    `,
+    [loopId],
+  );
 
-  if (!created) {
+  return result.rows;
+};
+
+export const queryTaskGet = async (loopId: string, taskId: string): Promise<Task | null> => {
+  const result = await getPool().query<Task>(
+    `
+      SELECT ${taskColumns}
+      FROM "task"
+      WHERE "loop" = $1
+        AND "id" = $2
+      LIMIT 1
+    `,
+    [loopId, taskId],
+  );
+
+  return result.rows[0] ?? null;
+};
+
+export const queryTaskListByWorkgraphItem = async (loopId: string, workgraphItemId: string): Promise<Task[]> => {
+  const result = await getPool().query<Task>(
+    `
+      SELECT ${taskColumns}
+      FROM "task"
+      WHERE "loop" = $1
+        AND "workgraphItem" = $2
+      ORDER BY "createdAt" DESC
+    `,
+    [loopId, workgraphItemId],
+  );
+
+  return result.rows;
+};
+
+export const queryTaskCreate = async (input: TaskCreate): Promise<Task> => {
+  const task = taskCreateSchema.parse(input);
+  const result = await getPool().query<Task>(
+    `
+      INSERT INTO "task" ("loop", "source", "status", "workgraphItem", "title")
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING ${taskColumns}
+    `,
+    [task.loop, task.source ?? `user`, task.status ?? `queued`, task.workgraphItem ?? null, task.title ?? `New Task`],
+  );
+
+  const createdTask = result.rows[0];
+
+  if (!createdTask) {
     throw new Error(`Task was not created.`);
   }
 
-  return created;
+  return createdTask;
 };
 
-export const queryTaskCreate = async (
-  task: TaskCreateInput,
-  options?: { workgraphItemId?: string },
-): Promise<Task | null> => {
-  const v = taskCreateInputSchema.parse(task);
-  const taskInsert = buildTaskInsert(v);
-
-  if (!options?.workgraphItemId) {
-    return insertTaskRow(getPool(), taskInsert);
-  }
-
-  const client = await getPool().connect();
-
-  try {
-    await client.query(`BEGIN`);
-
-    const lockedItem = await client.query<{ id: string }>(
-      `
-        SELECT "id"
-        FROM "loopWorkgraphItem"
-        WHERE "id" = $1::uuid
-        FOR UPDATE
-      `,
-      [options.workgraphItemId],
-    );
-
-    if (!lockedItem.rows[0]) {
-      await client.query(`ROLLBACK`);
-      return null;
-    }
-
-    const existingTask = await client.query<{ id: string }>(
-      `
-        SELECT "id"
-        FROM "task"
-        WHERE "workgraphItem" = $1::uuid
-          AND "status" <> 'completed'
-        LIMIT 1
-        FOR UPDATE
-      `,
-      [options.workgraphItemId],
-    );
-
-    if (existingTask.rows[0]) {
-      await client.query(`COMMIT`);
-      return null;
-    }
-
-    const createdResult = await insertTaskRow(client, {
-      ...taskInsert,
-      workgraphItem: options.workgraphItemId,
-    });
-
-    await client.query(`COMMIT`);
-    return createdResult;
-  } catch (error) {
-    await client.query(`ROLLBACK`);
-    throw error;
-  } finally {
-    client.release();
-  }
-};
-
-export const queryTaskList = async (userId: string): Promise<Task[]> => {
+export const queryTaskCreateForWorkgraphItem = async (input: { loop: string; workgraphItem: string; title?: string | null }): Promise<Task | null> => {
   const result = await getPool().query<Task>(
     `
-      SELECT ${getTaskColumns(`t`)}
-      FROM "task" t
-      JOIN "loopUser" lu ON lu."loop" = t."loop"
-      WHERE lu."user" = $1
-      ORDER BY t."emittedAt" DESC
-    `,
-    [userId],
-  );
-  return result.rows;
-};
-
-export const queryLoopTaskList = async (loopId: string, userId: string): Promise<Task[]> => {
-  const result = await getPool().query<Task>(
-    `
-      SELECT ${getTaskColumns(`t`)}
-      FROM "task" t
-      JOIN "loopUser" lu ON lu."loop" = t."loop"
-      WHERE lu."user" = $1
-        AND t."loop" = $2
-      ORDER BY t."updatedAt" DESC, t."emittedAt" DESC
-    `,
-    [userId, loopId],
-  );
-  return result.rows;
-};
-
-export const queryLoopChatUserMessageCount = async (loopId: string): Promise<number> => {
-  const result = await getPool().query<{ count: string }>(
-    `
-      SELECT COUNT(*)::text AS "count"
-      FROM "task"
-      WHERE "loop" = $1
-        AND "sourceType" = 'chat-ui'
-        AND "payload"->'chat'->>'messageType' = 'user'
-    `,
-    [loopId],
-  );
-  return Number(result.rows[0]?.count ?? `0`);
-};
-
-export const queryLoopLastSelectedPersona = async (loopId: string): Promise<string | undefined> => {
-  const result = await getPool().query<{ selectedPersona: string | null }>(
-    `
-      SELECT "selectedPersona"
-      FROM "task"
-      WHERE "loop" = $1
-        AND "sourceType" = 'chat-ui'
-        AND "selectedPersona" IS NOT NULL
-      ORDER BY "emittedAt" DESC
-      LIMIT 1
-    `,
-    [loopId],
-  );
-  return result.rows[0]?.selectedPersona ?? undefined;
-};
-
-export const queryLoopLatestActiveTask = async (loopId: string, userId: string): Promise<Task | null> => {
-  const result = await getPool().query<Task>(
-    `
-      SELECT ${getTaskColumns(`t`)}
-      FROM "task" t
-      JOIN "loopUser" lu ON lu."loop" = t."loop"
-      WHERE lu."user" = $1
-        AND t."loop" = $2
-        AND t."sourceType" = 'chat-ui'
-        AND t."status" NOT IN ('completed')
-      ORDER BY t."updatedAt" DESC
-      LIMIT 1
-    `,
-    [userId, loopId],
-  );
-  return result.rows[0] ?? null;
-};
-
-export const queryLoopLatestTask = async (loopId: string, userId: string): Promise<Task | null> => {
-  const result = await getPool().query<Task>(
-    `
-      SELECT ${getTaskColumns(`t`)}
-      FROM "task" t
-      JOIN "loopUser" lu ON lu."loop" = t."loop"
-      WHERE lu."user" = $1
-        AND t."loop" = $2
-        AND t."sourceType" = 'chat-ui'
-      ORDER BY t."updatedAt" DESC
-      LIMIT 1
-    `,
-    [userId, loopId],
-  );
-  return result.rows[0] ?? null;
-};
-
-export const queryTaskById = async (taskId: string): Promise<Task | null> => {
-  const result = await getPool().query<Task>(`SELECT ${getTaskColumns()} FROM "task" WHERE "id" = $1 LIMIT 1`, [taskId]);
-  return result.rows[0] ?? null;
-};
-
-const processableClaimCondition = `
-  (
-    ("phase" = 'routing' AND "status" = 'active')
-    OR ("phase" = 'execution' AND "status" IN ('queued', 'blocked'))
-    OR (
-      "status" = 'processing'
-      AND (
-        "pingedAt" IS NULL
-        OR "pingedAt" <= NOW() - ($2 * INTERVAL '1 second')
+      WITH lock_row AS (
+        SELECT pg_advisory_xact_lock(hashtext(($2::uuid)::text))
+      ),
+      inserted AS (
+        INSERT INTO "task" ("loop", "source", "status", "workgraphItem", "title")
+        SELECT
+          $1::uuid,
+          'workgraphItem',
+          'queued',
+          $2::uuid,
+          COALESCE(NULLIF(BTRIM($3), ''), 'New Task')
+        FROM lock_row
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM "task" t
+          WHERE t."loop" = $1::uuid
+            AND t."workgraphItem" = $2::uuid
+            AND t."status" <> 'completed'
+        )
+        RETURNING ${taskColumns}
       )
-    )
-  )
-`;
-const reclaimStaleSeconds = 120;
+      SELECT ${taskColumns}
+      FROM inserted
+      LIMIT 1
+    `,
+    [input.loop, input.workgraphItem, input.title ?? null],
+  );
 
-export const queryNextProcessableTask = async (claimOwner: string): Promise<Task | null> => {
-  const claimedTasks = await queryClaimedTasks(1, claimOwner);
-  return claimedTasks[0] ?? null;
+  return result.rows[0] ?? null;
 };
 
-export const queryLoopsWithPoolNotReadyTasks = async (): Promise<string[]> => {
-  const result = await getPool().query<{ loop: string }>(`SELECT DISTINCT "loop" FROM "task" WHERE "status" = 'pool-not-ready'`);
-  return result.rows.map((row) => row.loop);
-};
-
-export const queryPromotePoolNotReadyTasksToQueued = async (loopId: string): Promise<number> => {
+export const queryTaskAssignWorkgraphItem = async (loopId: string, taskId: string, workgraphItemId: string, title: string | null): Promise<boolean> => {
   const result = await getPool().query(
     `
       UPDATE "task"
-      SET "phase" = 'execution', "status" = 'queued', "updatedAt" = NOW()
-      WHERE "loop" = $1 AND "status" = 'pool-not-ready'
+      SET
+        "source" = 'workgraphItem',
+        "workgraphItem" = $3,
+        "title" = COALESCE(NULLIF(BTRIM($4), ''), "title")
+      WHERE "loop" = $1
+        AND "id" = $2
     `,
-    [loopId],
+    [loopId, taskId, workgraphItemId, title ?? null],
   );
-  return Number(result.rowCount ?? 0);
+
+  return (result.rowCount ?? 0) > 0;
 };
 
-const queryClaimedTasks = async (limit: number, claimOwner: string): Promise<Task[]> => {
-  const client = await getPool().connect();
-  try {
-    await client.query(`BEGIN`);
+const parseTypeInstructions = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== `object` || Array.isArray(value)) {
+    return {};
+  }
 
-    const lockedRows = await client.query<{ id: string }>(
-      `
-        SELECT "id" FROM "task"
-        WHERE ${processableClaimCondition}
-        ORDER BY "updatedAt" ASC
-        LIMIT $1
-        FOR UPDATE SKIP LOCKED
-      `,
-      [limit, reclaimStaleSeconds],
-    );
-
-    const ids = lockedRows.rows.map((row) => row.id);
-    if (ids.length === 0) {
-      await client.query(`COMMIT`);
-      return [];
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>((accumulator, [key, instruction]) => {
+    if (typeof instruction === `string` && instruction.trim().length > 0) {
+      accumulator[key] = instruction.trim();
     }
 
-    const claimedResult = await client.query<Task>(
-      `
-        UPDATE "task"
-        SET
-          "status" = 'processing',
-          "processingSourceStatus" = CASE
-            WHEN "status" = 'processing' THEN COALESCE("processingSourceStatus", 'queued')
-            ELSE "status"
-          END,
-          "claimToken" = uuidv7(),
-          "claimOwner" = $2,
-          "pingedAt" = NOW(),
-          "claimAttemptCount" = "claimAttemptCount" + 1
-        WHERE "id" = ANY($1::uuid[])
-        RETURNING ${getTaskColumns()}
-      `,
-      [ids, claimOwner],
-    );
+    return accumulator;
+  }, {});
+};
 
-    await client.query(`COMMIT`);
-    const claimedById = new Map(claimedResult.rows.map((t) => [t.id, t]));
-    return ids.map((id) => claimedById.get(id)).filter((t): t is Task => t !== undefined);
-  } catch (error) {
-    await client.query(`ROLLBACK`);
-    throw error;
-  } finally {
-    client.release();
+const readSourceIssueTypeIdFromPayload = (value: unknown): string | null => {
+  if (!value || typeof value !== `object` || Array.isArray(value)) {
+    return null;
   }
+
+  const payload = value as Record<string, unknown>;
+  const fields = payload.fields;
+
+  if (!fields || typeof fields !== `object` || Array.isArray(fields)) {
+    return null;
+  }
+
+  const issueType = (fields as Record<string, unknown>).issuetype;
+
+  if (!issueType || typeof issueType !== `object` || Array.isArray(issueType)) {
+    return null;
+  }
+
+  const issueTypeId = (issueType as Record<string, unknown>).id;
+
+  return typeof issueTypeId === `string` && issueTypeId.trim().length > 0 ? issueTypeId.trim() : null;
 };
 
-export const queryTaskPing = async (taskId: string, claimToken: string): Promise<boolean> => {
-  const result = await getPool().query<{ id: string }>(
-    `
-      UPDATE "task" SET "pingedAt" = NOW()
-      WHERE "id" = $1 AND "status" = 'processing' AND "claimToken" = $2::uuid
-      RETURNING "id"
-    `,
-    [taskId, claimToken],
-  );
-  return result.rowCount === 1;
+export type TaskWorkgraphItemContext = {
+  workgraph: string;
+  workgraphItem: string;
+  itemType: string;
+  sourceIssueTypeId: string | null;
+  workOnLabel: string;
+  workInProgressLabel: string;
+  workDoneLabel: string;
+  typeInstructions: Record<string, string>;
 };
 
-export const queryTaskByIdForUser = async (taskId: string, userId: string): Promise<Task | null> => {
-  const result = await getPool().query<Task>(
+export const queryTaskWorkgraphItemContext = async (loopId: string, taskId: string): Promise<TaskWorkgraphItemContext | null> => {
+  const result = await getPool().query<{
+    workgraph: string;
+    workgraphItem: string;
+    itemType: string;
+    payload: unknown;
+    assignmentConfig: unknown;
+  }>(
     `
-      SELECT ${getTaskColumns(`t`)}
+      SELECT
+        lw."workgraph" AS "workgraph",
+        lwi."id" AS "workgraphItem",
+        lwi."itemType" AS "itemType",
+        lwi."payload" AS "payload",
+        lw."assignmentConfig" AS "assignmentConfig"
       FROM "task" t
-      JOIN "loopUser" lu ON lu."loop" = t."loop"
-      WHERE lu."user" = $1 AND t."id" = $2
+      JOIN "loopWorkgraphItem" lwi ON lwi."id" = t."workgraphItem"
+      JOIN "loopWorkgraph" lw ON lw."id" = lwi."loopWorkgraph"
+      WHERE t."loop" = $1
+        AND t."id" = $2
       LIMIT 1
     `,
-    [userId, taskId],
+    [loopId, taskId],
   );
+
+  const row = result.rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  const assignmentConfig = row.assignmentConfig && typeof row.assignmentConfig === `object` && !Array.isArray(row.assignmentConfig) ? (row.assignmentConfig as Record<string, unknown>) : {};
+
+  return {
+    workgraph: row.workgraph,
+    workgraphItem: row.workgraphItem,
+    itemType: row.itemType,
+    sourceIssueTypeId: readSourceIssueTypeIdFromPayload(row.payload),
+    workOnLabel: readWorkOnLabelFromAssignmentConfig(assignmentConfig),
+    workInProgressLabel: readWorkInProgressLabelFromAssignmentConfig(assignmentConfig),
+    workDoneLabel: readWorkDoneLabelFromAssignmentConfig(assignmentConfig),
+    typeInstructions: parseTypeInstructions(assignmentConfig.typeInstructions),
+  };
+};
+
+export const queryTaskPick = async (processorId: string, readyLoopIds: string[]): Promise<Task | null> => {
+  if (readyLoopIds.length === 0) {
+    return null;
+  }
+
+  const result = await getPool().query<Task>(
+    `
+      WITH picked AS (
+        SELECT t."id"
+        FROM "task" t
+        WHERE t."status" <> 'completed'
+          AND t."processorUnit" IS NULL
+          AND t."loop" = ANY($2::uuid[])
+          AND NOT EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(t."queue") AS queue_item
+            WHERE queue_item->>'status' = 'awaiting-approval'
+          )
+        ORDER BY t."createdAt" ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+      )
+      UPDATE "task" t
+      SET "processorUnit" = $1,
+          "status" = 'wip',
+          "processorPingedAt" = NOW()
+      FROM picked
+      WHERE t."id" = picked."id"
+      RETURNING ${scopeTaskColumns(`t`)}
+    `,
+    [processorId, readyLoopIds],
+  );
+
   return result.rows[0] ?? null;
 };
 
-export const queryTaskUpdate = async (input: TaskUpdateInput): Promise<Task> => {
-  const validatedInput = taskUpdateInputSchema.parse(input);
-  const currentResult = await getPool().query<Task>(`SELECT ${getTaskColumns()} FROM "task" WHERE "id" = $1 LIMIT 1`, [validatedInput.id]);
-  const current = currentResult.rows[0];
-  if (!current) throw new Error(`Task not found for update.`);
-
-  const result = await getPool().query<Task>(
+export const queryTaskProcessorPing = async (taskId: string, processorId: string): Promise<void> => {
+  await getPool().query(
     `
       UPDATE "task"
-      SET
-        "phase" = $2,
-        "status" = $3,
-        "assignee" = $4,
-        "selectedPersona" = $5,
-        "targetType" = $6,
-        "targetId" = $7,
-        "routeReasonCode" = $8,
-        "routeReasonText" = $9,
-        "blocker" = $10,
-        "payload" = $11::jsonb,
-        "context" = $12,
-        "completedAt" = $13,
-        "claimToken" = $14::uuid,
-        "claimOwner" = $15,
-        "pingedAt" = $16,
-        "processingSourceStatus" = $17,
-        "autonomyIterationCount" = $19,
-        "autonomyMaxIterations" = $20,
-        "llmCostUsdTotal" = $21,
-        "updatedAt" = NOW()
+      SET "processorPingedAt" = NOW()
       WHERE "id" = $1
-        AND ($18::uuid IS NULL OR "claimToken" = $18::uuid)
-      RETURNING ${getTaskColumns()}
+        AND "processorUnit" = $2
     `,
-    [
-      validatedInput.id,
-      validatedInput.phase ?? current.phase,
-      validatedInput.status ?? current.status,
-      validatedInput.assignee === undefined ? current.assignee : validatedInput.assignee,
-      validatedInput.selectedPersona === undefined ? current.selectedPersona : validatedInput.selectedPersona,
-      validatedInput.targetType === undefined ? current.targetType : validatedInput.targetType,
-      validatedInput.targetId === undefined ? current.targetId : validatedInput.targetId,
-      validatedInput.routeReasonCode === undefined ? current.routeReasonCode : validatedInput.routeReasonCode,
-      validatedInput.routeReasonText === undefined ? current.routeReasonText : validatedInput.routeReasonText,
-      validatedInput.blocker === undefined ? current.blocker : validatedInput.blocker,
-      JSON.stringify(validatedInput.payload ?? current.payload),
-      validatedInput.context ?? current.context,
-      validatedInput.completedAt === undefined ? current.completedAt : validatedInput.completedAt,
-      validatedInput.clearClaim ? null : current.claimToken,
-      validatedInput.clearClaim ? null : current.claimOwner,
-      validatedInput.clearClaim ? null : current.pingedAt,
-      validatedInput.clearClaim ? null : current.processingSourceStatus,
-      validatedInput.expectedClaimToken ?? null,
-      validatedInput.autonomyIterationCount ?? current.autonomyIterationCount,
-      validatedInput.autonomyMaxIterations ?? current.autonomyMaxIterations,
-      validatedInput.llmCostUsdTotal ?? current.llmCostUsdTotal,
-    ],
+    [taskId, processorId],
+  );
+};
+
+export const queryTaskResetStaleProcessorClaims = async (): Promise<number> => {
+  const result = await getPool().query(
+    `
+      UPDATE "task" t
+      SET "processorUnit" = NULL,
+          "processorPingedAt" = NULL,
+          "status" = 'queued'
+      WHERE t."status" <> 'completed'
+        AND t."processorUnit" IS NOT NULL
+        AND t."processorPingedAt" < NOW() - INTERVAL '5 minutes'
+    `,
   );
 
-  const updated = result.rows[0];
-  if (!updated) {
-    if (validatedInput.expectedClaimToken) {
-      throw new TaskClaimLostError(`Claim token mismatch while updating task.`);
-    }
-    throw new Error(`Task was not updated.`);
-  }
-  return updated;
+  return result.rowCount ?? 0;
+};
+
+export const queryTaskResetProcessorClaim = async (loopId: string, taskId: string): Promise<number> => {
+  const result = await getPool().query(
+    `
+      UPDATE "task" t
+      SET "processorUnit" = NULL,
+          "processorPingedAt" = NULL,
+          "status" = CASE WHEN t."status" = 'completed' THEN t."status" ELSE 'queued' END
+      WHERE t."loop" = $1
+        AND t."id" = $2
+        AND t."processorUnit" IS NOT NULL
+    `,
+    [loopId, taskId],
+  );
+
+  return result.rowCount ?? 0;
+};
+
+export const queryTaskMarkCompleted = async (loopId: string, taskId: string, processorId: string, checkQueueItems = true): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      UPDATE "task" t
+      SET "status" = 'completed'
+      WHERE t."loop" = $1
+        AND t."id" = $2
+        AND t."processorUnit" = $3
+        AND (
+          NOT $4::boolean
+          OR NOT EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(t."queue") AS queue_item
+            WHERE COALESCE(queue_item->>'status', '') <> 'completed'
+          )
+        )
+    `,
+    [loopId, taskId, processorId, checkQueueItems],
+  );
+
+  return (result.rowCount ?? 0) > 0;
+};
+
+export const queryTaskAssignCurrentPersona = async (loopId: string, taskId: string, processorId: string): Promise<string | null> => {
+  const result = await getPool().query<{ currentPersona: string }>(
+    `
+      WITH routing AS (
+        SELECT p."id"
+        FROM "loopPersona" lp
+        JOIN "persona" p ON p."id" = lp."persona"
+        WHERE lp."loop" = $1
+          AND p."lifecycleStatus" = 'active'
+          AND p."isRouting" = TRUE
+        ORDER BY p."createdAt" ASC
+        LIMIT 1
+      )
+      UPDATE "task" t
+      SET "currentPersona" = routing."id"
+      FROM routing
+      WHERE t."loop" = $1
+        AND t."id" = $2
+        AND t."processorUnit" = $3
+        AND t."currentPersona" IS NULL
+      RETURNING t."currentPersona"
+    `,
+    [loopId, taskId, processorId],
+  );
+
+  return result.rows[0]?.currentPersona ?? null;
+};
+
+export const queryTaskAssignCurrentProvider = async (loopId: string, taskId: string, processorId: string, providerId: string): Promise<string | null> => {
+  const result = await getPool().query<{ currentProvider: string }>(
+    `
+      UPDATE "task" t
+      SET "currentProvider" = $4,
+          "currentModel" = NULL
+      WHERE t."loop" = $1
+        AND t."id" = $2
+        AND t."processorUnit" = $3
+        AND t."currentProvider" IS NULL
+      RETURNING t."currentProvider"
+    `,
+    [loopId, taskId, processorId, providerId],
+  );
+
+  return result.rows[0]?.currentProvider ?? null;
+};
+
+export const queryTaskAssignCurrentModel = async (loopId: string, taskId: string, processorId: string, providerId: string): Promise<string | null> => {
+  const result = await getPool().query<{ currentModel: string }>(
+    `
+      WITH selected_model AS (
+        SELECT COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), p."enabledModels"[1]) AS "model"
+        FROM "provider" p
+        JOIN "loopProvider" lp ON lp."provider" = p."id"
+        WHERE lp."loop" = $1
+          AND lp."provider" = $4
+          AND lp."enabled" = TRUE
+          AND p."lifecycleStatus" = 'active'
+          AND p."providerType" = 'openrouter'
+        LIMIT 1
+      )
+      UPDATE "task" t
+      SET "currentModel" = selected_model."model"
+      FROM selected_model
+      WHERE t."loop" = $1
+        AND t."id" = $2
+        AND t."processorUnit" = $3
+        AND t."currentProvider" = $4
+        AND t."currentModel" IS NULL
+        AND selected_model."model" IS NOT NULL
+      RETURNING t."currentModel"
+    `,
+    [loopId, taskId, processorId, providerId],
+  );
+
+  return result.rows[0]?.currentModel ?? null;
+};
+
+export const queryAppendQueueItem = async (taskId: string, processorId: string | null, queueItem: TaskQueueItemInput, requeueIfCompleted = false): Promise<boolean> => {
+  const itemWithId = { ...queueItem, id: uuidv7() };
+  const result = await getPool().query(
+    `
+      UPDATE "task" t
+      SET "queue" = t."queue" || CASE
+            WHEN COALESCE($3::jsonb #>> '{value,role}', '') <> 'user' THEN jsonb_build_array(
+              (
+                (
+                  $3::jsonb
+                  || jsonb_build_object('persona', to_jsonb(t."currentPersona"))
+                )
+                || jsonb_build_object('timestamp', to_jsonb(clock_timestamp()))
+              )
+            )
+            ELSE jsonb_build_array(($3::jsonb || jsonb_build_object('timestamp', to_jsonb(clock_timestamp()))))
+          END,
+          "status" = CASE WHEN $4::boolean AND t."status" = 'completed' THEN 'queued' ELSE t."status" END
+      WHERE t."id" = $1
+        AND ((t."processorUnit" IS NULL AND $2::uuid IS NULL) OR t."processorUnit" = $2::uuid)
+    `,
+    [taskId, processorId, JSON.stringify(itemWithId), requeueIfCompleted],
+  );
+
+  return (result.rowCount ?? 0) > 0;
+};
+
+export const queryTaskQueueItemStatusUpdate = async (taskId: string, processorId: string, id: string, status: TaskQueueItemInput["status"]): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      UPDATE "task" t
+      SET "queue" = (
+        SELECT COALESCE(
+          jsonb_agg(
+            CASE
+              WHEN queue_item.item->>'id' = $3 THEN jsonb_set(queue_item.item, '{status}', to_jsonb($4::text), false)
+              ELSE queue_item.item
+            END
+            ORDER BY queue_item.ordinality
+          ),
+          '[]'::jsonb
+        )
+        FROM jsonb_array_elements(t."queue") WITH ORDINALITY AS queue_item(item, ordinality)
+      )
+      WHERE t."id" = $1
+        AND t."processorUnit" = $2
+        AND EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(t."queue") AS queue_item(item)
+          WHERE queue_item.item->>'id' = $3
+            AND COALESCE(queue_item.item->>'status', '') <> $4
+        )
+    `,
+    [taskId, processorId, id, status],
+  );
+
+  return (result.rowCount ?? 0) > 0;
+};
+
+// Approve: moves awaiting-approval → approved so the processor can execute the tool calls.
+export const queryTaskToolCallApprove = async (loopId: string, taskId: string, queueItemId: string): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      UPDATE "task" t
+      SET "queue" = (
+        SELECT COALESCE(
+          jsonb_agg(
+            CASE
+              WHEN queue_item.item->>'id' = $3
+                AND queue_item.item->>'status' = 'awaiting-approval'
+              THEN jsonb_set(queue_item.item, '{status}', '"approved"', false)
+              ELSE queue_item.item
+            END
+            ORDER BY queue_item.ordinality
+          ),
+          '[]'::jsonb
+        )
+        FROM jsonb_array_elements(t."queue") WITH ORDINALITY AS queue_item(item, ordinality)
+      )
+      WHERE t."loop" = $1
+        AND t."id" = $2
+        AND EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(t."queue") AS qi(item)
+          WHERE qi.item->>'id' = $3
+            AND qi.item->>'status' = 'awaiting-approval'
+        )
+    `,
+    [loopId, taskId, queueItemId],
+  );
+
+  return (result.rowCount ?? 0) > 0;
+};
+
+// Reject: moves awaiting-approval → completed and appends a rejection tool response for each tool call.
+export const queryTaskToolCallReject = async (loopId: string, taskId: string, queueItemId: string): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      UPDATE "task" t
+      SET "queue" = (
+        WITH source AS (
+          SELECT queue_item.item, queue_item.ordinality
+          FROM jsonb_array_elements(t."queue") WITH ORDINALITY AS queue_item(item, ordinality)
+        ),
+        target AS (
+          SELECT item
+          FROM source
+          WHERE item->>'id' = $3
+            AND item->>'status' = 'awaiting-approval'
+          LIMIT 1
+        ),
+        tool_rejections AS (
+          SELECT jsonb_build_object(
+            'type', 'message',
+            'id', gen_random_uuid()::text,
+            'status', 'completed',
+            'timestamp', to_jsonb(clock_timestamp()),
+            'value', jsonb_build_object(
+              'role', 'tool',
+              'content', '"Tool call rejected by user."',
+              'tool_call_id', tc->>'id',
+              'name', tc->'function'->>'name'
+            )
+          ) AS item
+          FROM target, jsonb_array_elements(target.item->'value'->'tool_calls') AS tc
+        )
+        SELECT COALESCE(
+          jsonb_agg(
+            CASE
+              WHEN source.item->>'id' = $3
+                AND source.item->>'status' = 'awaiting-approval'
+              THEN jsonb_set(source.item, '{status}', '"completed"', false)
+              ELSE source.item
+            END
+            ORDER BY source.ordinality
+          ),
+          '[]'::jsonb
+        ) || COALESCE((SELECT jsonb_agg(item) FROM tool_rejections), '[]'::jsonb)
+        FROM source
+      )
+      WHERE t."loop" = $1
+        AND t."id" = $2
+        AND EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(t."queue") AS qi(item)
+          WHERE qi.item->>'id' = $3
+            AND qi.item->>'status' = 'awaiting-approval'
+        )
+    `,
+    [loopId, taskId, queueItemId],
+  );
+
+  return (result.rowCount ?? 0) > 0;
 };

@@ -2,21 +2,6 @@ body {
   min-height: 100vh;
 }
 
-.l-navigation__drawer {
-  height: 100%;
-}
-
-.l-navigation .p-panel {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.l-navigation .p-panel__content {
-  flex: 1;
-  min-height: 0;
-}
-
 .athena-side-navigation-shell {
   display: flex;
   flex-direction: column;
@@ -28,6 +13,15 @@ body {
 .athena-side-navigation-shell__selector {
   display: grid;
   gap: 0.35rem;
+}
+
+.athena-side-navigation-shell__loop-switcher,
+.athena-side-navigation-shell__loop-switcher select,
+.athena-side-navigation-shell__loop-switcher button,
+.athena-side-navigation-shell__loop-switcher .p-form-validation__input,
+.athena-side-navigation-shell__loop-switcher .p-form-validation__select-wrapper {
+  border: 0 !important;
+  box-shadow: none !important;
 }
 
 .athena-side-navigation-shell__separator {
@@ -84,19 +78,15 @@ body {
   width: min(96rem, 100vw);
 }
 
-.toast-animate {
-  z-index: 1200;
-}
-
-.toast-notification,
-.toast-notification-list {
-  z-index: 1201;
-}
-
 .text-negative {
   color: var(--vf-color-button-negative-default);
 }
 
 .text-negative[class*='p-icon--'] {
   filter: brightness(0) saturate(100%) invert(15%) sepia(85%) saturate(4500%) hue-rotate(345deg) brightness(88%) contrast(110%);
+}
+
+// Utility classes
+.u-no-border {
+  border: 0 !important;
 }

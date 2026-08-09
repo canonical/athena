@@ -1,7 +1,8 @@
-import { Button, Chip, CodeSnippet, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Button, Chip, Notification, NotificationSeverity } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import type { LoopWorkgraphItemListState } from "@components/workgraph/workgraph.query.js";
 import type { LoopWorkgraph, LoopWorkgraphItem } from "@components/workgraph/workgraph.schema.js";
+import ReactJson from "@microlink/react-json-view";
 import type { ReactElement } from "react";
 import { useMemo, useState } from "react";
 
@@ -163,13 +164,6 @@ export function LoopWorkgraphDetails({ workgraph, syncInProgress, startingItemId
   }, [itemListState]);
   const flatItems = useMemo<LoopWorkgraphItem[]>(() => (itemListState.status === `success` ? itemListState.items : []), [itemListState]);
   const selectedItem = useMemo(() => flatItems.find((item) => item.itemKey === selectedItemKey), [flatItems, selectedItemKey]);
-  const selectedItemPayloadJson = useMemo(() => {
-    if (!selectedItem) {
-      return ``;
-    }
-
-    return JSON.stringify(selectedItem.payload, null, 2);
-  }, [selectedItem]);
 
   const handleStartItem = async (itemId: string) => {
     const item = byItemId.get(itemId);
@@ -258,14 +252,9 @@ export function LoopWorkgraphDetails({ workgraph, syncInProgress, startingItemId
               )}
             </p>
             <h3 className="p-heading--5">Payload JSON</h3>
-            <CodeSnippet
-              blocks={[
-                {
-                  code: selectedItemPayloadJson,
-                  wrapLines: true,
-                },
-              ]}
-            />
+            <div style={{ overflow: `auto` }}>
+              <ReactJson src={selectedItem.payload} name={false} collapsed={false} displayDataTypes={false} displayObjectSize={false} enableClipboard={true} sortKeys={true} />
+            </div>
           </>
         ) : null}
       </EntityDrawer>

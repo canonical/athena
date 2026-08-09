@@ -1,83 +1,92 @@
 import { getAuthenticatedUserId } from "@components/authentication/session.js";
 import { defineRoutes } from "@components/express/express.router.js";
-import { uuid } from "@components/utilities/zod.utilities.js";
 import { Router } from "express";
-import { z } from "zod";
-import { taskCreate, taskListByLoop, taskMarkBlocked, taskMarkCompleted, taskProcessQueue, taskUpdateContext } from "./task.controller.js";
-import { markTaskBlockedRequestSchema, markTaskCompletedRequestSchema, updateTaskContextRequestSchema, validatedCreateTaskRequestSchema } from "./task.schema.js";
+import { taskAppendUserMessage, taskApproveToolCall, taskCreate, taskGet, taskList, taskRejectToolCall, taskResetProcessorClaims } from "./task.controller.js";
+import { taskAppendUserMessageSchema, taskCreateSchema, taskDetailParamsSchema, taskListParamsSchema, taskResetProcessorClaimsSchema, taskToolCallApprovalSchema } from "./task.schema.js";
 
 export const taskRouter = Router();
 const route = defineRoutes(taskRouter);
 
-const taskListQuerySchema = z.object({
-  loop: uuid(`loop must be a valid UUID.`).optional(),
-});
-
-route({
-  method: `post`,
-  route: `/loop`,
-  validators: {
-    body: validatedCreateTaskRequestSchema,
-  },
-  handler: async ({ body, response, respond }) => {
-    const result = await taskCreate(body, getAuthenticatedUserId(response));
-    respond({ status: 201, data: result });
-  },
-});
-
 route({
   method: `get`,
-  route: `/loop`,
+  route: `/loop/:loopId`,
   validators: {
-    query: taskListQuerySchema,
+    params: taskListParamsSchema,
   },
-  handler: async ({ query, response, respond }) => {
-    const tasks = await taskListByLoop(getAuthenticatedUserId(response), query.loop);
+  handler: async ({ params, response, respond }) => {
+    const tasks = await taskList(getAuthenticatedUserId(response), params.loopId);
     respond({ status: 200, data: tasks });
   },
 });
 
 route({
-  method: `post`,
-  route: `/loop/complete`,
+  method: `get`,
+  route: `/loop/:loopId/:taskId`,
   validators: {
-    body: markTaskCompletedRequestSchema,
+    params: taskDetailParamsSchema,
   },
-  handler: async ({ body, response, respond }) => {
-    const task = await taskMarkCompleted(body.loop, getAuthenticatedUserId(response), body.note, body.taskId);
+  handler: async ({ params, response, respond }) => {
+    const task = await taskGet(getAuthenticatedUserId(response), params.loopId, params.taskId);
     respond({ status: 200, data: task });
   },
 });
 
 route({
   method: `post`,
-  route: `/loop/blocked`,
+  route: `/`,
   validators: {
-    body: markTaskBlockedRequestSchema,
+    body: taskCreateSchema,
   },
   handler: async ({ body, response, respond }) => {
-    const task = await taskMarkBlocked(body.loop, getAuthenticatedUserId(response), body.blocker, body.note, body.taskId);
-    respond({ status: 200, data: task });
+    const task = await taskCreate(body, getAuthenticatedUserId(response));
+    respond({ status: 201, data: task });
   },
 });
 
 route({
   method: `post`,
-  route: `/loop/context`,
+  route: `/reset-processor-claims`,
   validators: {
-    body: updateTaskContextRequestSchema,
+    body: taskResetProcessorClaimsSchema,
   },
   handler: async ({ body, response, respond }) => {
-    const task = await taskUpdateContext(body.loop, getAuthenticatedUserId(response), body.context, body.note, body.taskId);
-    respond({ status: 200, data: task });
+    const result = await taskResetProcessorClaims(getAuthenticatedUserId(response), body.loopId, body.taskId);
+    respond({ status: 200, data: result });
   },
 });
 
 route({
   method: `post`,
-  route: `/queue/process`,
-  handler: async ({ respond }) => {
-    const result = await taskProcessQueue();
+  route: `/append-user-message`,
+  validators: {
+    body: taskAppendUserMessageSchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    const result = await taskAppendUserMessage(getAuthenticatedUserId(response), body);
+    respond({ status: 200, data: result });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/approve-tool-call`,
+  validators: {
+    body: taskToolCallApprovalSchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    const result = await taskApproveToolCall(getAuthenticatedUserId(response), body);
+    respond({ status: 200, data: result });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/reject-tool-call`,
+  validators: {
+    body: taskToolCallApprovalSchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    const result = await taskRejectToolCall(getAuthenticatedUserId(response), body);
     respond({ status: 200, data: result });
   },
 });

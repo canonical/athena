@@ -3,6 +3,7 @@ import { log } from "@components/logging/logging.service.js";
 import type { ProviderModel } from "@components/provider/provider.schema.js";
 import { fetchWithRetry } from "@components/utilities/http-retry.js";
 import type { OpenRouterChatCompletionPayload, OpenRouterChatCompletionRequest, OpenRouterConnection } from "./openrouter.schema.js";
+import { openRouterChatCompletionPayloadSchema } from "./openrouter.schema.js";
 
 const normalizeBaseUrl = (value: string): string => value.replace(/\/$/, ``);
 
@@ -338,6 +339,7 @@ export const fetchOpenRouterChatCompletion = async (connection: OpenRouterConnec
   const timeout = setTimeout(() => {
     controller.abort();
   }, timeoutMs);
+  const maxValidationAttempts = 2;
 
   logger.info(`OpenRouter chat completion request started`, {
     endpoint,
@@ -348,60 +350,82 @@ export const fetchOpenRouterChatCompletion = async (connection: OpenRouterConnec
   });
 
   try {
-    const response = await fetchWithRetry(
-      endpoint,
-      {
-        method: `POST`,
-        headers: {
-          Authorization: `Bearer ${connection.apiKey}`,
-          "Content-Type": `application/json`,
-          ...(request.idempotencyKey ? { "Idempotency-Key": request.idempotencyKey } : {}),
-        },
-        body: JSON.stringify({
-          model: request.model,
-          temperature: request.temperature ?? 0,
-          ...(request.responseFormat !== `text` ? { response_format: { type: `json_object` } } : {}),
-          ...(request.sessionId ? { session_id: request.sessionId } : {}),
-          ...(request.tools ? { tools: request.tools } : {}),
-          ...(request.toolChoice ? { tool_choice: request.toolChoice } : {}),
-          ...(request.parallelToolCalls !== undefined ? { parallel_tool_calls: request.parallelToolCalls } : {}),
-          messages: request.messages,
-        }),
-        signal: controller.signal,
-      },
-      {
-        maxAttempts: 4,
-        baseDelayMs: 600,
-        maxDelayMs: 8_000,
-        allowRetryOnNonIdempotentMethods: true,
-      },
-    );
-
-    const payload = (await response.json().catch(() => ({}))) as OpenRouterChatCompletionPayload;
-
-    if (!response.ok) {
-      logger.warn(`OpenRouter chat completion request failed`, {
+    for (let validationAttempt = 0; validationAttempt < maxValidationAttempts; validationAttempt += 1) {
+      const response = await fetchWithRetry(
         endpoint,
-        model: request.model,
-        status: response.status,
-        durationMs: Date.now() - startedAt,
-        operation: request.operation,
-        ...request.context,
-      });
+        {
+          method: `POST`,
+          headers: {
+            Authorization: `Bearer ${connection.apiKey}`,
+            "Content-Type": `application/json`,
+            ...(request.idempotencyKey ? { "Idempotency-Key": request.idempotencyKey } : {}),
+          },
+          body: JSON.stringify({
+            model: request.model,
+            temperature: request.temperature ?? 0,
+            ...(request.responseFormat !== `text` ? { response_format: { type: `json_object` } } : {}),
+            ...(request.sessionId ? { session_id: request.sessionId } : {}),
+            ...(request.tools ? { tools: request.tools } : {}),
+            ...(request.toolChoice ? { tool_choice: request.toolChoice } : {}),
+            ...(request.parallelToolCalls !== undefined ? { parallel_tool_calls: request.parallelToolCalls } : {}),
+            messages: request.messages,
+          }),
+          signal: controller.signal,
+        },
+        {
+          maxAttempts: 4,
+          baseDelayMs: 600,
+          maxDelayMs: 8_000,
+          allowRetryOnNonIdempotentMethods: true,
+        },
+      );
 
-      throw new OpenRouterRequestError(readErrorMessage(payload, response.status, `OpenRouter chat completion request failed`), response.status, payload);
+      const rawPayload = (await response.json().catch(() => ({}))) as unknown;
+      const parsedPayload = openRouterChatCompletionPayloadSchema.safeParse(rawPayload);
+      const payload: OpenRouterChatCompletionPayload = parsedPayload.success ? parsedPayload.data : {};
+
+      if (!response.ok) {
+        logger.warn(`OpenRouter chat completion request failed`, {
+          endpoint,
+          model: request.model,
+          status: response.status,
+          durationMs: Date.now() - startedAt,
+          operation: request.operation,
+          ...request.context,
+        });
+
+        throw new OpenRouterRequestError(readErrorMessage(payload, response.status, `OpenRouter chat completion request failed`), response.status, payload);
+      }
+
+      if (parsedPayload.success) {
+        logger.info(`OpenRouter chat completion request completed`, {
+          endpoint,
+          model: request.model,
+          status: response.status,
+          durationMs: Date.now() - startedAt,
+          operation: request.operation,
+          ...request.context,
+        });
+
+        return payload;
+      }
+
+      if (validationAttempt === 0) {
+        logger.warn(`OpenRouter chat completion response validation failed; retrying once`, {
+          endpoint,
+          model: request.model,
+          durationMs: Date.now() - startedAt,
+          operation: request.operation,
+          validationIssueCount: parsedPayload.error.issues.length,
+          ...request.context,
+        });
+        continue;
+      }
+
+      throw new Error(`OpenRouter chat completion response validation failed: ${parsedPayload.error.issues.map((issue) => issue.message).join(`; `)}`);
     }
 
-    logger.info(`OpenRouter chat completion request completed`, {
-      endpoint,
-      model: request.model,
-      status: response.status,
-      durationMs: Date.now() - startedAt,
-      operation: request.operation,
-      ...request.context,
-    });
-
-    return payload;
+    throw new Error(`OpenRouter chat completion response validation failed after retry.`);
   } catch (error) {
     logger.error(`OpenRouter chat completion request errored`, {
       endpoint,

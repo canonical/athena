@@ -1,89 +1,97 @@
-import { Button, Icon, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
-import { useEffect, useMemo, useState } from "react";
-import { useTasks } from "./task.query.js";
-import type { Task } from "./task.schema.js";
-import "./task.scss";
+import { MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import type { ToastFeedback } from "@components/base/toast.js";
+import { useFeedbackToast } from "@components/base/toast.js";
+import { Fab } from "@components/fab/Fab.js";
+import { useLoopReadiness } from "@components/loop/loop.query.js";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { useCreateTask, useTasks } from "./task.query.js";
 
-const formatDateTime = (value: string): string => {
-  const parsed = new Date(value);
-
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+const taskStatusLabel: Record<string, string> = {
+  queued: `Queued`,
+  wip: `In progress`,
+  completed: `Completed`,
 };
 
-type TaskListProps = {
-  loopId: string;
-  selectedTaskId?: string | null;
-  onSelectTask?: (task: Task) => void;
+const taskSourceLabel: Record<string, string> = {
+  user: `User`,
+  workgraphItem: `Workgraph item`,
 };
 
-export function TaskList({ loopId, selectedTaskId: controlledSelectedTaskId, onSelectTask }: TaskListProps) {
+export function TaskList({ loopId }: { loopId: string }) {
+  const navigate = useNavigate();
   const { state: tasksState } = useTasks(loopId);
-  const [internalSelectedTaskId, setInternalSelectedTaskId] = useState<string | null>(null);
+  const createTaskMutation = useCreateTask(loopId);
+  const { state: loopReadinessState } = useLoopReadiness(loopId);
+  const [isCreating, setIsCreating] = useState(false);
+  const [feedback, setFeedback] = useState<ToastFeedback | null>(null);
+  useFeedbackToast(feedback, setFeedback);
 
-  const loopTasks = useMemo(() => (tasksState.status === `success` ? tasksState.tasks : []), [tasksState]);
-  const filteredTasks = loopTasks;
+  const loopBlockers = loopReadinessState.status === `success` ? loopReadinessState.readiness.blockers : [];
+  const isLoopBlocked = loopReadinessState.status === `success` ? loopReadinessState.readiness.blocked : false;
 
-  const selectedTaskId = controlledSelectedTaskId ?? internalSelectedTaskId;
+  const submitCreate = async (title?: string) => {
+    setIsCreating(true);
 
-  useEffect(() => {
-    if (controlledSelectedTaskId !== undefined) {
-      return;
-    }
-
-    if (filteredTasks.length === 0) {
-      setInternalSelectedTaskId(null);
-      return;
-    }
-
-    if (!selectedTaskId || !filteredTasks.some((task) => task.id === selectedTaskId)) {
-      setInternalSelectedTaskId(filteredTasks[0]?.id ?? null);
-    }
-  }, [controlledSelectedTaskId, filteredTasks, selectedTaskId]);
-
-  const selectTask = (task: Task) => {
-    onSelectTask?.(task);
-
-    if (controlledSelectedTaskId === undefined) {
-      setInternalSelectedTaskId(task.id);
+    try {
+      const createdTask = await createTaskMutation.mutateAsync(title);
+      void navigate({ to: `/loop/$loopId/task/$taskId`, params: { loopId, taskId: createdTask.id } });
+    } catch (error) {
+      setFeedback({
+        severity: NotificationSeverity.NEGATIVE,
+        title: `Unable to create task`,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsCreating(false);
     }
   };
 
   return (
-    <div>
+    <section className="p-strip is-shallow u-no-max-width">
+      {loopReadinessState.status === `success` && isLoopBlocked ? (
+        <Notification severity={NotificationSeverity.CAUTION} title="Loop is blocked">
+          <ul>
+            {loopBlockers.map((blocker) => (
+              <li key={blocker.code}>{blocker.message}</li>
+            ))}
+          </ul>
+        </Notification>
+      ) : null}
+
+      {loopReadinessState.status === `error` ? (
+        <Notification severity={NotificationSeverity.CAUTION} title="Unable to load loop readiness">
+          {loopReadinessState.message}
+        </Notification>
+      ) : null}
+
+      <MainTable
+        className="u-table-layout--auto"
+        headers={[{ content: `Task` }, { content: `Status` }, { content: `Source` }]}
+        rows={(tasksState.status === `success` ? tasksState.tasks : []).map((task) => ({
+          key: task.id,
+          columns: [
+            {
+              content: (
+                <Link params={{ loopId, taskId: task.id }} to={`/loop/$loopId/task/$taskId`}>
+                  {task.title ?? `Untitled task`}
+                </Link>
+              ),
+            },
+            { content: taskStatusLabel[task.status] ?? task.status },
+            { content: taskSourceLabel[task.source] ?? task.source },
+          ],
+        }))}
+      />
+
       {tasksState.status === `loading` ? <p className="p-text--default">Loading tasks...</p> : null}
       {tasksState.status === `error` ? (
         <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load tasks">
           {tasksState.message}
         </Notification>
       ) : null}
-      {tasksState.status === `success` && loopTasks.length === 0 ? <p className="p-text--default">No tasks yet for this loop.</p> : null}
-      {tasksState.status === `success` && filteredTasks.length > 0 ? (
-        <div>
-          <MainTable
-            className="u-table-layout--auto"
-            headers={[{ content: `Task` }, { content: `Source` }, { content: `Phase` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions`, className: `u-align--right` }]}
-            rows={filteredTasks.map((task, index) => ({
-              key: task.id,
-              columns: [
-                { content: `Task ${filteredTasks.length - index}${selectedTaskId === task.id ? ` (selected)` : ``}` },
-                { content: task.sourceType },
-                { content: task.phase },
-                { content: task.status },
-                { content: formatDateTime(task.updatedAt) },
-                {
-                  content: (
-                    <div className="u-align--right">
-                      <Button appearance="base" aria-label={`Open task ${task.id}`} onClick={() => selectTask(task)} title={`Open task ${task.id}`} type="button">
-                        <Icon aria-hidden="true" name="copy" />
-                      </Button>
-                    </div>
-                  ),
-                },
-              ],
-            }))}
-          />
-        </div>
-      ) : null}
-    </div>
+
+      <Fab disabled={isLoopBlocked || isCreating} title="New Task" onClick={() => void submitCreate(`New Task`)} />
+    </section>
   );
 }

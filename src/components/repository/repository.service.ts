@@ -136,17 +136,7 @@ export const queryRepositoryUpdate = async (repositoryId: string, ownerId: strin
         AND "owner" = $9
       RETURNING ${repositoryColumns}, TRUE AS "hasCredential"
     `,
-    [
-      input.displayName,
-      input.repositoryType,
-      input.apiBaseUrl,
-      input.repositoryOwner,
-      input.repositoryName,
-      input.defaultBranch ?? null,
-      input.lifecycleStatus,
-      repositoryId,
-      ownerId,
-    ],
+    [input.displayName, input.repositoryType, input.apiBaseUrl, input.repositoryOwner, input.repositoryName, input.defaultBranch ?? null, input.lifecycleStatus, repositoryId, ownerId],
   );
 
   return result.rows[0];

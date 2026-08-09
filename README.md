@@ -29,9 +29,14 @@ Athena uses a co-located, flat component structure in [src/components](./src/com
 
 See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rules, including file move conventions.
 
-## Task processing
+## Task model
 
-Athena task lifecycle, queue processing, rerouting, dispatch behavior, and approval flow are documented in [docs/task-lifecycle.md](./docs/task-lifecycle.md).
+Task support is currently minimal and intentionally breaking-change oriented.
+
+- Task shape is defined in [src/components/task/task.schema.ts](./src/components/task/task.schema.ts).
+- Task iteration notes are tracked in [docs/task-iteration.md](./docs/task-iteration.md).
+- Only `id` and `title` are part of the task schema.
+- Legacy task lifecycle, routing, queue dispatch, and autonomy runtime behavior has been removed.
 
 ## PR publishing and updating standards
 

@@ -41,7 +41,7 @@ Implementation order:
 ### Phase 0: Foundations
 
 - [ ] Finalize webhook secret storage model for verifiable HMAC (replace hash-only wording with envelope-encryption/KMS style key management).
-- [ ] Define formal state machines for loop lifecycle and task lifecycle, including pause/resume transitions.
+- [ ] Align all loop/task specifications to the current minimal task model (`id`, `title`) and remove legacy lifecycle assumptions.
 - [ ] Define deterministic retry/failover parameters (attempt limits, backoff, terminal behavior).
 - [ ] Define provider health-check contract (probe, timeout, thresholds, resume gating).
 - [ ] Define provider/schema versioning and migration policy for harness/LLM profiles and validation contracts.

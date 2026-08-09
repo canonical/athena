@@ -1,83 +1,92 @@
 import { authenticatedJsonGet, authenticatedJsonPost } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
-import { RouteSelectionRequiredClientError } from "./task.errors.js";
-import type { CreateTaskRequest, CreateTaskResponse, MarkTaskBlockedRequest, MarkTaskCompletedRequest, RouteSelectionRequired, Task, UpdateTaskContextRequest } from "./task.schema.js";
+import type { Task, TaskCreate } from "./task.schema.js";
 
 export const taskApiPaths = {
-  list: getApiUrl(`/task/loop`),
-  complete: getApiUrl(`/task/loop/complete`),
-  blocked: getApiUrl(`/task/loop/blocked`),
-  context: getApiUrl(`/task/loop/context`),
+  list: (loopId: string) => getApiUrl(`/task/loop/${loopId}`),
+  detail: (loopId: string, taskId: string) => getApiUrl(`/task/loop/${loopId}/${taskId}`),
+  create: () => getApiUrl(`/task/`),
+  resetProcessorClaims: () => getApiUrl(`/task/reset-processor-claims`),
+  appendUserMessage: () => getApiUrl(`/task/append-user-message`),
+  approveToolCall: () => getApiUrl(`/task/approve-tool-call`),
+  rejectToolCall: () => getApiUrl(`/task/reject-tool-call`),
 } as const;
 
-const readErrorPayload = async (response: Response): Promise<{ error?: string; message?: string; code?: string; options?: unknown[] }> => {
+const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
   try {
-    return (await response.json()) as { error?: string; message?: string; code?: string; options?: unknown[] };
+    const payload = (await response.json()) as { error?: string };
+    return payload.error ?? fallback;
   } catch {
-    return {};
+    return fallback;
   }
 };
 
-export const fetchTasks = async (loopId?: string): Promise<Task[]> => {
-  const path = loopId ? `${taskApiPaths.list}?loop=${encodeURIComponent(loopId)}` : taskApiPaths.list;
-  const response = await authenticatedJsonGet(path);
+export const fetchTasks = async (loopId: string): Promise<Task[]> => {
+  const response = await authenticatedJsonGet(taskApiPaths.list(loopId));
 
   if (!response.ok) {
-    const payload = await readErrorPayload(response);
-    throw new Error(payload.error ?? `Tasks request failed with status ${response.status}`);
+    throw new Error(await readErrorMessage(response, `Tasks request failed with status ${response.status}`));
   }
 
   return response.json() as Promise<Task[]>;
 };
 
-export const createTask = async (request: CreateTaskRequest): Promise<CreateTaskResponse> => {
-  const response = await authenticatedJsonPost(taskApiPaths.list, request);
-
-  if (response.status === 409) {
-    const payload = (await readErrorPayload(response)) as RouteSelectionRequired;
-
-    if (payload.code === `ROUTE_SELECTION_REQUIRED` && Array.isArray(payload.options)) {
-      throw new RouteSelectionRequiredClientError(payload);
-    }
-  }
+export const fetchTask = async (loopId: string, taskId: string): Promise<Task> => {
+  const response = await authenticatedJsonGet(taskApiPaths.detail(loopId, taskId));
 
   if (!response.ok) {
-    const payload = await readErrorPayload(response);
-    throw new Error(payload.error ?? `Task creation failed with status ${response.status}`);
-  }
-
-  return response.json() as Promise<CreateTaskResponse>;
-};
-
-export const markTaskCompleted = async (request: MarkTaskCompletedRequest): Promise<Task> => {
-  const response = await authenticatedJsonPost(taskApiPaths.complete, request);
-
-  if (!response.ok) {
-    const payload = await readErrorPayload(response);
-    throw new Error(payload.error ?? `Mark task complete failed with status ${response.status}`);
+    throw new Error(await readErrorMessage(response, `Task request failed with status ${response.status}`));
   }
 
   return response.json() as Promise<Task>;
 };
 
-export const markTaskBlocked = async (request: MarkTaskBlockedRequest): Promise<Task> => {
-  const response = await authenticatedJsonPost(taskApiPaths.blocked, request);
+export const createTask = async (input: TaskCreate): Promise<Task> => {
+  const response = await authenticatedJsonPost(taskApiPaths.create(), input);
 
   if (!response.ok) {
-    const payload = await readErrorPayload(response);
-    throw new Error(payload.error ?? `Mark task blocked failed with status ${response.status}`);
+    throw new Error(await readErrorMessage(response, `Task creation failed with status ${response.status}`));
   }
 
   return response.json() as Promise<Task>;
 };
 
-export const updateTaskContext = async (request: UpdateTaskContextRequest): Promise<Task> => {
-  const response = await authenticatedJsonPost(taskApiPaths.context, request);
+export const resetTaskProcessorClaims = async (loopId: string, taskId: string): Promise<{ updatedCount: number }> => {
+  const response = await authenticatedJsonPost(taskApiPaths.resetProcessorClaims(), { loopId, taskId });
 
   if (!response.ok) {
-    const payload = await readErrorPayload(response);
-    throw new Error(payload.error ?? `Update task context failed with status ${response.status}`);
+    throw new Error(await readErrorMessage(response, `Task reset failed with status ${response.status}`));
   }
 
-  return response.json() as Promise<Task>;
+  return response.json() as Promise<{ updatedCount: number }>;
+};
+
+export const appendTaskUserMessage = async (loopId: string, taskId: string, content: string): Promise<{ appended: boolean }> => {
+  const response = await authenticatedJsonPost(taskApiPaths.appendUserMessage(), { loopId, taskId, content });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Task message append failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<{ appended: boolean }>;
+};
+
+export const approveTaskToolCall = async (loopId: string, taskId: string, queueItemId: string): Promise<{ approved: boolean }> => {
+  const response = await authenticatedJsonPost(taskApiPaths.approveToolCall(), { loopId, taskId, queueItemId });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Tool call approval failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<{ approved: boolean }>;
+};
+
+export const rejectTaskToolCall = async (loopId: string, taskId: string, queueItemId: string): Promise<{ rejected: boolean }> => {
+  const response = await authenticatedJsonPost(taskApiPaths.rejectToolCall(), { loopId, taskId, queueItemId });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Tool call rejection failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<{ rejected: boolean }>;
 };

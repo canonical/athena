@@ -1,11 +1,19 @@
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  queryLoopWorkgraphId,
+  queryLoopWorkgraphWebhookCreate,
+  queryLoopWorkgraphWebhookDelete,
+  queryLoopWorkgraphWebhookList,
+  queryLoopWorkgraphWebhookUpdate,
+  queryWebhookByReceiverId,
+  queryWebhookItemCreate,
+} from "@components/workgraph/workgraph.pg.service.js";
 import { v7 as uuidv7 } from "uuid";
-import { queryLoopWorkgraphId, queryLoopWorkgraphWebhookCreate, queryLoopWorkgraphWebhookDelete, queryLoopWorkgraphWebhookList, queryLoopWorkgraphWebhookUpdate, queryWebhookByReceiverId, queryWebhookItemCreate } from "@components/workgraph/workgraph.pg.service.js";
+import { WebhookForbiddenError, WebhookNotFoundError, WebhookUnauthorizedError, WebhookValidationError } from "./webhook.errors.js";
 import { triggerWebhookItemProcessor } from "./webhook.processor.js";
 import type { LoopWorkgraphWebhook, LoopWorkgraphWebhookCreate, LoopWorkgraphWebhookCreateResult, LoopWorkgraphWebhookUpdate } from "./webhook.schema.js";
-import { WebhookForbiddenError, WebhookNotFoundError, WebhookUnauthorizedError, WebhookValidationError } from "./webhook.errors.js";
 
 const validateLoopId = (loopId: string): void => {
   if (!isValidUuid(loopId)) {
@@ -171,7 +179,7 @@ export const loopWorkgraphWebhookDelete = async (loopId: string, workgraphId: st
 export const webhookInboundReceive = async (receiverId: string, headers: Record<string, string | string[] | undefined>, body: unknown): Promise<void> => {
   const webhook = await queryWebhookByReceiverId(receiverId);
 
-  if (!webhook || !webhook.active) {
+  if (!webhook?.active) {
     throw new WebhookNotFoundError(`Webhook not found.`);
   }
 

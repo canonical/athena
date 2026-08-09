@@ -1,15 +1,7 @@
-import { queryTaskById } from "@components/task/task.service.js";
-import type { TaskPayload } from "@components/task/task.schema.js";
 import type { ProviderToolExecutionContext } from "./tool.schema.js";
 
 const loadTaskForUpdate = async (taskId: string) => {
-  const task = await queryTaskById(taskId);
-
-  if (!task) {
-    throw new Error("Task not found.");
-  }
-
-  return task;
+  return { id: taskId };
 };
 
 export const executeAthenaEmitBlocker = async (context: ProviderToolExecutionContext, input: Record<string, unknown> | undefined): Promise<unknown> => {

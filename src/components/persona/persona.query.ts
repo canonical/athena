@@ -1,4 +1,5 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { fetchLoopPersonaList, fetchPersonaById, fetchPersonaCatalog, fetchPersonaList } from "./persona.client.js";
 import type { Persona } from "./persona.schema.js";
 
@@ -87,4 +88,50 @@ export const usePersonaCatalog = (options: UseQueryOptions = {}): CatalogState =
   if (isPending) return { status: `loading` };
   if (isError) return { status: `error`, message: error instanceof Error ? error.message : String(error) };
   return { status: `success`, catalog: data };
+};
+
+export const usePersonaNameByIds = (personaIds: string[]) => {
+  const uniquePersonaIds = useMemo(() => Array.from(new Set(personaIds.filter(Boolean))), [personaIds]);
+
+  const personaQueries = useQueries({
+    queries: uniquePersonaIds.map((personaId) => ({
+      queryKey: [`personas`, personaId],
+      queryFn: () => fetchPersonaById(personaId),
+    })),
+  });
+
+  return useMemo(() => {
+    return new Map(
+      personaQueries.flatMap((query, index) => {
+        if (!query.data) {
+          return [];
+        }
+
+        return [[uniquePersonaIds[index], query.data.displayName] as const];
+      }),
+    );
+  }, [personaQueries, uniquePersonaIds]);
+};
+
+export const usePersonaByIds = (personaIds: string[]) => {
+  const uniquePersonaIds = useMemo(() => Array.from(new Set(personaIds.filter(Boolean))), [personaIds]);
+
+  const personaQueries = useQueries({
+    queries: uniquePersonaIds.map((personaId) => ({
+      queryKey: [`personas`, personaId],
+      queryFn: () => fetchPersonaById(personaId),
+    })),
+  });
+
+  return useMemo(() => {
+    return new Map(
+      personaQueries.flatMap((query, index) => {
+        if (!query.data) {
+          return [];
+        }
+
+        return [[uniquePersonaIds[index], query.data] as const];
+      }),
+    );
+  }, [personaQueries, uniquePersonaIds]);
 };

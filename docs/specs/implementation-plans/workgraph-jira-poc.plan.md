@@ -46,4 +46,3 @@ Implement Workgraph end-to-end as a loop-assignable external hierarchy source.
 ## References
 
 - Concept: [workgraph.md](../../workgraph.md)
-- Loop/task lifecycle and processing: [task-lifecycle.md](../../task-lifecycle.md)

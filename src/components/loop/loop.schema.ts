@@ -115,7 +115,6 @@ export type Tab = z.infer<typeof loopTabSchema>;
 export type LoopProps = {
   loopId: string;
   tab: Tab;
-  taskId?: string;
   editor?: `create` | `edit` | `clone`;
   personaId?: string;
   workgraphViewWorkgraphId?: string;

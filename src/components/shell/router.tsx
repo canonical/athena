@@ -1,4 +1,4 @@
-import { ApplicationLayout, Card, Select, SideNavigation } from "@canonical/react-components";
+import { ApplicationLayout, Select, SideNavigation } from "@canonical/react-components";
 import { fetchAuthenticationProfile } from "@components/authentication/authentication.client.js";
 import { useLoopList } from "@components/loop/loop.query.js";
 import { loopTabs } from "@components/loop/loop.schema.js";
@@ -173,24 +173,33 @@ const LazyWorkgraph = lazy(async () => {
   return { default: module.Workgraph };
 });
 
+const LazyTaskDetails = lazy(async () => {
+  const module = await import("@components/task/TaskDetails.js");
+
+  return { default: module.TaskDetails };
+});
+
 function capitalize(value: string) {
   return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 }
 
-function LoopSidebarLink({ href, className, ...props }: ComponentPropsWithoutRef<"a">) {
+function LoopSidebarLink({ href, className, ...props }: ComponentPropsWithoutRef<"a"> & { activePrefix?: string }) {
   const location = useRouterState({ select: (state) => state.location });
 
   if (!href) {
     return <a className={className} {...props} />;
   }
 
-  const pathname = href;
   const currentPath = location.pathname;
-  const normalizedTarget = pathname.endsWith(`/`) ? pathname.slice(0, -1) : pathname;
   const normalizedCurrent = currentPath.endsWith(`/`) ? currentPath.slice(0, -1) : currentPath;
-  const isActive = normalizedCurrent === normalizedTarget || normalizedCurrent.startsWith(`${normalizedTarget}/`);
+  const activePrefix = (props as { activePrefix?: string }).activePrefix;
+  const normalizedTarget = href.endsWith(`/`) ? href.slice(0, -1) : href;
+  const isActive = activePrefix ? normalizedCurrent.startsWith(activePrefix) : normalizedCurrent === normalizedTarget || normalizedCurrent.startsWith(`${normalizedTarget}/`);
 
-  return <a aria-current={isActive ? `page` : undefined} className={isActive ? `${className ?? ``} is-active`.trim() : className} href={href} {...props} />;
+  // strip internal prop before spreading onto <a>
+  const { activePrefix: _activePrefix, ...anchorProps } = props as ComponentPropsWithoutRef<"a"> & { activePrefix?: string };
+
+  return <a aria-current={isActive ? `page` : undefined} className={isActive ? `${className ?? ``} is-active`.trim() : className} href={href} {...anchorProps} />;
 }
 
 function buildLoopSideNavigationItems(loopId: string) {
@@ -203,6 +212,8 @@ function buildLoopSideNavigationItems(loopId: string) {
               component: LoopSidebarLink,
               label: `Tasks`,
               href: `/loop/${loopId}/task/list`,
+              // match all task sub-routes (/task/list, /task/:id)
+              activePrefix: `/loop/${loopId}/task/`,
             };
           }
 
@@ -249,6 +260,7 @@ function ShellLayout() {
             <>
               <div className="athena-side-navigation-shell__selector">
                 <Select
+                  className="athena-side-navigation-shell__loop-switcher"
                   disabled={loopListState.status !== `success`}
                   id="loop-switcher"
                   name="loop-switcher"
@@ -275,9 +287,9 @@ function ShellLayout() {
         </div>
       }
     >
-      <Card style={{ height: `100vh` }} className="u-no-margin">
+      <div style={{ height: `100vh` }} className="u-no-margin u-no-border">
         <Outlet />
-      </Card>
+      </div>
     </ApplicationLayout>
   );
 }
@@ -327,10 +339,10 @@ type LoopTab = (typeof loopTabs)[number];
 type LoopPersonaEditor = `create` | `edit` | `clone`;
 type LoopWorkgraphConfigTab = `jql` | `labels` | `item-type-playbooks` | `webhook-definitions` | `synced-items`;
 
-function LoopViewRoute(props: { loopId: string; tab: LoopTab; taskId?: string; editor?: LoopPersonaEditor; personaId?: string; workgraphViewWorkgraphId?: string; workgraphConfigTab?: LoopWorkgraphConfigTab }) {
+function LoopViewRoute(props: { loopId: string; tab: LoopTab; editor?: LoopPersonaEditor; personaId?: string; workgraphViewWorkgraphId?: string; workgraphConfigTab?: LoopWorkgraphConfigTab }) {
   return (
     <Suspense fallback={<RouteLoadingView />}>
-      <LazyLoop editor={props.editor} loopId={props.loopId} personaId={props.personaId} tab={props.tab} taskId={props.taskId} workgraphConfigTab={props.workgraphConfigTab} workgraphViewWorkgraphId={props.workgraphViewWorkgraphId} />
+      <LazyLoop editor={props.editor} loopId={props.loopId} personaId={props.personaId} tab={props.tab} workgraphConfigTab={props.workgraphConfigTab} workgraphViewWorkgraphId={props.workgraphViewWorkgraphId} />
     </Suspense>
   );
 }
@@ -344,7 +356,11 @@ function LoopTaskListRouteView() {
 function LoopTaskDetailRouteView() {
   const { loopId, taskId } = loopTaskDetailRoute.useParams();
 
-  return <LoopViewRoute loopId={loopId} tab="tasks" taskId={taskId} />;
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyTaskDetails loopId={loopId} taskId={taskId} />
+    </Suspense>
+  );
 }
 
 function LoopDetailsRouteView() {

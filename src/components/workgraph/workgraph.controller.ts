@@ -1,18 +1,17 @@
-import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { log } from "@components/logging/logging.service.js";
-import { readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
+import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
-import { WorkgraphForbiddenError, WorkgraphNotFoundError, WorkgraphSyncError, WorkgraphValidationError } from "./workgraph.errors.js";
-import { synchronizeLoopWorkgraphAndPromoteTasks } from "./workgraph.sync.service.js";
-import { addJiraIssueLabel, listJiraIssueTypes, syncJiraWorkgraphItems, testJiraWorkgraphConnection } from "./workgraph.jira.service.js";
+import { readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
+import { WorkgraphForbiddenError, WorkgraphNotFoundError, WorkgraphValidationError } from "./workgraph.errors.js";
+import { addJiraIssueLabel, listJiraIssueTypes, testJiraWorkgraphConnection } from "./workgraph.jira.service.js";
 import {
   queryLoopWorkgraphAssign,
   queryLoopWorkgraphDelete,
   queryLoopWorkgraphItemById,
   queryLoopWorkgraphItemList,
-  queryLoopWorkgraphMarkSynchronizing,
   queryLoopWorkgraphList,
   queryLoopWorkgraphMarkSyncFailed,
+  queryLoopWorkgraphMarkSynchronizing,
   queryLoopWorkgraphSyncConnection,
   queryLoopWorkgraphUpdateByAdmin,
   queryWorkgraphApiConnectionByOwner,
@@ -36,6 +35,7 @@ import type {
   WorkgraphTypeOption,
   WorkgraphUpdate,
 } from "./workgraph.schema.js";
+import { synchronizeLoopWorkgraphAndPromoteTasks } from "./workgraph.sync.service.js";
 
 const validateLoopId = (loopId: string): void => {
   if (!isValidUuid(loopId)) {

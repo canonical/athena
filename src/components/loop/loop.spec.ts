@@ -88,11 +88,11 @@ test(`loop tools API exposes requiresApproval metadata`, async ({ page }) => {
   expect(Array.isArray(payload.tools)).toBe(true);
   expect(payload.tools.length).toBeGreaterThan(0);
 
-  const createIssue = payload.tools.find((tool) => tool.name === `jira_create_issue`);
-  const readIssue = payload.tools.find((tool) => tool.name === `jira_read_issue`);
+  const createItem = payload.tools.find((tool) => tool.name === `workgraph_create_item`);
+  const readItem = payload.tools.find((tool) => tool.name === `workgraph_read_item`);
 
-  expect(createIssue?.requiresApproval).toBe(true);
-  expect(readIssue?.requiresApproval).toBe(false);
+  expect(createItem?.requiresApproval).toBe(true);
+  expect(readItem?.requiresApproval).toBe(false);
 });
 
 test(`loops page supports create update and delete`, async ({ page }) => {

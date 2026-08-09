@@ -74,7 +74,7 @@ If routing is needed after research, Athena routes through the active routing pe
 The following tool categories are included for MVP planning beyond Research.
 
 1. Summarize
-   - Condense long artifacts into structured context for task processing.
+   - Condense long artifacts into structured context for task records and UI presentation.
 2. Validate
    - Check schema, policy, or rule compliance against definition files, including Zod-based conversation payload validation defined in [llm-harness.md](./llm-harness.md).
 3. Transform

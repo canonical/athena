@@ -8,12 +8,12 @@ Read these documents before making changes:
 
 - [README](./README.md): project scope, runtime overview, and developer workflows.
 - [Workgraph concept](./docs/workgraph.md): canonical concept for external project hierarchy ingestion, refinement rules, and Workgraph/runtime boundaries.
-- [Task lifecycle and processing](./docs/task-lifecycle.md): authoritative phase/status model, queue lifecycle, blocked reroute flow, routed dispatch behavior, and approval handling.
 - [Coding standards](./docs/coding-standards.md): canonical source layout and file move conventions.
 - [Documentation standards](./docs/documentation-standards.md): canonical markdown cross-reference and documentation authoring rules.
 - [Design standards](./docs/design-standards.md): minimal UI/UX defaults for layout, accessibility, states, and icon usage.
 - [Database standards](./docs/database-standards.md): canonical database naming, identifier, and migration rules.
 - [Testing standards](./docs/testing-standards.md): canonical test strategy, E2E scope, and coverage expectations.
+- [Task iteration](./docs/task-iteration.md): working notes for task iteration behavior while implementation is in progress.
 - [PR publishing and updating standards](./docs/pr-publishing-updating-standards.md): canonical pull request validation and update requirements.
 
 ## Local specs workflow

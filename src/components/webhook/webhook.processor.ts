@@ -1,12 +1,5 @@
 import { log } from "@components/logging/logging.service.js";
-import {
-  queryLoopWorkgraphMarkSyncFailed,
-  queryLoopWorkgraphMarkSynchronizing,
-  queryWebhookByReceiverId,
-  queryWebhookItemClaimNext,
-  queryWebhookItemMarkDone,
-  queryWebhookItemRequeue,
-} from "@components/workgraph/workgraph.pg.service.js";
+import { queryLoopWorkgraphMarkSyncFailed, queryLoopWorkgraphMarkSynchronizing, queryWebhookByReceiverId, queryWebhookItemClaimNext, queryWebhookItemMarkDone, queryWebhookItemRequeue } from "@components/workgraph/workgraph.pg.service.js";
 import { synchronizeLoopWorkgraphAndPromoteTasks } from "@components/workgraph/workgraph.sync.service.js";
 
 let isProcessing = false;
@@ -20,7 +13,7 @@ const processWebhookItem = async (item: { id: string; payload: Record<string, un
 
   const webhook = await queryWebhookByReceiverId(receiverId);
 
-  if (!webhook || !webhook.active) {
+  if (!webhook?.active) {
     return;
   }
 

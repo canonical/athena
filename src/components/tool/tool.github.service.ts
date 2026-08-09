@@ -80,18 +80,22 @@ const resolveRepositoryConnectionForInput = async (loopId: string, input: Record
 };
 
 const githubRequest = async (connection: { apiBaseUrl: string; apiKey: string }, requestPath: string): Promise<Response> => {
-  return fetchWithRetry(`${connection.apiBaseUrl.replace(/\/+$/u, "")}${requestPath}`, {
-    method: "GET",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${connection.apiKey}`,
-      "X-GitHub-Api-Version": "2022-11-28",
+  return fetchWithRetry(
+    `${connection.apiBaseUrl.replace(/\/+$/u, "")}${requestPath}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${connection.apiKey}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
     },
-  }, {
-    maxAttempts: 4,
-    baseDelayMs: 500,
-    maxDelayMs: 8_000,
-  });
+    {
+      maxAttempts: 4,
+      baseDelayMs: 500,
+      maxDelayMs: 8_000,
+    },
+  );
 };
 
 const readGithubError = async (response: Response): Promise<string> => {
@@ -148,7 +152,10 @@ export const executeTaskRepositories = async (context: ProviderToolExecutionCont
 export const executeRepoLs = async (context: ProviderToolExecutionContext, input: Record<string, unknown> | undefined): Promise<unknown> => {
   const connection = await resolveRepositoryConnectionForInput(context.loopId, input);
   const root = typeof input?.path === "string" ? input.path.trim().replace(/^\/+|\/+$/gu, "") : "";
-  const endpointPath = root.length > 0 ? `/repos/${encodeURIComponent(connection.repositoryOwner)}/${encodeURIComponent(connection.repositoryName)}/contents/${encodeRepoPath(root)}` : `/repos/${encodeURIComponent(connection.repositoryOwner)}/${encodeURIComponent(connection.repositoryName)}/contents`;
+  const endpointPath =
+    root.length > 0
+      ? `/repos/${encodeURIComponent(connection.repositoryOwner)}/${encodeURIComponent(connection.repositoryName)}/contents/${encodeRepoPath(root)}`
+      : `/repos/${encodeURIComponent(connection.repositoryOwner)}/${encodeURIComponent(connection.repositoryName)}/contents`;
   const response = await githubRequest(connection, endpointPath);
 
   if (!response.ok) {
@@ -299,9 +306,7 @@ export const executeRepoFind = async (context: ProviderToolExecutionContext, inp
 
   const normalizedPrefix = pathPrefix.length > 0 ? `${pathPrefix}/` : "";
   const entries = Array.isArray(payload.tree) ? payload.tree : [];
-  const fileEntries = entries.filter(
-    (entry): entry is { path: string; type: "blob"; sha?: unknown; size?: unknown; url?: unknown } => entry.type === "blob" && typeof entry.path === "string",
-  );
+  const fileEntries = entries.filter((entry): entry is { path: string; type: "blob"; sha?: unknown; size?: unknown; url?: unknown } => entry.type === "blob" && typeof entry.path === "string");
 
   const matches = fileEntries
     .filter((entry) => (normalizedPrefix ? entry.path.startsWith(normalizedPrefix) : true))
@@ -383,9 +388,7 @@ export const executeRepoSymbolIndex = async (context: ProviderToolExecutionConte
     }
 
     const filePath = encodeRepoPath(candidate.path);
-    const content = await readRepositoryFileContent(() =>
-      githubRequest(connection, `/repos/${encodeURIComponent(connection.repositoryOwner)}/${encodeURIComponent(connection.repositoryName)}/contents/${filePath}`),
-    );
+    const content = await readRepositoryFileContent(() => githubRequest(connection, `/repos/${encodeURIComponent(connection.repositoryOwner)}/${encodeURIComponent(connection.repositoryName)}/contents/${filePath}`));
 
     if (content === null) {
       continue;
