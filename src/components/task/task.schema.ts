@@ -7,6 +7,8 @@ export const taskQueueItemInputSchema = z.object({
   id: uuid().optional(),
   status: z.enum([`pending`, `awaiting-approval`, `approved`, `completed`]).default(`pending`),
   persona: uuid().nullable().optional(),
+  userId: z.string().nullable().optional(),
+  userName: z.string().nullable().optional(),
   value: openRouterMessageSchema,
 });
 
@@ -70,6 +72,24 @@ export const taskToolCallApprovalSchema = z.object({
   queueItemId: uuid(`queueItemId must be a valid UUID.`),
 });
 
+export const taskUpdateTitleSchema = z.object({
+  loopId: uuid(`loop must be a valid UUID.`),
+  taskId: uuid(`task must be a valid UUID.`),
+  title: z.string().trim().min(1, `title is required.`),
+});
+
+export const taskUpdateObjectiveSchema = z.object({
+  loopId: uuid(`loop must be a valid UUID.`),
+  taskId: uuid(`task must be a valid UUID.`),
+  objective: z.string().trim().min(1, `objective is required.`),
+});
+
+export const taskAssignWorkgraphItemSchema = z.object({
+  loopId: uuid(`loop must be a valid UUID.`),
+  taskId: uuid(`task must be a valid UUID.`),
+  item: uuid(`item must be a valid UUID.`),
+});
+
 export const taskCreateSchema = taskSchema
   .pick({
     loop: true,
@@ -99,3 +119,6 @@ export type TaskDetailParams = z.infer<typeof taskDetailParamsSchema>;
 export type TaskCreate = z.input<typeof taskCreateSchema>;
 export type TaskAppendUserMessage = z.infer<typeof taskAppendUserMessageSchema>;
 export type TaskToolCallApproval = z.infer<typeof taskToolCallApprovalSchema>;
+export type TaskUpdateTitle = z.infer<typeof taskUpdateTitleSchema>;
+export type TaskUpdateObjective = z.infer<typeof taskUpdateObjectiveSchema>;
+export type TaskAssignWorkgraphItem = z.infer<typeof taskAssignWorkgraphItemSchema>;

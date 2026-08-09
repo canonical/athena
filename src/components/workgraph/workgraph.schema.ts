@@ -71,6 +71,10 @@ export const loopWorkgraphItemParamsSchema = z.object({
   itemId: uuid(`itemId must be a valid UUID.`),
 });
 
+export const loopWorkgraphItemSearchQuerySchema = z.object({
+  q: z.string().trim().min(1, `q is required.`),
+});
+
 export const workgraphDeleteBodySchema = z.object({
   workgraph: uuid(`workgraph must be a valid UUID.`),
 });
@@ -150,3 +154,4 @@ export type LoopWorkgraphSyncResult = z.infer<typeof loopWorkgraphSyncResultSche
 export type LoopWorkgraphStartItemResult = z.infer<typeof loopWorkgraphStartItemResultSchema>;
 export type WorkgraphTypeOption = z.infer<typeof workgraphTypeOptionSchema>;
 export type WorkgraphIssueType = z.infer<typeof workgraphIssueTypeSchema>;
+export type LoopWorkgraphItemSearchQuery = z.infer<typeof loopWorkgraphItemSearchQuerySchema>;

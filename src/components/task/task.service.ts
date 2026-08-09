@@ -517,6 +517,33 @@ export const queryTaskDefineTitle = async (loopId: string, taskId: string, proce
   return (result.rowCount ?? 0) > 0;
 };
 
+export const queryTaskAssignedWorkgraphItem = async (loopId: string, taskId: string): Promise<{ id: string; title: string | null; itemKey: string | null; itemType: string } | null> => {
+  const result = await getPool().query<{ id: string; title: string | null; itemKey: string | null; itemType: string }>(
+    `
+      SELECT lwi."id", lwi."title", lwi."itemKey", lwi."itemType"
+      FROM "task" t
+      JOIN "loopWorkgraphItem" lwi ON lwi."id" = t."workgraphItem"
+      WHERE t."loop" = $1 AND t."id" = $2
+      LIMIT 1
+    `,
+    [loopId, taskId],
+  );
+
+  return result.rows[0] ?? null;
+};
+
+export const queryTaskUpdateTitleByUser = async (loopId: string, taskId: string, title: string): Promise<boolean> => {
+  const result = await getPool().query(`UPDATE "task" SET "title" = NULLIF(BTRIM($3), '') WHERE "loop" = $1 AND "id" = $2`, [loopId, taskId, title]);
+
+  return (result.rowCount ?? 0) > 0;
+};
+
+export const queryTaskUpdateObjectiveByUser = async (loopId: string, taskId: string, objective: string): Promise<boolean> => {
+  const result = await getPool().query(`UPDATE "task" SET "currentObjective" = NULLIF(BTRIM($3), '') WHERE "loop" = $1 AND "id" = $2`, [loopId, taskId, objective]);
+
+  return (result.rowCount ?? 0) > 0;
+};
+
 export const queryAppendQueueItem = async (taskId: string, processorId: string | null, queueItem: TaskQueueItemInput, requeueIfCompleted = false): Promise<boolean> => {
   const itemWithId = { ...queueItem, id: uuidv7() };
   const result = await getPool().query(

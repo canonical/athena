@@ -21,6 +21,7 @@ export const workgraphApiPaths = {
   testById: (workgraphId: string) => getApiUrl(`/workgraph/${workgraphId}/test`),
   loopList: (loopId: string) => getApiUrl(`/workgraph/loop/${loopId}/list`),
   loopItems: (loopId: string, workgraphId: string) => getApiUrl(`/workgraph/loop/${loopId}/${workgraphId}/items`),
+  loopItemSearch: (loopId: string, q: string) => getApiUrl(`/workgraph/loop/${loopId}/items/search?q=${encodeURIComponent(q)}`),
   loopItemStart: (loopId: string, workgraphId: string, itemId: string) => getApiUrl(`/workgraph/loop/${loopId}/${workgraphId}/items/${itemId}/start`),
   loopIssueTypes: (loopId: string, workgraphId: string) => getApiUrl(`/workgraph/loop/${loopId}/${workgraphId}/issue-types`),
   loopSync: (loopId: string, workgraphId: string) => getApiUrl(`/workgraph/loop/${loopId}/${workgraphId}/sync`),
@@ -164,6 +165,16 @@ export const fetchLoopWorkgraphItems = async (loopId: string, workgraphId: strin
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Loop workgraph items request failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<LoopWorkgraphItem[]>;
+};
+
+export const searchLoopWorkgraphItems = async (loopId: string, q: string): Promise<LoopWorkgraphItem[]> => {
+  const response = await authenticatedJsonGet(workgraphApiPaths.loopItemSearch(loopId, q));
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Loop workgraph item search failed with status ${response.status}`));
   }
 
   return response.json() as Promise<LoopWorkgraphItem[]>;

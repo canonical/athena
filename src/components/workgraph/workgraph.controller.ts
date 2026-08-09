@@ -9,6 +9,7 @@ import {
   queryLoopWorkgraphDelete,
   queryLoopWorkgraphItemById,
   queryLoopWorkgraphItemList,
+  queryLoopWorkgraphItemSearch,
   queryLoopWorkgraphList,
   queryLoopWorkgraphMarkSyncFailed,
   queryLoopWorkgraphMarkSynchronizing,
@@ -265,6 +266,16 @@ export const loopWorkgraphItemList = async (loopId: string, workgraphId: string,
   }
 
   return queryLoopWorkgraphItemList(loopId, workgraphId);
+};
+
+export const loopWorkgraphItemSearch = async (loopId: string, q: string, userId: string): Promise<LoopWorkgraphItem[]> => {
+  validateLoopId(loopId);
+
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new WorkgraphNotFoundError(`Loop not found.`);
+  }
+
+  return queryLoopWorkgraphItemSearch(loopId, q);
 };
 
 export const loopWorkgraphIssueTypes = async (loopId: string, workgraphId: string, userId: string): Promise<WorkgraphIssueType[]> => {

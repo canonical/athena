@@ -19,6 +19,8 @@ import type { Task } from "./task.schema";
 type TaskHistoryProps = {
   loopId: string;
   task: Task;
+  isRawJsonDrawerOpen: boolean;
+  onRawJsonDrawerOpenChange: (isOpen: boolean) => void;
 };
 
 type SelectedToolCall = {
@@ -37,8 +39,7 @@ type SelectedToolResult = {
   content: string;
 };
 
-export function TaskHistory({ loopId, task }: TaskHistoryProps) {
-  const [isRawJsonDrawerOpen, setIsRawJsonDrawerOpen] = useState(false);
+export function TaskHistory({ loopId, task, isRawJsonDrawerOpen, onRawJsonDrawerOpenChange }: TaskHistoryProps) {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [isAthenaDrawerOpen, setIsAthenaDrawerOpen] = useState(false);
   const [selectedToolCall, setSelectedToolCall] = useState<SelectedToolCall | null>(null);
@@ -63,12 +64,6 @@ export function TaskHistory({ loopId, task }: TaskHistoryProps) {
   return (
     <>
       <div style={{ width: "100%", height: "100%", minHeight: 0, boxSizing: "border-box", display: "flex", flexDirection: "column", padding: "1rem", gap: "0.75rem" }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
-          <Button appearance="base" onClick={() => setIsRawJsonDrawerOpen(true)} type="button">
-            Raw JSON
-          </Button>
-        </div>
-
         <div ref={messageContainerRef} style={{ flex: 1, minHeight: 0, overflow: "auto", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {messageItems.length === 0 ? (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -86,7 +81,7 @@ export function TaskHistory({ loopId, task }: TaskHistoryProps) {
               const toolResultLabel = toolResultName ? providerToolLabelByName(toolResultName) : "Tool Response";
               const persona = queueItem.persona ? personaById.get(queueItem.persona) : null;
               const personaLabel = persona ? `${persona.displayName}${persona.role ? ` (${persona.role})` : ``}` : null;
-              const authorLabel = isToolResultMessage ? `Athena` : (personaLabel ?? (isUserMessage ? `User` : role));
+              const authorLabel = isToolResultMessage ? `Athena` : (personaLabel ?? (isUserMessage ? (queueItem.userName ?? `User`) : role));
               const authorNode = isToolResultMessage ? (
                 <button onClick={() => setIsAthenaDrawerOpen(true)} style={{ all: "unset", cursor: "pointer" }} type="button">
                   {authorLabel}
@@ -205,7 +200,7 @@ export function TaskHistory({ loopId, task }: TaskHistoryProps) {
         </div>
       </div>
 
-      <TaskHistoryRawJsonDrawer isOpen={isRawJsonDrawerOpen} onClose={() => setIsRawJsonDrawerOpen(false)} task={task} />
+      <TaskHistoryRawJsonDrawer isOpen={isRawJsonDrawerOpen} onClose={() => onRawJsonDrawerOpenChange(false)} task={task} />
 
       <TaskHistoryPersonaDrawer isOpen={Boolean(selectedPersonaId)} onClose={() => setSelectedPersonaId(null)} personaId={selectedPersonaId} />
 

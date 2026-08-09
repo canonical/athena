@@ -19,3 +19,13 @@ export function getAuthenticatedUserId(response: Response): string {
 
   return user.id;
 }
+
+export function getAuthenticatedUser(response: Response): AuthenticatedUser {
+  const user = response.locals.user as AuthenticatedUser | undefined;
+
+  if (!user) {
+    throw new Error(`Authenticated user not found in request context.`);
+  }
+
+  return user;
+}

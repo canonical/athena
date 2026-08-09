@@ -9,6 +9,10 @@ export const taskApiPaths = {
   appendUserMessage: () => getApiUrl(`/task/append-user-message`),
   approveToolCall: () => getApiUrl(`/task/approve-tool-call`),
   rejectToolCall: () => getApiUrl(`/task/reject-tool-call`),
+  updateTitle: () => getApiUrl(`/task/update-title`),
+  updateObjective: () => getApiUrl(`/task/update-objective`),
+  assignWorkgraphItem: () => getApiUrl(`/task/assign-workgraph-item`),
+  assignedWorkgraphItem: (loopId: string, taskId: string) => getApiUrl(`/task/loop/${loopId}/${taskId}/workgraph-item`),
 } as const;
 
 const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
@@ -78,4 +82,44 @@ export const rejectTaskToolCall = async (loopId: string, taskId: string, queueIt
   }
 
   return response.json() as Promise<{ rejected: boolean }>;
+};
+
+export const updateTaskTitle = async (loopId: string, taskId: string, title: string): Promise<{ updated: boolean }> => {
+  const response = await authenticatedJsonPost(taskApiPaths.updateTitle(), { loopId, taskId, title });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Task title update failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<{ updated: boolean }>;
+};
+
+export const updateTaskObjective = async (loopId: string, taskId: string, objective: string): Promise<{ updated: boolean }> => {
+  const response = await authenticatedJsonPost(taskApiPaths.updateObjective(), { loopId, taskId, objective });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Task objective update failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<{ updated: boolean }>;
+};
+
+export const assignTaskWorkgraphItem = async (loopId: string, taskId: string, item: string): Promise<{ assigned: boolean }> => {
+  const response = await authenticatedJsonPost(taskApiPaths.assignWorkgraphItem(), { loopId, taskId, item });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Task workgraph assignment failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<{ assigned: boolean }>;
+};
+
+export const fetchTaskAssignedWorkgraphItem = async (loopId: string, taskId: string): Promise<{ id: string; title: string | null; itemKey: string | null; itemType: string } | null> => {
+  const response = await authenticatedJsonGet(taskApiPaths.assignedWorkgraphItem(loopId, taskId));
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Workgraph item fetch failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<{ id: string; title: string | null; itemKey: string | null; itemType: string } | null>;
 };

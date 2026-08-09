@@ -5,6 +5,7 @@ import {
   loopWorkgraphDelete,
   loopWorkgraphIssueTypes,
   loopWorkgraphItemList,
+  loopWorkgraphItemSearch,
   loopWorkgraphList,
   loopWorkgraphStartItem,
   loopWorkgraphSync,
@@ -24,6 +25,7 @@ import {
   loopWorkgraphAdminUpdateSchema,
   loopWorkgraphAssignSchema,
   loopWorkgraphItemParamsSchema,
+  loopWorkgraphItemSearchQuerySchema,
   loopWorkgraphParamsSchema,
   workgraphConnectionTestSchema,
   workgraphDeleteBodySchema,
@@ -159,6 +161,19 @@ route({
   handler: async ({ params, body, response, respond }) => {
     const workgraph = await loopWorkgraphUpdateByAdmin(params.loop, params.workgraph, getAuthenticatedUserId(response), body);
     respond({ status: 200, data: workgraph });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/items/search`,
+  validators: {
+    params: loopParamsSchema,
+    query: loopWorkgraphItemSearchQuerySchema,
+  },
+  handler: async ({ params, query, response, respond }) => {
+    const items = await loopWorkgraphItemSearch(params.loop, query.q, getAuthenticatedUserId(response));
+    respond({ status: 200, data: items });
   },
 });
 

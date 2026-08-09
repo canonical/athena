@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { appendTaskUserMessage, approveTaskToolCall, createTask, fetchTask, fetchTasks, rejectTaskToolCall } from "./task.client.js";
+import { appendTaskUserMessage, approveTaskToolCall, assignTaskWorkgraphItem, createTask, fetchTask, fetchTaskAssignedWorkgraphItem, fetchTasks, rejectTaskToolCall, updateTaskObjective, updateTaskTitle } from "./task.client.js";
 import type { Task } from "./task.schema.js";
 
 export type TasksState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; tasks: Task[] };
@@ -124,6 +124,51 @@ export const useRejectTaskToolCall = (loopId: string, taskId: string) => {
     mutationFn: (queueItemId: string) => rejectTaskToolCall(loopId, taskId, queueItemId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: taskQueryKeys.detail(loopId, taskId) });
+    },
+  });
+};
+
+export const useUpdateTaskTitle = (loopId: string, taskId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (title: string) => updateTaskTitle(loopId, taskId, title),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: taskQueryKeys.detail(loopId, taskId) });
+      await queryClient.invalidateQueries({ queryKey: taskQueryKeys.list(loopId) });
+    },
+  });
+};
+
+export const useUpdateTaskObjective = (loopId: string, taskId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (objective: string) => updateTaskObjective(loopId, taskId, objective),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: taskQueryKeys.detail(loopId, taskId) });
+    },
+  });
+};
+
+export const useTaskAssignedWorkgraphItem = (loopId: string, taskId: string, enabled: boolean) => {
+  const { data, isPending, isError } = useQuery({
+    queryKey: [`task-workgraph-item`, loopId, taskId],
+    queryFn: () => fetchTaskAssignedWorkgraphItem(loopId, taskId),
+    enabled,
+  });
+
+  return { item: data ?? null, isLoading: isPending && enabled, isError };
+};
+
+export const useAssignTaskWorkgraphItem = (loopId: string, taskId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (item: string) => assignTaskWorkgraphItem(loopId, taskId, item),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: taskQueryKeys.detail(loopId, taskId) });
+      await queryClient.invalidateQueries({ queryKey: taskQueryKeys.list(loopId) });
     },
   });
 };

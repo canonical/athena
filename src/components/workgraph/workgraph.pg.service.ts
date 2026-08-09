@@ -463,6 +463,42 @@ export const queryLoopWorkgraphReplaceItems = async (loopId: string, workgraphId
   }
 };
 
+export const queryLoopWorkgraphItemSearch = async (loopId: string, q: string, limit = 20): Promise<LoopWorkgraphItem[]> => {
+  const result = await getPool().query<LoopWorkgraphItem>(
+    `
+      SELECT
+        lwi."id",
+        lwi."loopWorkgraph",
+        lw."loop",
+        lw."workgraph",
+        lwi."itemKey",
+        lwi."itemId",
+        lwi."parentKey",
+        lwi."title",
+        lwi."itemType",
+        lwi."status",
+        lwi."webUrl",
+        lwi."payload",
+        lwi."syncedAt",
+        lwi."createdAt",
+        lwi."updatedAt"
+      FROM "loopWorkgraphItem" lwi
+      JOIN "loopWorkgraph" lw ON lw."id" = lwi."loopWorkgraph"
+      WHERE lw."loop" = $1
+        AND (
+          lwi."title" ILIKE '%' || $2 || '%'
+          OR lwi."itemKey" ILIKE '%' || $2 || '%'
+          OR lwi."itemType" ILIKE '%' || $2 || '%'
+        )
+      ORDER BY lwi."itemKey" ASC
+      LIMIT $3
+    `,
+    [loopId, q, limit],
+  );
+
+  return result.rows;
+};
+
 export const queryLoopWorkgraphItemList = async (loopId: string, workgraphId: string): Promise<LoopWorkgraphItem[]> => {
   const result = await getPool().query<LoopWorkgraphItem>(
     `
