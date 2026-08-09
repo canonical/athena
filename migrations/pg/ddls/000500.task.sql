@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS "task" (
   "currentPersona" UUID REFERENCES "persona"("id") ON DELETE SET NULL,
   "currentProvider" UUID REFERENCES "provider"("id") ON DELETE SET NULL,
   "currentModel" TEXT,
+  "currentObjective" TEXT,
+  "queueArchive" JSONB NOT NULL DEFAULT '[]'::jsonb,
   "source" TEXT NOT NULL CHECK ("source" IN ('user', 'workgraphItem')),
   "status" TEXT NOT NULL CHECK ("status" IN ('queued', 'wip', 'completed')) DEFAULT 'queued',
   "processorUnit" UUID,

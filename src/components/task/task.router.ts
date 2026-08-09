@@ -1,8 +1,8 @@
 import { getAuthenticatedUserId } from "@components/authentication/session.js";
 import { defineRoutes } from "@components/express/express.router.js";
 import { Router } from "express";
-import { taskAppendUserMessage, taskApproveToolCall, taskCreate, taskGet, taskList, taskRejectToolCall, taskResetProcessorClaims } from "./task.controller.js";
-import { taskAppendUserMessageSchema, taskCreateSchema, taskDetailParamsSchema, taskListParamsSchema, taskResetProcessorClaimsSchema, taskToolCallApprovalSchema } from "./task.schema.js";
+import { taskAppendUserMessage, taskApproveToolCall, taskCreate, taskGet, taskList, taskRejectToolCall } from "./task.controller.js";
+import { taskAppendUserMessageSchema, taskCreateSchema, taskDetailParamsSchema, taskListParamsSchema, taskToolCallApprovalSchema } from "./task.schema.js";
 
 export const taskRouter = Router();
 const route = defineRoutes(taskRouter);
@@ -40,18 +40,6 @@ route({
   handler: async ({ body, response, respond }) => {
     const task = await taskCreate(body, getAuthenticatedUserId(response));
     respond({ status: 201, data: task });
-  },
-});
-
-route({
-  method: `post`,
-  route: `/reset-processor-claims`,
-  validators: {
-    body: taskResetProcessorClaimsSchema,
-  },
-  handler: async ({ body, response, respond }) => {
-    const result = await taskResetProcessorClaims(getAuthenticatedUserId(response), body.loopId, body.taskId);
-    respond({ status: 200, data: result });
   },
 });
 

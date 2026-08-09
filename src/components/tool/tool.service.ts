@@ -45,9 +45,16 @@ const providerToolExecutors: Record<string, ProviderToolExecutor> = {
   workgraph_list_fields: async (context, input) => workgraphExecutors.executeWorkgraphFieldList(context, input),
   workgraph_edit_field: async (context, input) => workgraphExecutors.executeWorkgraphEditField(context, input),
   workgraph_add_comment: async (context, input) => workgraphExecutors.executeWorkgraphAddComment(context, input),
-  athena_emit_blocker: async (context, input) => athenaExecutors.executeAthenaEmitBlocker(context, input),
   athena_mark_complete: async (context, input) => athenaExecutors.executeAthenaMarkComplete(context, input),
-  athena_request_chat: async (context, input) => athenaExecutors.executeAthenaRequestChat(context, input),
+  athena_compact_queue: async (context, input) => athenaExecutors.executeAthenaCompactQueue(context, input),
+  athena_define_objective: async (context, input) => athenaExecutors.executeAthenaDefineObjective(context, input),
+  athena_define_title: async (context, input) => athenaExecutors.executeAthenaDefineTitle(context, input),
+  athena_get_objective: async (context) => athenaExecutors.executeAthenaGetObjective(context),
+  athena_get_title: async (context) => athenaExecutors.executeAthenaGetTitle(context),
+  athena_list_models: async (context) => athenaExecutors.executeAthenaListModels(context),
+  athena_list_personas: async (context) => athenaExecutors.executeAthenaListPersonas(context),
+  athena_ask_other_persona: async (context, input) => athenaExecutors.executeAthenaAskOtherPersona(context, input),
+  athena_assign_to_workgraph_item: async (context, input) => athenaExecutors.executeAthenaAssignToWorkgraphItem(context, input),
 };
 
 const executeSingleTool = async (context: ProviderToolExecutionContext, request: ProviderToolRequest): Promise<ProviderToolResult> => {

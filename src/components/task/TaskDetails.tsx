@@ -1,8 +1,7 @@
 import { Button, Notification, NotificationSeverity } from "@canonical/react-components";
-import { Fab } from "@components/fab/Fab.js";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TaskHistory } from "./TaskHistory.js";
-import { useAppendTaskUserMessage, useResetTaskProcessorClaims, useTask } from "./task.query.js";
+import { useAppendTaskUserMessage, useTask } from "./task.query.js";
 
 type TaskDetailsProps = {
   loopId: string;
@@ -11,9 +10,23 @@ type TaskDetailsProps = {
 
 export function TaskDetails({ loopId, taskId }: TaskDetailsProps) {
   const { state } = useTask(loopId, taskId);
-  const resetTaskProcessorClaimsMutation = useResetTaskProcessorClaims(loopId, taskId);
   const appendTaskUserMessageMutation = useAppendTaskUserMessage(loopId, taskId);
   const [message, setMessage] = useState(``);
+  const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (state.status !== `success`) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      messageInputRef.current?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [loopId, taskId, state.status]);
 
   const handleSend = async () => {
     const trimmedMessage = message.trim();
@@ -40,26 +53,8 @@ export function TaskDetails({ loopId, taskId }: TaskDetailsProps) {
 
   const task = state.task;
 
-  const handleResetProcessorClaims = async () => {
-    await resetTaskProcessorClaimsMutation.mutateAsync();
-  };
-
   return (
     <div style={{ height: "100vh", width: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <Fab
-        disabled={resetTaskProcessorClaimsMutation.isPending}
-        icon={
-          <span aria-hidden="true" style={{ fontSize: "1.25rem", lineHeight: 1 }}>
-            ↻
-          </span>
-        }
-        onClick={() => {
-          void handleResetProcessorClaims();
-        }}
-        position="topRight"
-        title="Reset processor claims"
-      />
-
       <div style={{ height: "3.125rem", width: "100%", padding: "1rem", boxSizing: "border-box", flexShrink: 0 }}>
         <strong>{task.title}</strong>
       </div>
@@ -80,6 +75,7 @@ export function TaskDetails({ loopId, taskId }: TaskDetailsProps) {
         }}
       >
         <textarea
+          ref={messageInputRef}
           onChange={(event) => setMessage(event.target.value)}
           onKeyDown={(event) => {
             if (event.ctrlKey && event.key === `Enter`) {

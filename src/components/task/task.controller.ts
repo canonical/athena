@@ -3,7 +3,7 @@ import { LoopNotFoundError } from "@components/loop/loop.errors.js";
 import { queryLoopById, queryLoopForUser } from "@components/loop/loop.service.js";
 import { triggerTaskProcessor } from "./task.processor.js";
 import type { Task, TaskAppendUserMessage, TaskCreate, TaskQueueItemInput, TaskToolCallApproval } from "./task.schema.js";
-import { queryAppendQueueItem, queryTaskCreate, queryTaskCreateForWorkgraphItem, queryTaskGet, queryTaskList, queryTaskResetProcessorClaim, queryTaskToolCallApprove, queryTaskToolCallReject } from "./task.service.js";
+import { queryAppendQueueItem, queryTaskCreate, queryTaskCreateForWorkgraphItem, queryTaskGet, queryTaskList, queryTaskToolCallApprove, queryTaskToolCallReject } from "./task.service.js";
 
 const triggerTaskProcessorAsync = (): void => {
   queueMicrotask(() => {
@@ -68,14 +68,6 @@ export const taskCreate = async (input: TaskCreate, userId?: string): Promise<Ta
   const createdTask = await queryTaskCreate(input);
   triggerTaskProcessorAsync();
   return createdTask;
-};
-
-export const taskResetProcessorClaims = async (userId: string, loopId: string, taskId: string): Promise<{ updatedCount: number }> => {
-  await requireLoopAccess(loopId, userId);
-
-  const updatedCount = await queryTaskResetProcessorClaim(loopId, taskId);
-
-  return { updatedCount };
 };
 
 export const taskAppendUserMessage = async (userId: string, input: TaskAppendUserMessage): Promise<{ appended: boolean }> => {

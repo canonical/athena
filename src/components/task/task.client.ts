@@ -6,7 +6,6 @@ export const taskApiPaths = {
   list: (loopId: string) => getApiUrl(`/task/loop/${loopId}`),
   detail: (loopId: string, taskId: string) => getApiUrl(`/task/loop/${loopId}/${taskId}`),
   create: () => getApiUrl(`/task/`),
-  resetProcessorClaims: () => getApiUrl(`/task/reset-processor-claims`),
   appendUserMessage: () => getApiUrl(`/task/append-user-message`),
   approveToolCall: () => getApiUrl(`/task/approve-tool-call`),
   rejectToolCall: () => getApiUrl(`/task/reject-tool-call`),
@@ -49,16 +48,6 @@ export const createTask = async (input: TaskCreate): Promise<Task> => {
   }
 
   return response.json() as Promise<Task>;
-};
-
-export const resetTaskProcessorClaims = async (loopId: string, taskId: string): Promise<{ updatedCount: number }> => {
-  const response = await authenticatedJsonPost(taskApiPaths.resetProcessorClaims(), { loopId, taskId });
-
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, `Task reset failed with status ${response.status}`));
-  }
-
-  return response.json() as Promise<{ updatedCount: number }>;
 };
 
 export const appendTaskUserMessage = async (loopId: string, taskId: string, content: string): Promise<{ appended: boolean }> => {

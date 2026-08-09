@@ -231,35 +231,99 @@ export const providerToolDefinitions: ReadonlyArray<ProviderToolDefinition> = [
     inputSchema: workgraphItemInputSchema.extend({ comment: requiredString(`must be a non-empty string.`).describe(`Comment text.`) }).strict(),
   },
   {
-    name: `athena_emit_blocker`,
-    label: `Emit Blocker Intent`,
-    description: `Emit a blocker intent for the current task.`,
-    requiresApproval: false,
-    inputSchema: z
-      .object({
-        blocker: optionalString.describe(`Reason this tool is emitting a blocker.`),
-      })
-      .strict(),
-  },
-  {
     name: `athena_mark_complete`,
-    label: `Emit Completion Intent`,
-    description: `Emit a completion intent for the current task.`,
+    label: `Mark Task Complete`,
+    description: `Mark the current task as complete. The task will be closed immediately upon approval.`,
     requiresApproval: true,
     inputSchema: z
       .object({
-        note: optionalString.describe(`Completion note.`),
+        note: optionalString.describe(`Optional completion note.`),
       })
       .strict(),
   },
   {
-    name: `athena_request_chat`,
-    label: `Emit Chat Request Intent`,
-    description: `Emit a request-chat intent for the current task.`,
+    name: `athena_compact_queue`,
+    label: `Compact Task Queue`,
+    description: `Compress the task conversation history into a persistent summary and remove already-completed queue items up to the first pending item. This serves as compaction and summarization of the task's conversation history, preserving the current state, decisions, blockers, and next actions.`,
+    requiresApproval: true,
+    inputSchema: z
+      .object({
+        summary: requiredString(`must be a non-empty string.`).describe(`Concise summary of the conversation so far, preserving current state, decisions, blockers, and next actions.`),
+      })
+      .strict(),
+  },
+  {
+    name: `athena_define_objective`,
+    label: `Define Task Objective`,
+    description: `Set or update the current objective for this task.`,
+    requiresApproval: true,
+    inputSchema: z
+      .object({
+        objective: requiredString(`must be a non-empty string.`).describe(`The new objective for this task.`),
+      })
+      .strict(),
+  },
+  {
+    name: `athena_define_title`,
+    label: `Define Task Title`,
+    description: `Set or update the title for this task.`,
+    requiresApproval: true,
+    inputSchema: z
+      .object({
+        title: requiredString(`must be a non-empty string.`).describe(`The new title for this task.`),
+      })
+      .strict(),
+  },
+  {
+    name: `athena_get_objective`,
+    label: `Get Task Objective`,
+    description: `Get the current objective for this task.`,
+    requiresApproval: false,
+    inputSchema: z.object({}).strict(),
+  },
+  {
+    name: `athena_get_title`,
+    label: `Get Task Title`,
+    description: `Get the current title for this task.`,
+    requiresApproval: false,
+    inputSchema: z.object({}).strict(),
+  },
+  {
+    name: `athena_list_models`,
+    label: `List Available Models`,
+    description: `List models enabled on the current task's provider, including description, pricing, context length, and capability details.`,
+    requiresApproval: false,
+    inputSchema: z.object({}).strict(),
+  },
+  {
+    name: `athena_list_personas`,
+    label: `List Available Personas`,
+    description: `List all personas available in this loop. Use persona IDs from this list as input to athena_ask_other_persona.`,
+    requiresApproval: false,
+    inputSchema: z.object({}).strict(),
+  },
+  {
+    name: `athena_ask_other_persona`,
+    label: `Ask Another Persona`,
+    description: `Consult another persona in this loop by providing a context summary and a prompt. The persona's response is appended to the task history attributed to that persona and also returned as the tool result.`,
     requiresApproval: false,
     inputSchema: z
       .object({
-        prompt: requiredString(`must be a non-empty string.`).describe(`Chat request prompt.`),
+        personaId: uuid(`personaId must be a valid UUID.`).describe(`ID of the persona to consult. Call athena_list_personas first to discover available personas.`),
+        model: requiredString(`must be a non-empty string.`).describe(`Model ID to use for the consultation. Call athena_list_models first to discover available models.`),
+        summary: requiredString(`must be a non-empty string.`).describe(`Concise context summary giving the consulted persona enough background to answer.`),
+        prompt: requiredString(`must be a non-empty string.`).describe(`The question or task to ask the consulted persona.`),
+      })
+      .strict(),
+  },
+  {
+    name: `athena_assign_to_workgraph_item`,
+    label: `Assign Task to Workgraph Item`,
+    description: `Assign the current task to a workgraph item in this loop. Only items belonging to this loop's workgraphs are valid. Requires user approval before execution.`,
+    requiresApproval: true,
+    inputSchema: z
+      .object({
+        item: uuid(`item must be a valid UUID.`).describe(`Workgraph item id to assign this task to.`),
       })
       .strict(),
   },

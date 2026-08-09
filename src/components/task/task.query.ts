@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { appendTaskUserMessage, approveTaskToolCall, createTask, fetchTask, fetchTasks, rejectTaskToolCall, resetTaskProcessorClaims } from "./task.client.js";
+import { appendTaskUserMessage, approveTaskToolCall, createTask, fetchTask, fetchTasks, rejectTaskToolCall } from "./task.client.js";
 import type { Task } from "./task.schema.js";
 
 export type TasksState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; tasks: Task[] };
@@ -49,18 +49,6 @@ export const useCreateTask = (loopId: string) => {
     mutationFn: (title?: string) => createTask({ loop: loopId, title }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: taskQueryKeys.list(loopId) });
-    },
-  });
-};
-
-export const useResetTaskProcessorClaims = (loopId: string, taskId: string) => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: () => resetTaskProcessorClaims(loopId, taskId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: taskQueryKeys.list(loopId) });
-      await queryClient.invalidateQueries({ queryKey: taskQueryKeys.detail(loopId, taskId) });
     },
   });
 };

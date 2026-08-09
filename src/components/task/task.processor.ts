@@ -1,6 +1,6 @@
 import { log } from "@components/logging/logging.service.js";
 import { readyLoops } from "@components/loop/loop.controller.js";
-import * as iterator from "@components/task/task.iterator.js";
+import * as iteratorPrimary from "@components/task/task.iteratorPrimary.js";
 import type { Task } from "@components/task/task.schema.js";
 import { queryTaskMarkCompleted, queryTaskPick, queryTaskProcessorPing, queryTaskResetProcessorClaim, queryTaskResetStaleProcessorClaims } from "@components/task/task.service.js";
 import { v7 as uuidv7 } from "uuid";
@@ -103,21 +103,30 @@ export const iterateTask = async (task: Task): Promise<void> => {
 
     await pingTask(task.id);
 
-    const steps = [
-      iterator.iterateTaskAssignCurrentPersona,
-      iterator.iterateTaskAssignCurrentProvider,
-      iterator.iterateTaskAssignCurrentModel,
-      iterator.iterateTaskInitialGreeting,
-      iterator.iterateTaskBootstrapWorkgraphItem,
-      iterator.iterateTaskFirstPendingToolCall,
-      iterator.iterateTaskFirstPendingUserMessage,
+    const primarySteps: Array<(task: Task, processorId: string) => Promise<iteratorPrimary.TaskPrimaryIterationOutcome>> = [
+      iteratorPrimary.iterateTaskAssignCurrentPersona,
+      iteratorPrimary.iterateTaskAssignCurrentProvider,
+      iteratorPrimary.iterateTaskAssignCurrentModel,
+      iteratorPrimary.iterateTaskInitialGreeting,
+      iteratorPrimary.iterateTaskBootstrapWorkgraphItem,
+      iteratorPrimary.iterateTaskFirstPendingToolCall,
+      iteratorPrimary.iterateTaskFirstPendingUserMessage,
     ];
 
-    for (const stepFn of steps) {
-      if (await stepFn(task, processorId)) return;
+    let primaryOutcome: iteratorPrimary.TaskPrimaryIterationOutcome | null = null;
+
+    for (const stepFn of primarySteps) {
+      const stepOutcome = await stepFn(task, processorId);
+
+      if (stepOutcome.handled) {
+        primaryOutcome = stepOutcome;
+        break;
+      }
     }
 
-    await queryTaskMarkCompleted(task.loop, task.id, processorId);
+    if (!primaryOutcome) {
+      await queryTaskMarkCompleted(task.loop, task.id, processorId);
+    }
   } finally {
     if (pingInterval) {
       clearInterval(pingInterval);

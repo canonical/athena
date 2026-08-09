@@ -4,7 +4,24 @@ import { v7 as uuidv7 } from "uuid";
 import type { Task, TaskCreate, TaskQueueItemInput } from "./task.schema.js";
 import { taskCreateSchema } from "./task.schema.js";
 
-const taskColumnNames = ["id", "loop", "currentPersona", "currentProvider", "currentModel", "source", "status", "processorUnit", "processorPingedAt", "workgraphItem", "title", "queue", "createdAt", "updatedAt"] as const;
+const taskColumnNames = [
+  "id",
+  "loop",
+  "currentPersona",
+  "currentProvider",
+  "currentModel",
+  "currentObjective",
+  "queueArchive",
+  "source",
+  "status",
+  "processorUnit",
+  "processorPingedAt",
+  "workgraphItem",
+  "title",
+  "queue",
+  "createdAt",
+  "updatedAt",
+] as const;
 
 const taskColumns = taskColumnNames.map((column) => `"${column}"`).join(`, `);
 
@@ -399,6 +416,105 @@ export const queryTaskAssignCurrentModel = async (loopId: string, taskId: string
   );
 
   return result.rows[0]?.currentModel ?? null;
+};
+
+export const queryTaskCompactQueue = async (loopId: string, taskId: string, processorId: string, summary: string): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      WITH snapshot AS (
+        SELECT
+          t."queue",
+          t."queueArchive",
+          COALESCE(
+            (
+              SELECT MIN(qi.ordinality)
+              FROM jsonb_array_elements(t."queue") WITH ORDINALITY AS qi(item, ordinality)
+              WHERE COALESCE(qi.item->>'status', '') <> 'completed'
+            ),
+            jsonb_array_length(t."queue") + 1
+          ) AS cutoff
+        FROM "task" t
+        WHERE t."loop" = $1 AND t."id" = $2 AND t."processorUnit" = $3
+      )
+      UPDATE "task" t
+      SET
+        "queueArchive" = snapshot."queueArchive"
+          || COALESCE(
+               (
+                 SELECT jsonb_agg(qi.item ORDER BY qi.ordinality)
+                 FROM jsonb_array_elements(snapshot."queue") WITH ORDINALITY AS qi(item, ordinality)
+                 WHERE qi.ordinality < snapshot.cutoff
+               ),
+               '[]'::jsonb
+             )
+          || jsonb_build_array(
+               jsonb_build_object(
+                 'type', 'compaction',
+                 'id', gen_random_uuid()::text,
+                 'timestamp', to_jsonb(clock_timestamp()),
+                 'itemCount', (
+                   SELECT COUNT(*)::int
+                   FROM jsonb_array_elements(snapshot."queue") WITH ORDINALITY AS qi(item, ordinality)
+                   WHERE qi.ordinality < snapshot.cutoff
+                 )
+               )
+             ),
+        "queue" = jsonb_build_array(
+                    jsonb_build_object(
+                      'type', 'message',
+                      'id', gen_random_uuid()::text,
+                      'status', 'completed',
+                      'timestamp', to_jsonb(clock_timestamp()),
+                      'value', jsonb_build_object('role', 'assistant', 'content', $4::text)
+                    )
+                  )
+                  || COALESCE(
+                       (
+                         SELECT jsonb_agg(qi.item ORDER BY qi.ordinality)
+                         FROM jsonb_array_elements(snapshot."queue") WITH ORDINALITY AS qi(item, ordinality)
+                         WHERE qi.ordinality >= snapshot.cutoff
+                       ),
+                       '[]'::jsonb
+                     )
+      FROM snapshot
+      WHERE t."loop" = $1
+        AND t."id" = $2
+        AND t."processorUnit" = $3
+    `,
+    [loopId, taskId, processorId, summary],
+  );
+
+  return (result.rowCount ?? 0) > 0;
+};
+
+export const queryTaskDefineObjective = async (loopId: string, taskId: string, processorId: string, objective: string): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      UPDATE "task"
+      SET "currentObjective" = NULLIF(BTRIM($4), '')
+      WHERE "loop" = $1
+        AND "id" = $2
+        AND "processorUnit" = $3
+    `,
+    [loopId, taskId, processorId, objective],
+  );
+
+  return (result.rowCount ?? 0) > 0;
+};
+
+export const queryTaskDefineTitle = async (loopId: string, taskId: string, processorId: string, title: string): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      UPDATE "task"
+      SET "title" = NULLIF(BTRIM($4), '')
+      WHERE "loop" = $1
+        AND "id" = $2
+        AND "processorUnit" = $3
+    `,
+    [loopId, taskId, processorId, title],
+  );
+
+  return (result.rowCount ?? 0) > 0;
 };
 
 export const queryAppendQueueItem = async (taskId: string, processorId: string | null, queueItem: TaskQueueItemInput, requeueIfCompleted = false): Promise<boolean> => {

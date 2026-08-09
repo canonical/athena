@@ -1,9 +1,10 @@
 import { log } from "@components/logging/logging.service.js";
 import { queryLoopDisabledProviderToolsById } from "@components/loop/loop.service.js";
-import { resolveLoopSelection, resolveLoopSelectionByAssignment } from "@components/loop/loop-selection.service.js";
+import { resolveLoopSelection } from "@components/loop/loop-selection.service.js";
 import type { OpenRouterMessage, OpenRouterTool } from "@components/openrouter/openrouter.schema.js";
 import { fetchOpenRouterChatCompletion, readOpenRouterAssistantText } from "@components/openrouter/openrouter.service.js";
 import { queryLoopPersonaById } from "@components/persona/persona.service.js";
+import { isTaskReadyForModel, parseJsonWithSchema } from "@components/task/task.iteratorUtilities.js";
 import type { Task, TaskQueueItemInput } from "@components/task/task.schema.js";
 import {
   queryAppendQueueItem,
@@ -17,60 +18,94 @@ import {
 import { enabledProviderToolDefinitionsFromDisabled, isProviderToolRequiringApproval, providerToolParametersFromInputSchema } from "@components/tool/tool.catalog.js";
 import type { ProviderToolRequest } from "@components/tool/tool.schema.js";
 import { executeProviderToolBatch } from "@components/tool/tool.service.js";
+import { z } from "zod";
 
-export const iterateTaskAssignCurrentPersona = async (task: Task, processorId: string): Promise<boolean> => {
+const taskPrimaryResponseSchema = z.object({
+  content: z.string().default(``),
+});
+
+export type TaskPrimaryIterationOutcome = {
+  handled: boolean;
+};
+
+const createPrimaryIterationOutcome = (handled: boolean): TaskPrimaryIterationOutcome => ({
+  handled,
+});
+
+const readPrimaryAssistantContent = (responseMessage: { content?: unknown; tool_calls?: Array<unknown> } | undefined, parseFailureMessage: string): string => {
+  const responseText = readOpenRouterAssistantText(responseMessage);
+  const parsedResponse = parseJsonWithSchema(taskPrimaryResponseSchema, responseText);
+
+  if (parsedResponse) {
+    return parsedResponse.content.trim();
+  }
+
+  const fallbackText = responseText.trim();
+
+  if (fallbackText.length > 0) {
+    return fallbackText;
+  }
+
+  if ((responseMessage?.tool_calls?.length ?? 0) > 0) {
+    return ``;
+  }
+
+  throw new Error(parseFailureMessage);
+};
+
+export const iterateTaskAssignCurrentPersona = async (task: Task, processorId: string): Promise<TaskPrimaryIterationOutcome> => {
   if (task.currentPersona) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   const currentPersona = await queryTaskAssignCurrentPersona(task.loop, task.id, processorId);
 
   if (!currentPersona) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
-  return true;
+  return createPrimaryIterationOutcome(true);
 };
 
-export const iterateTaskAssignCurrentProvider = async (task: Task, processorId: string): Promise<boolean> => {
+export const iterateTaskAssignCurrentProvider = async (task: Task, processorId: string): Promise<TaskPrimaryIterationOutcome> => {
   if (task.currentProvider) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   const providerResolution = await resolveLoopSelection(task.loop, `provider`);
 
   if (!providerResolution.selected) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   const currentProvider = await queryTaskAssignCurrentProvider(task.loop, task.id, processorId, providerResolution.selected.assignmentId);
 
   if (!currentProvider) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
-  return true;
+  return createPrimaryIterationOutcome(true);
 };
 
-export const iterateTaskAssignCurrentModel = async (task: Task, processorId: string): Promise<boolean> => {
+export const iterateTaskAssignCurrentModel = async (task: Task, processorId: string): Promise<TaskPrimaryIterationOutcome> => {
   if (task.currentModel || !task.currentProvider) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   const currentModel = await queryTaskAssignCurrentModel(task.loop, task.id, processorId, task.currentProvider);
 
   if (!currentModel) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
-  return true;
+  return createPrimaryIterationOutcome(true);
 };
 
-export const iterateTaskInitialGreeting = async (task: Task, processorId: string): Promise<boolean> => {
+export const iterateTaskInitialGreeting = async (task: Task, processorId: string): Promise<TaskPrimaryIterationOutcome> => {
   const shouldAppendInitialGreeting = task.source === `user` && task.queue.length === 0;
 
   if (!shouldAppendInitialGreeting) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   const initialGreetingQueueItem: TaskQueueItemInput = {
@@ -86,48 +121,53 @@ export const iterateTaskInitialGreeting = async (task: Task, processorId: string
   const inserted = await queryAppendQueueItem(task.id, processorId, initialGreetingQueueItem);
 
   if (!inserted) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   log.info(`Task iterate inserted initial user greeting`, { taskId: task.id, processorId });
-  return true;
+  return createPrimaryIterationOutcome(true);
 };
 
-export const iterateTaskBootstrapWorkgraphItem = async (task: Task, processorId: string): Promise<boolean> => {
+export const iterateTaskBootstrapWorkgraphItem = async (task: Task, processorId: string): Promise<TaskPrimaryIterationOutcome> => {
   if (task.source !== `workgraphItem` || task.queue.length > 0) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
-  const providerResolution = task.currentProvider ? await resolveLoopSelectionByAssignment(task.loop, `provider`, task.currentProvider) : await resolveLoopSelection(task.loop, `provider`);
+  const readiness = await isTaskReadyForModel(task);
 
-  if (!providerResolution.selected) {
-    log.warn(`Task iterate skipped workgraph bootstrap because no provider selection is available`, {
-      taskId: task.id,
-      loopId: task.loop,
-    });
-    return false;
-  }
+  if (!readiness.ready) {
+    if (readiness.reason === "provider-unavailable") {
+      log.warn(`Task iterate skipped workgraph bootstrap because no provider selection is available`, {
+        taskId: task.id,
+        loopId: task.loop,
+      });
+      return createPrimaryIterationOutcome(false);
+    }
 
-  const baseUrl = providerResolution.selected.baseUrl;
-  const model = task.currentModel ?? providerResolution.selected.defaultModel ?? providerResolution.selected.enabledModels[0] ?? null;
-
-  if (!baseUrl || !model) {
     log.warn(`Task iterate skipped workgraph bootstrap because provider baseUrl or model is missing`, {
       taskId: task.id,
       loopId: task.loop,
-      providerId: providerResolution.selected.assignmentId,
-      hasBaseUrl: Boolean(baseUrl),
-      hasModel: Boolean(model),
+      providerId: readiness.providerResolution.selected?.assignmentId ?? null,
+      hasBaseUrl: Boolean(readiness.baseUrl),
+      hasModel: Boolean(readiness.model),
     });
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
+
+  const { providerResolution, baseUrl, model } = readiness;
 
   const persona = task.currentPersona ? await queryLoopPersonaById(task.currentPersona, task.loop) : undefined;
   const systemMessage = await buildTaskSystemMessage(task, persona?.personality);
   const toolDefinitions = await buildOpenRouterToolDefinitions(task.loop);
   const bootstrapUserMessage: OpenRouterMessage = {
     role: `user`,
-    content: [`Start work on the assigned workgraph item now.`, `Task title: ${task.title ?? `Workgraph task`}.`, `Use available tools to gather context and make concrete progress without waiting for another user prompt.`].join("\n"),
+    content: [
+      `Start work on the assigned workgraph item now.`,
+      `Task title: ${task.title ?? `Workgraph task`}.`,
+      `Use available tools to gather context and make concrete progress without waiting for another user prompt.`,
+      `Return a JSON object with key content.`,
+      `content should contain only the assistant reply text.`,
+    ].join("\n"),
   };
   const messageHistory: OpenRouterMessage[] = systemMessage ? [systemMessage, bootstrapUserMessage] : [bootstrapUserMessage];
 
@@ -151,7 +191,7 @@ export const iterateTaskBootstrapWorkgraphItem = async (task: Task, processorId:
   );
 
   const responseMessage = payload.choices?.[0]?.message;
-  const assistantText = readOpenRouterAssistantText(responseMessage).trim();
+  const assistantText = readPrimaryAssistantContent(responseMessage, `Unable to parse bootstrap assistant response.`);
   const toolCalls = responseMessage?.tool_calls;
   const hasToolCalls = Boolean(toolCalls && toolCalls.length > 0);
   const toolCallsNeedApproval = hasToolCalls && toolCalls?.some((tc) => isProviderToolRequiringApproval(tc.function.name));
@@ -182,7 +222,7 @@ export const iterateTaskBootstrapWorkgraphItem = async (task: Task, processorId:
     toolCallCount: toolCalls?.length ?? 0,
   });
 
-  return true;
+  return createPrimaryIterationOutcome(true);
 };
 
 const parseToolCallInput = (value: string): Record<string, unknown> | undefined => {
@@ -213,7 +253,7 @@ const buildOpenRouterToolDefinitions = async (loopId: string): Promise<OpenRoute
     type: `function`,
     function: {
       name: tool.name,
-      description: tool.description,
+      description: tool.requiresApproval ? `${tool.description} Requires user approval before execution.` : tool.description,
       parameters: providerToolParametersFromInputSchema(tool.inputSchema),
     },
   }));
@@ -282,7 +322,7 @@ const buildTaskSystemMessage = async (task: Task, personaPersonality: string | n
   };
 };
 
-export const iterateTaskFirstPendingToolCall = async (task: Task, processorId: string): Promise<boolean> => {
+export const iterateTaskFirstPendingToolCall = async (task: Task, processorId: string): Promise<TaskPrimaryIterationOutcome> => {
   const firstPendingToolCallIndex = task.queue.findIndex((queueItem) => {
     if (queueItem.value.role !== `assistant` || !queueItem.value.tool_calls?.length) {
       return false;
@@ -295,13 +335,13 @@ export const iterateTaskFirstPendingToolCall = async (task: Task, processorId: s
   });
 
   if (firstPendingToolCallIndex < 0) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   const firstPendingToolCallMessage = task.queue[firstPendingToolCallIndex];
 
   if (!firstPendingToolCallMessage?.value.tool_calls?.length) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   const requests: ProviderToolRequest[] = firstPendingToolCallMessage.value.tool_calls.map((toolCall) => ({
@@ -356,30 +396,38 @@ export const iterateTaskFirstPendingToolCall = async (task: Task, processorId: s
   const queueMessages: OpenRouterMessage[] = reloadedTask.queue.map((queueItem) => queueItem.value);
   const messageHistory: OpenRouterMessage[] = systemMessage ? [systemMessage, ...queueMessages] : queueMessages;
 
-  const providerResolution = task.currentProvider ? await resolveLoopSelectionByAssignment(task.loop, `provider`, task.currentProvider) : await resolveLoopSelection(task.loop, `provider`);
+  const readiness = await isTaskReadyForModel(reloadedTask, { minQueueLength: 1 });
   const toolDefinitions = await buildOpenRouterToolDefinitions(task.loop);
 
-  if (!providerResolution.selected) {
-    log.warn(`Task iterate skipped LLM continuation after tool calls because no provider selection is available`, {
-      taskId: task.id,
-      loopId: task.loop,
-    });
-    return true;
-  }
+  if (!readiness.ready) {
+    if (readiness.reason === "queue-empty") {
+      return createPrimaryIterationOutcome(true);
+    }
 
-  const baseUrl = providerResolution.selected.baseUrl;
-  const model = task.currentModel ?? providerResolution.selected.defaultModel ?? providerResolution.selected.enabledModels[0] ?? null;
+    if (readiness.reason === "provider-unavailable") {
+      log.warn(`Task iterate skipped LLM continuation after tool calls because no provider selection is available`, {
+        taskId: task.id,
+        loopId: task.loop,
+      });
+      return createPrimaryIterationOutcome(true);
+    }
 
-  if (!baseUrl || !model) {
     log.warn(`Task iterate skipped LLM continuation after tool calls because provider baseUrl or model is missing`, {
       taskId: task.id,
       loopId: task.loop,
-      providerId: providerResolution.selected.assignmentId,
-      hasBaseUrl: Boolean(baseUrl),
-      hasModel: Boolean(model),
+      providerId: readiness.providerResolution.selected?.assignmentId ?? null,
+      hasBaseUrl: Boolean(readiness.baseUrl),
+      hasModel: Boolean(readiness.model),
     });
-    return true;
+    return createPrimaryIterationOutcome(true);
   }
+
+  const { providerResolution, baseUrl, model } = readiness;
+
+  const continuationPromptMessage: OpenRouterMessage = {
+    role: `user`,
+    content: [`Return a JSON object with key content.`, `content should be the assistant response text only.`].join("\n"),
+  };
 
   const llmPayload = await fetchOpenRouterChatCompletion(
     {
@@ -388,7 +436,7 @@ export const iterateTaskFirstPendingToolCall = async (task: Task, processorId: s
     },
     {
       model,
-      messages: messageHistory,
+      messages: [...messageHistory, continuationPromptMessage],
       ...(toolDefinitions.length > 0 ? { tools: toolDefinitions, toolChoice: `auto` as const } : {}),
       responseFormat: `text`,
       operation: `task-iterate-first-pending-tool-call`,
@@ -402,7 +450,7 @@ export const iterateTaskFirstPendingToolCall = async (task: Task, processorId: s
   );
 
   const llmResponseMessage = llmPayload.choices?.[0]?.message;
-  const llmAssistantText = readOpenRouterAssistantText(llmResponseMessage).trim();
+  const llmAssistantText = readPrimaryAssistantContent(llmResponseMessage, `Unable to parse task tool-call continuation response.`);
   const llmToolCalls = llmResponseMessage?.tool_calls;
   const llmHasToolCalls = Boolean(llmToolCalls && llmToolCalls.length > 0);
   const llmToolCallsNeedApproval = llmHasToolCalls && llmToolCalls?.some((tc) => isProviderToolRequiringApproval(tc.function.name));
@@ -434,58 +482,66 @@ export const iterateTaskFirstPendingToolCall = async (task: Task, processorId: s
     toolCallCount: llmToolCalls?.length ?? 0,
   });
 
-  return true;
+  return createPrimaryIterationOutcome(true);
 };
 
-export const iterateTaskFirstPendingUserMessage = async (task: Task, processorId: string): Promise<boolean> => {
+export const iterateTaskFirstPendingUserMessage = async (task: Task, processorId: string): Promise<TaskPrimaryIterationOutcome> => {
   const firstPendingUserMessageIndex = task.queue.findIndex((queueItem) => queueItem.status === `pending` && queueItem.value.role === `user`);
 
   if (firstPendingUserMessageIndex < 0) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   const firstPendingUserMessage = task.queue[firstPendingUserMessageIndex];
 
   if (!firstPendingUserMessage) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   const queueMessages: OpenRouterMessage[] = task.queue.slice(0, firstPendingUserMessageIndex + 1).map((queueItem) => queueItem.value);
 
   if (queueMessages.length === 0) {
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
 
   const persona = task.currentPersona ? await queryLoopPersonaById(task.currentPersona, task.loop) : undefined;
   const systemMessage = await buildTaskSystemMessage(task, persona?.personality);
   const messageHistory: OpenRouterMessage[] = systemMessage ? [systemMessage, ...queueMessages] : queueMessages;
 
-  const providerResolution = task.currentProvider ? await resolveLoopSelectionByAssignment(task.loop, `provider`, task.currentProvider) : await resolveLoopSelection(task.loop, `provider`);
+  const readiness = await isTaskReadyForModel(task, { minQueueLength: 1 });
   const toolDefinitions = await buildOpenRouterToolDefinitions(task.loop);
 
-  if (!providerResolution.selected) {
-    log.warn(`Task iterate skipped LLM call because no provider selection is available`, {
-      taskId: task.id,
-      loopId: task.loop,
-      firstPendingUserMessageIndex,
-    });
-    return false;
-  }
+  if (!readiness.ready) {
+    if (readiness.reason === "queue-empty") {
+      return createPrimaryIterationOutcome(false);
+    }
 
-  const baseUrl = providerResolution.selected.baseUrl;
-  const model = task.currentModel ?? providerResolution.selected.defaultModel ?? providerResolution.selected.enabledModels[0] ?? null;
+    if (readiness.reason === "provider-unavailable") {
+      log.warn(`Task iterate skipped LLM call because no provider selection is available`, {
+        taskId: task.id,
+        loopId: task.loop,
+        firstPendingUserMessageIndex,
+      });
+      return createPrimaryIterationOutcome(false);
+    }
 
-  if (!baseUrl || !model) {
     log.warn(`Task iterate skipped LLM call because provider baseUrl or model is missing`, {
       taskId: task.id,
       loopId: task.loop,
-      providerId: providerResolution.selected.assignmentId,
-      hasBaseUrl: Boolean(baseUrl),
-      hasModel: Boolean(model),
+      providerId: readiness.providerResolution.selected?.assignmentId ?? null,
+      hasBaseUrl: Boolean(readiness.baseUrl),
+      hasModel: Boolean(readiness.model),
       firstPendingUserMessageIndex,
     });
-    return false;
+    return createPrimaryIterationOutcome(false);
   }
+
+  const { providerResolution, baseUrl, model } = readiness;
+
+  const completionPromptMessage: OpenRouterMessage = {
+    role: `user`,
+    content: [`Return a JSON object with key content.`, `content should be the assistant response text only.`].join("\n"),
+  };
 
   const payload = await fetchOpenRouterChatCompletion(
     {
@@ -494,7 +550,7 @@ export const iterateTaskFirstPendingUserMessage = async (task: Task, processorId
     },
     {
       model,
-      messages: messageHistory,
+      messages: [...messageHistory, completionPromptMessage],
       ...(toolDefinitions.length > 0 ? { tools: toolDefinitions, toolChoice: `auto` as const } : {}),
       responseFormat: `text`,
       operation: `task-iterate-first-pending-user-message`,
@@ -508,7 +564,7 @@ export const iterateTaskFirstPendingUserMessage = async (task: Task, processorId
   );
 
   const responseMessage = payload.choices?.[0]?.message;
-  const assistantText = readOpenRouterAssistantText(responseMessage).trim();
+  const assistantText = readPrimaryAssistantContent(responseMessage, `Unable to parse task user-message continuation response.`);
   const toolCalls = responseMessage?.tool_calls;
   const hasToolCalls = Boolean(toolCalls && toolCalls.length > 0);
   const toolCallsNeedApproval = hasToolCalls && toolCalls?.some((tc) => isProviderToolRequiringApproval(tc.function.name));
@@ -542,5 +598,5 @@ export const iterateTaskFirstPendingUserMessage = async (task: Task, processorId
     toolCallCount: toolCalls?.length ?? 0,
   });
 
-  return true;
+  return createPrimaryIterationOutcome(true);
 };

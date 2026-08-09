@@ -15,8 +15,18 @@ export const taskQueueItemSchema = taskQueueItemInputSchema.extend({
   timestamp: isoDateTime,
 });
 
+export const taskQueueCompactionItemSchema = z.object({
+  type: z.literal(`compaction`),
+  id: uuid(),
+  timestamp: isoDateTime,
+  itemCount: z.number().int().min(0),
+});
+
+export const taskQueueArchiveItemSchema = z.union([taskQueueItemSchema, taskQueueCompactionItemSchema]);
+
 export const taskQueueSchema = z.array(z.union([taskQueueItemSchema]));
 export const taskQueueInputSchema = z.array(z.union([taskQueueItemInputSchema]));
+export const taskQueueArchiveSchema = z.array(taskQueueArchiveItemSchema);
 export const taskSourceSchema = z.enum([`user`, `workgraphItem`]);
 export const taskStatusSchema = z.enum([`queued`, `wip`, `completed`]);
 
@@ -26,6 +36,8 @@ export const taskSchema = z.object({
   currentPersona: uuid().nullable(),
   currentProvider: uuid().nullable(),
   currentModel: nullableString,
+  currentObjective: nullableString,
+  queueArchive: taskQueueArchiveSchema,
   source: taskSourceSchema,
   status: taskStatusSchema,
   processorUnit: uuid().nullable(),
@@ -42,11 +54,6 @@ export const taskListParamsSchema = z.object({
 });
 
 export const taskDetailParamsSchema = z.object({
-  loopId: uuid(`loop must be a valid UUID.`),
-  taskId: uuid(`task must be a valid UUID.`),
-});
-
-export const taskResetProcessorClaimsSchema = z.object({
   loopId: uuid(`loop must be a valid UUID.`),
   taskId: uuid(`task must be a valid UUID.`),
 });
@@ -81,6 +88,8 @@ export const taskCreateSchema = taskSchema
 
 export type Task = z.infer<typeof taskSchema>;
 export type TaskQueueItem = z.infer<typeof taskQueueItemSchema>;
+export type TaskQueueCompactionItem = z.infer<typeof taskQueueCompactionItemSchema>;
+export type TaskQueueArchiveItem = z.infer<typeof taskQueueArchiveItemSchema>;
 export type TaskQueueItemInput = z.infer<typeof taskQueueItemInputSchema>;
 export type TaskQueue = z.infer<typeof taskQueueSchema>;
 export type TaskSource = z.infer<typeof taskSourceSchema>;
@@ -88,6 +97,5 @@ export type TaskStatus = z.infer<typeof taskStatusSchema>;
 export type TaskListParams = z.infer<typeof taskListParamsSchema>;
 export type TaskDetailParams = z.infer<typeof taskDetailParamsSchema>;
 export type TaskCreate = z.input<typeof taskCreateSchema>;
-export type TaskResetProcessorClaims = z.infer<typeof taskResetProcessorClaimsSchema>;
 export type TaskAppendUserMessage = z.infer<typeof taskAppendUserMessageSchema>;
 export type TaskToolCallApproval = z.infer<typeof taskToolCallApprovalSchema>;
