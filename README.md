@@ -29,6 +29,15 @@ Athena uses a co-located, flat component structure in [src/components](./src/com
 
 See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rules, including file move conventions.
 
+## Task model
+
+Task support is currently minimal and intentionally breaking-change oriented.
+
+- Task shape is defined in [src/components/task/task.schema.ts](./src/components/task/task.schema.ts).
+- Task iteration notes are tracked in [docs/task-iteration.md](./docs/task-iteration.md).
+- Only `id` and `title` are part of the task schema.
+- Legacy task lifecycle, routing, queue dispatch, and autonomy runtime behavior has been removed.
+
 ## PR publishing and updating standards
 
 Athena requires validation before creating and updating pull requests.
@@ -43,7 +52,7 @@ Athena development is local-spec-first.
 - Before implementation, agents gather scope, acceptance criteria, and dependency context from local specs.
 - Keep local specs synchronized with implementation and behavioral changes.
 - Personas are persisted per loop, with lifecycle constraints defined in [docs/specs/definitions/persona.md](./docs/specs/definitions/persona.md).
-- Jira is an optional external event source and only participates when a loop is configured to ingest Jira events.
+- Jira is an optional external task source and only participates when a loop is configured to ingest Jira events.
 
 See [AGENTS.md](./AGENTS.md) for agent workflow guidance.
 
@@ -106,6 +115,18 @@ This starts:
 - `postgres` on `localhost:5432`
 - `dex` (local OIDC provider mimic) on `localhost:5556`
 - `athena` on `athena.localhost` (served through Traefik)
+
+For public webhook testing from external systems, start Cloudflare tunnel:
+
+```bash
+docker compose up -d cloudflared
+docker compose logs -f cloudflared
+```
+
+Tunnel behavior:
+
+- Cloudflared runs in managed tunnel mode with `tunnel run`.
+- Set `CLOUDFLARED_TUNNEL_TOKEN` in `.env` before starting `cloudflared`.
 
 The main public endpoints are:
 

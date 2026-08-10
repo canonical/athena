@@ -87,5 +87,5 @@ When a runner-backed persona executes:
 - [llm-harness.md](../definitions/llm-harness.md)
 - [runner-harness.md](../definitions/runner-harness.md)
 - [theloop.md](../definitions/theloop.md)
-- [event.md](../definitions/event.md)
+- [task.md](../definitions/task.md)
 - [nfr.md](../definitions/nfr.md)

@@ -4,5 +4,5 @@ test(`application root renders the shell`, async ({ page }) => {
   await authenticate(page);
   await page.goto(`http://athena.localhost/`);
 
-  await expect(page.getByRole(`heading`, { name: `Hello from Athena` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Create` })).toBeVisible();
 });

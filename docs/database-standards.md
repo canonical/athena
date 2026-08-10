@@ -14,11 +14,11 @@ The `user` table uses the OIDC email address as its primary key (`TEXT`). This i
 
 ## Naming standard
 
-1. All table names are camelCase: `loop`, `loopUser`, `event`, `session`.
+1. All table names are camelCase: `loop`, `loopUser`, `task`, `session`.
 2. All column names are camelCase: `id`, `createdAt`, `workItemUrl`.
 3. Do not use snake_case, PascalCase, or UPPER_CASE for table or column names.
 4. Junction table names are the camelCase concatenation of the two related table names: `loopUser` (not `loop_user`).
-5. Foreign key columns use the referenced table name as the column name, not `<table>Id`. Examples: `event.loop`, `session.user`, `loopUser.loop`.
+5. Foreign key columns use the referenced table name as the column name, not `<table>Id`. Examples: `task.loop`, `session.user`, `loopUser.loop`.
 
 ## Timestamp standard
 
@@ -29,7 +29,7 @@ The `user` table uses the OIDC email address as its primary key (`TEXT`). This i
 ## Index naming standard
 
 1. Index names follow the pattern `idx{Table}{Column}` in camelCase.
-2. Examples: `idxEventLoop`, `idxLoopUserUser`, `idxSessionCreatedAt`.
+2. Examples: `idxTaskLoop`, `idxLoopUserUser`, `idxSessionCreatedAt`.
 3. For descending indexes, no suffix is needed: the DESC direction is expressed in the `CREATE INDEX` statement, not the name.
 
 ## Permission standard
@@ -41,10 +41,18 @@ The `user` table uses the OIDC email address as its primary key (`TEXT`). This i
 ## Migration file naming standard
 
 1. Use one migration file per table.
-2. Migration files are named `{sequence}.{table}.sql` where sequence is a zero-padded six-digit integer.
-3. Sequence numbers are multiples of 100 (000100, 000200, 000300, …). This leaves room to insert future migrations between existing ones without renumbering.
-4. Tables that depend on another table must have a higher sequence number than the tables they reference: `loopUser` (000300) depends on `loop` (000200) and `user` (000100).
-5. All DDL migrations run inside a single transaction defined in `migrate.sql`. Every migration must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`).
+2. Keep each table's canonical shape in its own DDL file; do not create additional table-specific compatibility DDL files for the same table.
+3. Migration files are named `{sequence}.{table}.sql` where sequence is a zero-padded six-digit integer.
+4. Sequence numbers are multiples of 100 (000100, 000200, 000300, …). This leaves room to insert future migrations between existing ones without renumbering.
+5. Tables that depend on another table must have a higher sequence number than the tables they reference: `loopUser` (000300) depends on `loop` (000200) and `user` (000100).
+6. All DDL migrations run inside a single transaction defined in `migrate.sql`. Every migration must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`).
+
+## Seed file naming standard
+
+1. Use one seed file per table.
+2. Seed files are named `{sequence}.{table}.seed.sql` where sequence is a zero-padded six-digit integer.
+3. The sequence in a seed filename must align with the owning table DDL sequence when practical (example: `000400.persona.sql` and `000400.persona.seed.sql`).
+4. Seed scripts must be idempotent (`INSERT ... ON CONFLICT DO NOTHING` or equivalent deterministic upsert logic).
 
 ## Proposed additions
 

@@ -1,10 +1,12 @@
-import { Button, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
+import { Button, Icon, MainTable, Notification, NotificationSeverity, Select } from "@canonical/react-components";
+import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { updateProviderSelectionPolicy } from "@components/loop/loop.client.js";
 import { useProviderSelectionPolicy } from "@components/loop/loop.query.js";
 import type { loopSelectionAlgorithms } from "@components/loop/loop.schema.js";
 import { assignProviderToLoop, removeProviderFromLoop } from "@components/provider/provider.client.js";
 import { useLoopProviderList, useProviderList } from "@components/provider/provider.query.js";
 import type { LoopProvider } from "@components/provider/provider.schema.js";
+import { useQueryClient } from "@tanstack/react-query";
 import { useFormik } from "formik";
 import { useState } from "react";
 import type { LoopProvidersProps } from "./loop.schema.js";
@@ -26,10 +28,13 @@ const mvpAlgorithmOptions = [{ value: mvpSelectionAlgorithm, label: algorithmLab
 const formatTimestamp = (value: Date | string | null) => (value ? new Date(value).toLocaleString() : `-`);
 
 export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
+  const queryClient = useQueryClient();
   const { state: providerListState } = useProviderList();
   const { state: assignedProviderState, reload: reloadAssignedProviders } = useLoopProviderList(loopId);
   const { state: providerSelectionPolicyState, reload: reloadProviderSelectionPolicy } = useProviderSelectionPolicy(loopId);
   const [busyProviderId, setBusyProviderId] = useState<string | null>(null);
+  const [isAssignDrawerOpen, setIsAssignDrawerOpen] = useState(false);
+  const [isPolicyDrawerOpen, setIsPolicyDrawerOpen] = useState(false);
 
   const availableProviders = providerListState.status === `success` ? providerListState.providers : [];
   const assignedProviders = assignedProviderState.status === `success` ? assignedProviderState.providers : [];
@@ -54,6 +59,8 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
           message: `Provider has been assigned to this loop.`,
         });
         helpers.resetForm();
+        setIsAssignDrawerOpen(false);
+        await queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
         reloadAssignedProviders();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -66,22 +73,23 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
     },
   });
 
-  const policyFormik = useFormik<{ openRouterSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number] }>({
+  const policyFormik = useFormik<{ providerSelectionAlgorithm: (typeof loopSelectionAlgorithms)[number] }>({
     enableReinitialize: true,
     initialValues: {
-      openRouterSelectionAlgorithm: mvpSelectionAlgorithm,
+      providerSelectionAlgorithm: providerSelectionPolicyState.status === `success` ? providerSelectionPolicyState.policy.providerSelectionAlgorithm : mvpSelectionAlgorithm,
     },
     onSubmit: async (values, helpers) => {
       onFeedback(null);
 
       try {
-        await updateProviderSelectionPolicy(loopId, { openRouterSelectionAlgorithm: values.openRouterSelectionAlgorithm });
+        await updateProviderSelectionPolicy(loopId, { providerSelectionAlgorithm: values.providerSelectionAlgorithm });
         onFeedback({
           severity: NotificationSeverity.INFORMATION,
           title: `Provider selection policy updated`,
           message: `Provider selection algorithm has been updated.`,
         });
         helpers.setSubmitting(false);
+        setIsPolicyDrawerOpen(false);
         reloadProviderSelectionPolicy();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -105,6 +113,7 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
         title: `Provider removed`,
         message: `${provider.displayName} has been removed from this loop.`,
       });
+      await queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
       reloadAssignedProviders();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -120,55 +129,21 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
 
   return (
     <>
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Assign an existing provider</h2>
-        {providerListState.status === `loading` ? <p className="p-text--default">Loading available providers...</p> : null}
-        {providerListState.status === `error` ? (
-          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load available providers">
-            {providerListState.message}
-          </Notification>
-        ) : null}
-        {providerListState.status === `success` && availableProviders.length === 0 ? <p className="p-text--default">No providers are available yet. Create a provider first, then assign it to this loop.</p> : null}
-        {providerListState.status === `success` && availableProviders.length > 0 && unassignedProviders.length === 0 ? <p className="p-text--default">All available providers are already assigned to this loop.</p> : null}
-        <form onSubmit={assignFormik.handleSubmit}>
-          <Select
-            id="assign-provider-select"
-            label="Provider"
-            name="selectedProviderId"
-            onChange={assignFormik.handleChange}
-            options={[{ value: ``, label: `— Select a provider —` }, ...unassignedProviders.map((provider) => ({ value: provider.id, label: provider.displayName }))]}
-            value={assignFormik.values.selectedProviderId}
-          />
-          <div className="u-align--right">
-            <Button appearance="base" disabled={!assignFormik.values.selectedProviderId || assignFormik.isSubmitting} type="submit">
-              {assignFormik.isSubmitting ? `Assigning...` : `Assign provider`}
+      <div>
+        <div className="u-clearfix">
+          <div className="u-float-left">
+            <h2 className="p-heading--4">Assigned providers</h2>
+          </div>
+          <div className="u-float-right">
+            <Button appearance="positive" onClick={() => setIsPolicyDrawerOpen(true)} type="button">
+              Selection algorithm
+            </Button>
+            <Button appearance="positive" onClick={() => setIsAssignDrawerOpen(true)} type="button">
+              Assign provider
             </Button>
           </div>
-        </form>
-      </div>
-
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Provider selection algorithm</h2>
-        {providerSelectionPolicyState.status === `loading` ? <p className="p-text--default">Loading provider selection policy...</p> : null}
-        {providerSelectionPolicyState.status === `error` ? (
-          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load provider selection policy">
-            {providerSelectionPolicyState.message}
-          </Notification>
-        ) : null}
-        {providerSelectionPolicyState.status === `success` ? (
-          <form onSubmit={policyFormik.handleSubmit}>
-            <Select id="loop-provider-selection-algorithm" label="Algorithm" name="openRouterSelectionAlgorithm" onChange={policyFormik.handleChange} options={mvpAlgorithmOptions} value={policyFormik.values.openRouterSelectionAlgorithm} />
-            <div className="u-align--right">
-              <Button appearance="base" disabled={policyFormik.isSubmitting} type="submit">
-                {policyFormik.isSubmitting ? `Saving...` : `Save algorithm`}
-              </Button>
-            </div>
-          </form>
-        ) : null}
-      </div>
-
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Assigned providers</h2>
+        </div>
+        <hr />
         {assignedProviderState.status === `loading` ? <p className="p-text--default">Loading providers...</p> : null}
         {assignedProviderState.status === `error` ? (
           <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load assigned providers">
@@ -178,7 +153,8 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
         {assignedProviderState.status === `success` && assignedProviders.length === 0 ? <p className="p-text--default">No providers assigned to this loop yet.</p> : null}
         {assignedProviderState.status === `success` && assignedProviders.length > 0 ? (
           <MainTable
-            headers={[{ content: `Display name` }, { content: `Owner` }, { content: `Type` }, { content: `Priority` }, { content: `Enabled` }, { content: `Last used` }, { content: `Actions` }]}
+            className="u-table-layout--auto"
+            headers={[{ content: `Display name` }, { content: `Owner` }, { content: `Type` }, { content: `Priority` }, { content: `Enabled` }, { content: `Last used` }, { content: `Actions`, className: `u-align--right` }]}
             rows={assignedProviders.map((provider) => ({
               key: provider.provider,
               columns: [
@@ -191,8 +167,15 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
                 {
                   content: (
                     <div className="u-align--right">
-                      <Button appearance="negative" disabled={busyProviderId === provider.provider} onClick={() => handleRemoveAssignment(provider)} type="button">
-                        {busyProviderId === provider.provider ? `Removing ${provider.displayName}...` : `Remove ${provider.displayName}`}
+                      <Button
+                        appearance="base"
+                        aria-label={`Remove ${provider.displayName}`}
+                        disabled={busyProviderId === provider.provider}
+                        onClick={() => handleRemoveAssignment(provider)}
+                        title={`Remove ${provider.displayName}`}
+                        type="button"
+                      >
+                        <Icon aria-hidden="true" className="text-negative" name="delete" />
                       </Button>
                     </div>
                   ),
@@ -202,6 +185,59 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
           />
         ) : null}
       </div>
+
+      <EntityDrawer isOpen={isAssignDrawerOpen} onClose={() => setIsAssignDrawerOpen(false)} title="Assign provider">
+        {providerListState.status === `loading` ? <p className="p-text--default">Loading available providers...</p> : null}
+        {providerListState.status === `error` ? (
+          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load available providers">
+            {providerListState.message}
+          </Notification>
+        ) : null}
+        {providerListState.status === `success` && availableProviders.length === 0 ? <p className="p-text--default">No providers are available yet. Create a provider first, then assign it to this loop.</p> : null}
+        {providerListState.status === `success` && availableProviders.length > 0 && unassignedProviders.length === 0 ? <p className="p-text--default">All available providers are already assigned to this loop.</p> : null}
+        {providerListState.status === `success` && unassignedProviders.length > 0 ? (
+          <form onSubmit={assignFormik.handleSubmit}>
+            <Select
+              id="assign-provider-select"
+              label="Provider"
+              name="selectedProviderId"
+              onChange={assignFormik.handleChange}
+              options={[{ value: ``, label: `— Select a provider —` }, ...unassignedProviders.map((provider) => ({ value: provider.id, label: provider.displayName }))]}
+              value={assignFormik.values.selectedProviderId}
+            />
+            <div className="u-align--right">
+              <Button appearance="base" onClick={() => setIsAssignDrawerOpen(false)} type="button">
+                Cancel
+              </Button>
+              <Button appearance="positive" disabled={!assignFormik.values.selectedProviderId || assignFormik.isSubmitting} type="submit">
+                {assignFormik.isSubmitting ? `Assigning...` : `Assign provider`}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </EntityDrawer>
+
+      <EntityDrawer isOpen={isPolicyDrawerOpen} onClose={() => setIsPolicyDrawerOpen(false)} title="Provider selection algorithm">
+        {providerSelectionPolicyState.status === `loading` ? <p className="p-text--default">Loading provider selection policy...</p> : null}
+        {providerSelectionPolicyState.status === `error` ? (
+          <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load provider selection policy">
+            {providerSelectionPolicyState.message}
+          </Notification>
+        ) : null}
+        {providerSelectionPolicyState.status === `success` ? (
+          <form onSubmit={policyFormik.handleSubmit}>
+            <Select id="loop-provider-selection-algorithm" label="Algorithm" name="providerSelectionAlgorithm" onChange={policyFormik.handleChange} options={mvpAlgorithmOptions} value={policyFormik.values.providerSelectionAlgorithm} />
+            <div className="u-align--right">
+              <Button appearance="base" onClick={() => setIsPolicyDrawerOpen(false)} type="button">
+                Cancel
+              </Button>
+              <Button appearance="positive" disabled={policyFormik.isSubmitting} type="submit">
+                {policyFormik.isSubmitting ? `Saving...` : `Save algorithm`}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </EntityDrawer>
     </>
   );
 }

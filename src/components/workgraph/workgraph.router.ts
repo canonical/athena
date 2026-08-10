@@ -1,0 +1,238 @@
+import { getAuthenticatedUserId } from "@components/authentication/session.js";
+import { defineRoutes } from "@components/express/express.router.js";
+import { Router } from "express";
+import {
+  loopWorkgraphDelete,
+  loopWorkgraphIssueTypes,
+  loopWorkgraphItemList,
+  loopWorkgraphItemSearch,
+  loopWorkgraphList,
+  loopWorkgraphStartItem,
+  loopWorkgraphSync,
+  loopWorkgraphUpdateByAdmin,
+  workgraphAssign,
+  workgraphCreate,
+  workgraphDelete,
+  workgraphGet,
+  workgraphList,
+  workgraphTestConnection,
+  workgraphTestConnectionById,
+  workgraphTypeOptions,
+  workgraphUpdate,
+} from "./workgraph.controller.js";
+import {
+  loopParamsSchema,
+  loopWorkgraphAdminUpdateSchema,
+  loopWorkgraphAssignSchema,
+  loopWorkgraphItemParamsSchema,
+  loopWorkgraphItemSearchQuerySchema,
+  loopWorkgraphParamsSchema,
+  workgraphConnectionTestSchema,
+  workgraphDeleteBodySchema,
+  workgraphInsertSchema,
+  workgraphParamsSchema,
+  workgraphUpdateSchema,
+} from "./workgraph.schema.js";
+
+export const workgraphRouter = Router();
+const route = defineRoutes(workgraphRouter);
+
+route({
+  method: `get`,
+  route: `/types`,
+  handler: async ({ respond }) => {
+    respond({ status: 200, data: workgraphTypeOptions() });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/`,
+  handler: async ({ response, respond }) => {
+    const workgraphs = await workgraphList(getAuthenticatedUserId(response));
+    respond({ status: 200, data: workgraphs });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/`,
+  validators: {
+    body: workgraphInsertSchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    const workgraph = await workgraphCreate(body, getAuthenticatedUserId(response));
+    respond({ status: 201, data: workgraph });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/test`,
+  validators: {
+    body: workgraphConnectionTestSchema,
+  },
+  handler: async ({ body, respond }) => {
+    const result = await workgraphTestConnection(body);
+    respond({ status: 200, data: result });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/:workgraph/test`,
+  validators: {
+    params: workgraphParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const result = await workgraphTestConnectionById(params.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 200, data: result });
+  },
+});
+
+route({
+  method: `delete`,
+  route: `/`,
+  validators: {
+    body: workgraphDeleteBodySchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    await workgraphDelete(body.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/:workgraph`,
+  validators: {
+    params: workgraphParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const workgraph = await workgraphGet(params.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 200, data: workgraph });
+  },
+});
+
+route({
+  method: `put`,
+  route: `/:workgraph`,
+  validators: {
+    params: workgraphParamsSchema,
+    body: workgraphUpdateSchema,
+  },
+  handler: async ({ params, body, response, respond }) => {
+    const workgraph = await workgraphUpdate(params.workgraph, getAuthenticatedUserId(response), body);
+    respond({ status: 200, data: workgraph });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/list`,
+  validators: {
+    params: loopParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const workgraphs = await loopWorkgraphList(params.loop, getAuthenticatedUserId(response));
+    respond({ status: 200, data: workgraphs });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/assign`,
+  validators: {
+    body: loopWorkgraphAssignSchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    await workgraphAssign(getAuthenticatedUserId(response), body);
+    respond({ status: 204 });
+  },
+});
+
+route({
+  method: `put`,
+  route: `/loop/:loop/:workgraph/admin`,
+  validators: {
+    params: loopWorkgraphParamsSchema,
+    body: loopWorkgraphAdminUpdateSchema,
+  },
+  handler: async ({ params, body, response, respond }) => {
+    const workgraph = await loopWorkgraphUpdateByAdmin(params.loop, params.workgraph, getAuthenticatedUserId(response), body);
+    respond({ status: 200, data: workgraph });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/items/search`,
+  validators: {
+    params: loopParamsSchema,
+    query: loopWorkgraphItemSearchQuerySchema,
+  },
+  handler: async ({ params, query, response, respond }) => {
+    const items = await loopWorkgraphItemSearch(params.loop, query.q, getAuthenticatedUserId(response));
+    respond({ status: 200, data: items });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/:workgraph/items`,
+  validators: {
+    params: loopWorkgraphParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const items = await loopWorkgraphItemList(params.loop, params.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 200, data: items });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/:workgraph/issue-types`,
+  validators: {
+    params: loopWorkgraphParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const issueTypes = await loopWorkgraphIssueTypes(params.loop, params.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 200, data: issueTypes });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/loop/:loop/:workgraph/sync`,
+  validators: {
+    params: loopWorkgraphParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const result = await loopWorkgraphSync(params.loop, params.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 200, data: result });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/loop/:loop/:workgraph/items/:itemId/start`,
+  validators: {
+    params: loopWorkgraphItemParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const result = await loopWorkgraphStartItem(params.loop, params.workgraph, params.itemId, getAuthenticatedUserId(response));
+    respond({ status: 200, data: result });
+  },
+});
+
+route({
+  method: `delete`,
+  route: `/unassign`,
+  validators: {
+    body: loopWorkgraphAssignSchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    await loopWorkgraphDelete(body.loop, body.workgraph, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
+});

@@ -1,6 +1,7 @@
-import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Button, Icon, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
-import { useNavigate } from "@tanstack/react-router";
+import { useFeedbackToast } from "@components/base/toast.js";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ProviderEditor } from "./ProviderEditor.js";
 import { deleteProvider } from "./provider.client.js";
@@ -31,19 +32,20 @@ export function ProviderList({ editor, providerId }: ProviderListProps) {
   const { state, reload } = useProviderList();
   const [busyProviderId, setBusyProviderId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  useFeedbackToast(feedback, setFeedback);
 
   const openCreateDrawer = () => {
-    void navigate({ to: `/provider/list`, search: { create: true, edit: undefined } });
+    void navigate({ to: `/provider/list/create` });
     setFeedback(null);
   };
 
   const openEditDrawer = (provider: Provider) => {
-    void navigate({ to: `/provider/list`, search: { create: undefined, edit: provider.id } });
+    void navigate({ to: `/provider/list/edit/$providerEditorId`, params: { providerEditorId: provider.id } });
     setFeedback(null);
   };
 
   const closeDrawer = () => {
-    void navigate({ to: `/provider/list`, search: { create: undefined, edit: undefined } });
+    void navigate({ to: `/provider/list` });
   };
 
   const providers = state.status === `success` ? state.providers : [];
@@ -80,19 +82,13 @@ export function ProviderList({ editor, providerId }: ProviderListProps) {
 
   return (
     <section className="p-strip is-shallow u-no-max-width">
-      <h1 className="p-heading--2">Providers</h1>
-      {feedback ? (
-        <Notification severity={feedback.severity} title={feedback.title}>
-          {feedback.message}
-        </Notification>
-      ) : null}
       {state.status === `loading` ? <p className="p-text--default">Loading providers...</p> : null}
       {state.status === `error` ? (
         <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load providers">
           {state.message}
         </Notification>
       ) : null}
-      <div className="p-card p-strip is-shallow">
+      <div>
         <div className="p-grid">
           <div className="p-grid__row">
             <div className="p-grid__col-12 u-align--right">
@@ -103,23 +99,30 @@ export function ProviderList({ editor, providerId }: ProviderListProps) {
           </div>
         </div>
         <MainTable
+          className="u-table-layout--auto"
           emptyStateMsg="No providers yet."
-          headers={[{ content: `Display name` }, { content: `Type` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions` }]}
+          headers={[{ content: `Display name` }, { content: `Type` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions`, className: `u-align--right` }]}
           rows={providers.map((provider: Provider) => ({
             key: provider.id,
             columns: [
-              { content: provider.displayName },
+              {
+                content: (
+                  <Link params={{ providerId: provider.id }} to={`/provider/$providerId`}>
+                    {provider.displayName}
+                  </Link>
+                ),
+              },
               { content: provider.providerType },
               { content: lifecycleLabel[provider.lifecycleStatus] ?? provider.lifecycleStatus },
               { content: formatTimestamp(provider.updatedAt) },
               {
                 content: (
                   <div className="u-align--right">
-                    <Button appearance="base" onClick={() => openEditDrawer(provider)} type="button">
-                      {`Edit ${provider.displayName}`}
+                    <Button appearance="base" aria-label={`Edit ${provider.displayName}`} onClick={() => openEditDrawer(provider)} title={`Edit ${provider.displayName}`} type="button">
+                      <Icon aria-hidden="true" name="copy" />
                     </Button>
-                    <Button appearance="negative" disabled={busyProviderId === provider.id} onClick={() => handleDelete(provider)} type="button">
-                      {busyProviderId === provider.id ? `Deleting ${provider.displayName}...` : `Delete ${provider.displayName}`}
+                    <Button appearance="base" aria-label={`Delete ${provider.displayName}`} disabled={busyProviderId === provider.id} onClick={() => handleDelete(provider)} title={`Delete ${provider.displayName}`} type="button">
+                      <Icon aria-hidden="true" className="text-negative" name="delete" />
                     </Button>
                   </div>
                 ),
@@ -135,6 +138,8 @@ export function ProviderList({ editor, providerId }: ProviderListProps) {
           </Notification>
         ) : (
           <ProviderEditor
+            isDeleting={Boolean(editor === `edit` && selectedProvider && busyProviderId === selectedProvider.id)}
+            onDelete={editor === `edit` && selectedProvider ? handleDelete : undefined}
             onSuccess={(title, message) => {
               setFeedback({ severity: NotificationSeverity.INFORMATION, title, message });
               closeDrawer();

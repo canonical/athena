@@ -12,11 +12,11 @@ The goals are:
 
 ## Routing-selected execution environment
 
-Execution environment is selected per event step by the active routing persona (`isRouting = true`) based on event context and the loop persona list provided by Athena.
+Execution environment is selected per task step by the active routing persona (`isRouting = true`) based on task context and the loop persona list provided by Athena.
 
 - Persona definitions are behavior profiles and do not enforce a fixed role dropdown.
 - The routing persona can choose a harness-backed execution path or the deterministic Athena thread execution path.
-- If an event step is not handled in a harness, it must be handled in the deterministic Athena thread.
+- If a task step is not handled in a harness, it must be handled in the deterministic Athena thread.
 - Athena validates the routing decision against loop configuration and deterministic policy before execution.
 
 Athena routing authority remains unchanged. Execution-environment selection does not change ownership, handoff, or approval semantics.
@@ -103,7 +103,7 @@ Determinism contract:
 
 Athena must auto-validate LLM and harness conversation payloads against Zod schemas before any side-effecting execution step.
 
-- Validation must run before tool invocation, event-status mutation, handoff emission, or persistence of structured conversation outputs.
+- Validation must run before tool invocation, task-status mutation, handoff emission, or persistence of structured conversation outputs.
 - Validation schemas are part of deterministic Athena contracts and must be versioned.
 - The validation result must be auditable (schema version, pass or fail, failure summary, timestamp).
 - Raw provider responses may be retained for diagnostics under governance controls, but only validated payloads can drive orchestration decisions.
@@ -112,7 +112,7 @@ When validation fails:
 
 - Athena must treat the response as invalid output, not as a successful execution.
 - Athena may retry according to deterministic retry policy.
-- If retries are exhausted, Athena must keep the event open and route via existing blocked-handoff protocol in [handoff.definition.md](./handoff.definition.md).
+- If retries are exhausted, Athena must keep the task open and route via existing blocked-handoff protocol in [handoff.definition.md](./handoff.definition.md).
 
 ## Deterministic failover model
 
@@ -120,14 +120,14 @@ When validation fails:
 - Within the selected path, Athena attempts the highest-priority configured provider first.
 - If that provider is unavailable, Athena attempts the next configured provider in order until one succeeds or the list is exhausted.
 - Failover traversal order must be deterministic and auditable.
-- Successful execution through a fallback provider does not change loop ownership or event semantics.
+- Successful execution through a fallback provider does not change loop ownership or task semantics.
 
 ## Provider unavailability handling
 
-- Provider unavailability is an infrastructure availability condition, not an event completion outcome.
-- Events must not be auto-completed or auto-blocked solely because configured providers are unavailable.
+- Provider unavailability is an infrastructure availability condition, not a task completion outcome.
+- Tasks must not be auto-completed or auto-blocked solely because configured providers are unavailable.
 - If all providers in the relevant priority list are unavailable, Athena pauses loop execution and records the pause reason as provider unavailable.
-- While paused for provider unavailability, Athena must keep loop events open and stop dispatching new event execution attempts for that loop.
+- While paused for provider unavailability, Athena must keep loop tasks open and stop dispatching new task execution attempts for that loop.
 - Athena must run deterministic availability checks on a configured fixed frequency and resume the loop automatically when an eligible provider becomes available.
 - Pause and resume transitions must be auditable with reason, timestamp, and selected provider at resume time.
 
@@ -159,7 +159,7 @@ flowchart TD
    I -->|Yes| J[Try next profile by priority]
    J --> G
    I -->|No| K[Pause loop for provider unavailability]
-   K --> L[Keep events open]
+   K --> L[Keep tasks open]
    L --> M[Run deterministic availability checks]
    M --> N{Eligible profile recovered?}
    N -->|Yes| O[Resume loop and continue execution]

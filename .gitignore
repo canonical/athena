@@ -14,6 +14,9 @@ testing/results/
 .env.*
 !.example.env
 
+# Local seed files with confidential data
+migrations/pg/seed.local/
+
 # Python and charm artifacts
 venv/
 .venv/

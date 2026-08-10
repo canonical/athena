@@ -1,204 +1,126 @@
-import type { AuthenticatedUser } from "@components/authentication/session.schema.js";
-import { isValidUuid } from "@components/utilities/validation.js";
-import { type Request, type Response, Router } from "express";
-import {
-  PersonaForbiddenError,
-  PersonaNotFoundError,
-  PersonaValidationError,
-  personaAssignToLoop,
-  personaCatalog,
-  personaCreate,
-  personaCreateGlobal,
-  personaDelete,
-  personaGetById,
-  personaList,
-  personaListGlobal,
-  personaUpdateGlobal,
-  validatePersonaInsertRequest,
-  validatePersonaUpdateRequest,
-} from "./persona.controller.js";
+import { getAuthenticatedUserId } from "@components/authentication/session.js";
+import { defineRoutes } from "@components/express/express.router.js";
+import { uuid } from "@components/utilities/zod.utilities.js";
+import { Router } from "express";
+import { z } from "zod";
+import { personaAssignToLoop, personaCatalog, personaCreate, personaDelete, personaGetById, personaListForLoop, personaListForUser, personaUnassign, personaUpdateGlobal } from "./persona.controller.js";
+import { personaWritableSchema } from "./persona.schema.js";
 
 export const personaRouter = Router();
+const route = defineRoutes(personaRouter);
 
-const sendPersonaError = (error: unknown, response: Response): boolean => {
-  if (error instanceof PersonaValidationError) {
-    response.status(400).json({ error: error.message });
-    return true;
-  }
-
-  if (error instanceof PersonaNotFoundError) {
-    response.status(404).json({ error: error.message });
-    return true;
-  }
-
-  if (error instanceof PersonaForbiddenError) {
-    response.status(403).json({ error: error.message });
-    return true;
-  }
-
-  return false;
-};
-
-const getLoopId = (request: Request, response: Response): string | undefined => {
-  const raw = request.params.loopId;
-  const loopId = Array.isArray(raw) ? (raw[0] ?? ``) : (raw ?? ``);
-
-  if (!isValidUuid(loopId)) {
-    response.status(400).json({ error: `loopId must be a valid UUID.` });
-    return undefined;
-  }
-
-  return loopId;
-};
-
-const getPersonaId = (request: Request, response: Response): string | undefined => {
-  const raw = request.params.personaId;
-  const personaId = Array.isArray(raw) ? (raw[0] ?? ``) : (raw ?? ``);
-
-  if (!isValidUuid(personaId)) {
-    response.status(400).json({ error: `personaId must be a valid UUID.` });
-    return undefined;
-  }
-
-  return personaId;
-};
-
-const getUserId = (response: Response): string => {
-  const user = response.locals.user as AuthenticatedUser | undefined;
-
-  if (!user) {
-    throw new Error(`Authenticated user not found in request context.`);
-  }
-
-  return user.id;
-};
-
-personaRouter.get(`/persona/catalog`, async (_request: Request, response: Response) => {
-  response.status(200).json(await personaCatalog());
+const loopParamsSchema = z.object({
+  loop: uuid(`loop must be a valid UUID.`),
 });
 
-personaRouter.get(`/persona-list`, async (_request: Request, response: Response) => {
-  response.status(200).json(await personaListGlobal());
+const personaParamsSchema = z.object({
+  persona: uuid(`persona must be a valid UUID.`),
 });
 
-personaRouter.post(`/persona-list`, async (request: Request, response: Response) => {
-  try {
-    const rawLoopId = request.query.loop;
-
-    if (rawLoopId !== undefined) {
-      const loopId = typeof rawLoopId === `string` ? rawLoopId : ``;
-
-      if (!isValidUuid(loopId)) {
-        response.status(400).json({ error: `loopId must be a valid UUID.` });
-        return;
-      }
-
-      const { personaId: rawPersonaId } = request.body as { personaId?: unknown };
-
-      if (!rawPersonaId || typeof rawPersonaId !== `string`) {
-        response.status(400).json({ error: `personaId is required.` });
-        return;
-      }
-
-      await personaAssignToLoop(loopId, rawPersonaId, getUserId(response));
-      response.sendStatus(204);
-      return;
-    }
-
-    const persona = await personaCreateGlobal(validatePersonaInsertRequest(request.body), getUserId(response));
-    response.status(201).json(persona);
-  } catch (error) {
-    if (!sendPersonaError(error, response)) {
-      throw error;
-    }
-  }
+const personaAssignBodySchema = z.object({
+  loop: uuid(`loop must be a valid UUID.`),
+  persona: uuid(`persona must be a valid UUID.`),
 });
 
-personaRouter.get(`/persona/:personaId`, async (request: Request, response: Response) => {
-  try {
-    const personaId = getPersonaId(request, response);
-
-    if (!personaId) {
-      return;
-    }
-
-    response.status(200).json(await personaGetById(personaId));
-  } catch (error) {
-    if (!sendPersonaError(error, response)) {
-      throw error;
-    }
-  }
+const personaDeleteBodySchema = z.object({
+  persona: uuid(`persona must be a valid UUID.`),
 });
 
-personaRouter.put(`/persona/:personaId`, async (request: Request, response: Response) => {
-  try {
-    const personaId = getPersonaId(request, response);
-
-    if (!personaId) {
-      return;
-    }
-
-    const persona = await personaUpdateGlobal(personaId, validatePersonaUpdateRequest(request.body), getUserId(response));
-    response.status(200).json(persona);
-  } catch (error) {
-    if (!sendPersonaError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `get`,
+  route: `/catalog`,
+  handler: async ({ respond }) => {
+    const catalog = await personaCatalog();
+    respond({ status: 200, data: catalog });
+  },
 });
 
-personaRouter.get(`/loop/:loopId/persona-list`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    response.status(200).json(await personaList(loopId, getUserId(response)));
-  } catch (error) {
-    if (!sendPersonaError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `get`,
+  route: `/`,
+  handler: async ({ response, respond }) => {
+    const personas = await personaListForUser(getAuthenticatedUserId(response));
+    respond({ status: 200, data: personas });
+  },
 });
 
-personaRouter.post(`/loop/:loopId/persona-list`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    const persona = await personaCreate(loopId, validatePersonaInsertRequest(request.body), getUserId(response));
-    response.status(201).json(persona);
-  } catch (error) {
-    if (!sendPersonaError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `post`,
+  route: `/`,
+  validators: { body: personaWritableSchema },
+  handler: async ({ body, response, respond }) => {
+    const persona = await personaCreate(body, getAuthenticatedUserId(response));
+    respond({ status: 201, data: persona });
+  },
 });
 
-personaRouter.delete(`/loop/:loopId/persona/:personaId`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
+route({
+  method: `delete`,
+  route: `/`,
+  validators: { body: personaDeleteBodySchema },
+  handler: async ({ body, response, respond }) => {
+    await personaDelete(body.persona, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
+});
 
-    if (!loopId) {
-      return;
-    }
+route({
+  method: `post`,
+  route: `/assign`,
+  validators: {
+    body: personaAssignBodySchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    await personaAssignToLoop(body.loop, body.persona, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
+});
 
-    const personaId = getPersonaId(request, response);
+route({
+  method: `delete`,
+  route: `/unassign`,
+  validators: {
+    body: personaAssignBodySchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    await personaUnassign(body.loop, body.persona, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
+});
 
-    if (!personaId) {
-      return;
-    }
+route({
+  method: `get`,
+  route: `/:persona`,
+  validators: {
+    params: personaParamsSchema,
+  },
+  handler: async ({ params, respond }) => {
+    const persona = await personaGetById(params.persona);
+    respond({ status: 200, data: persona });
+  },
+});
 
-    await personaDelete(loopId, personaId, getUserId(response));
-    response.sendStatus(204);
-  } catch (error) {
-    if (!sendPersonaError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `put`,
+  route: `/:persona`,
+  validators: {
+    params: personaParamsSchema,
+    body: personaWritableSchema,
+  },
+  handler: async ({ params, body, response, respond }) => {
+    const persona = await personaUpdateGlobal(params.persona, body, getAuthenticatedUserId(response));
+    respond({ status: 200, data: persona });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/list`,
+  validators: {
+    params: loopParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const personas = await personaListForLoop(params.loop, getAuthenticatedUserId(response));
+    respond({ status: 200, data: personas });
+  },
 });

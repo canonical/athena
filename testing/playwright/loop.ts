@@ -2,14 +2,14 @@ import type { Page } from "./test.js";
 import { expect } from "./test.js";
 
 export const createLoop = async (page: Page, name: string, description = `${name} description`) => {
-  await page.goto(`http://athena.localhost/loop/list`);
+  await page.goto(`http://athena.localhost/`);
 
   await page.getByRole(`button`, { name: `Create` }).click();
   await page.getByLabel(`Loop name`).fill(name);
   await page.getByLabel(`Loop description`).fill(description);
   await page.getByRole(`button`, { name: `Create loop` }).click();
 
-  await expect(page.getByText(`${name} is ready to receive events.`)).toBeVisible();
+  await expect(page.getByText(`${name} is ready to receive tasks.`)).toBeVisible();
 
   const loopLink = page.getByRole(`link`, { name, exact: true }).first();
   await expect(loopLink).toBeVisible();

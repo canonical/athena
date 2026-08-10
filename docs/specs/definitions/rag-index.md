@@ -34,7 +34,7 @@ orchestration code.
 An index owns its data source, embedding model, and chunking, ingestion, and rebuild
 procedures. A source adapter turns one source type into ingestible documents that a
 chunking strategy then splits; adapters are pluggable, and a Markdown file collection is
-the only one in the MVP. Event and
+the only one in the MVP. Task and
 conversation sources — including a loop's own history — are future adapters over the
 same abstraction. A loop-to-index attachment makes an index available to a loop and
 carries that loop's consumption settings for it.
@@ -79,8 +79,8 @@ itself a signal) and defers merge or deduplication.
 
 ## Ingestion and rebuild
 
-Ingestion is out-of-band: it is never fired from within loop event handling, so it
-cannot affect any event outcome. It runs in two decoupled phases: the chunking strategy
+Ingestion is out-of-band: it is never fired from within loop task handling, so it
+cannot affect any task outcome. It runs in two decoupled phases: the chunking strategy
 splits each document and the pipeline upserts the chunks, then each chunk still missing an
 embedding is put through the model. A chunk is written before its embedding and becomes
 retrievable only once embedded, so ingestion degrades gracefully when the embedding
@@ -118,8 +118,8 @@ retrieval is always a persona-initiated tool call.
   verbatim rather than re-querying a possibly-rebuilt index.
 - Exact vector search makes live retrieval deterministic for a fixed index and query, so
   the snapshot and a fresh query agree until the index is rebuilt.
-- The Markdown source carries no event-timeline position, so retrieval applies no as-of
-  filter; a future event or conversation source, whose entries are ordered against the
+- The Markdown source carries no task-timeline position, so retrieval applies no as-of
+  filter; a future task or conversation source, whose entries are ordered against the
   loop timeline, would reintroduce as-of ordering.
 
 ## Index configuration
@@ -170,8 +170,8 @@ the chunking, overlap, and lineage that a record-oriented source would not.
 
 ## Future directions
 
-- Event and conversation adapters over the same abstraction — including a loop's own
-  history as retrievable memory — with event-timeline as-of ordering.
+- Task and conversation adapters over the same abstraction — including a loop's own
+  history as retrievable memory — with task-timeline as-of ordering.
 - Live, incrementally-updated sources with supersession, replacing the snapshot `rebuild`
   model.
 - Curated entries: personas committing distilled knowledge as an additive tier on the

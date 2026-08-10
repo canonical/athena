@@ -86,7 +86,7 @@ For each selection attempt, capture:
 3. Implement owner-only provider definition CRUD.
 4. Implement loop member assignment and admin-only order/override updates.
 5. Implement deterministic key selection engine and fallback behavior.
-6. Integrate minimal execution-time hook in event flow.
+6. Integrate minimal execution-time hook in task flow.
 7. Add E2E tests for permissions, HTTPS enforcement, OpenRouter-only enforcement, deterministic selection, and redaction.
 
 ## Acceptance criteria
@@ -101,5 +101,5 @@ For each selection attempt, capture:
 
 - [llm-harness.md](../definitions/llm-harness.md)
 - [theloop.md](../definitions/theloop.md)
-- [event.md](../definitions/event.md)
+- [task.md](../definitions/task.md)
 - [nfr.md](../definitions/nfr.md)

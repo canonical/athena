@@ -1,7 +1,7 @@
 import { queryLoopForUser } from "@components/loop/loop.service.js";
-import { isValidUuid } from "@components/utilities/validation.js";
-import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
-import { personaInsertSchema, personaUpdateSchema } from "./persona.schema.js";
+import { isValidUuid } from "@components/utilities/zod.utilities.js";
+import { PersonaForbiddenError, PersonaNotFoundError, PersonaValidationError } from "./persona.errors.js";
+import type { Persona, PersonaWritable } from "./persona.schema.js";
 import {
   queryLoopMembership,
   queryLoopPersonaById,
@@ -9,16 +9,13 @@ import {
   queryPersonaAssignToLoop,
   queryPersonaById,
   queryPersonaCreate,
-  queryPersonaCreateGlobal,
   queryPersonaDefaultList,
   queryPersonaDelete,
+  queryPersonaForUser,
   queryPersonaList,
+  queryPersonaUnassign,
   queryPersonaUpdate,
 } from "./persona.service.js";
-
-export class PersonaValidationError extends Error {}
-export class PersonaNotFoundError extends Error {}
-export class PersonaForbiddenError extends Error {}
 
 const validateLoopId = (loopId: string): void => {
   if (!isValidUuid(loopId)) {
@@ -32,27 +29,7 @@ const validatePersonaId = (personaId: string): void => {
   }
 };
 
-export const validatePersonaInsertRequest = (value: unknown): PersonaInsert => {
-  const result = personaInsertSchema.safeParse(value);
-
-  if (!result.success) {
-    throw new PersonaValidationError(result.error.issues[0]?.message ?? `Invalid persona request.`);
-  }
-
-  return result.data;
-};
-
-export const validatePersonaUpdateRequest = (value: unknown): PersonaUpdate => {
-  const result = personaUpdateSchema.safeParse(value);
-
-  if (!result.success) {
-    throw new PersonaValidationError(result.error.issues[0]?.message ?? `Invalid persona request.`);
-  }
-
-  return result.data;
-};
-
-export const personaList = async (loopId: string, userId: string): Promise<Persona[]> => {
+export const personaListForLoop = async (loopId: string, userId: string): Promise<Persona[]> => {
   validateLoopId(loopId);
 
   if (!(await queryLoopMembership(loopId, userId))) {
@@ -62,8 +39,8 @@ export const personaList = async (loopId: string, userId: string): Promise<Perso
   return queryLoopPersonaList(loopId);
 };
 
-export const personaListGlobal = async (): Promise<Persona[]> => {
-  return queryPersonaList();
+export const personaListForUser = async (userId: string): Promise<Persona[]> => {
+  return queryPersonaList(userId);
 };
 
 export const personaGetById = async (personaId: string): Promise<Persona> => {
@@ -78,21 +55,31 @@ export const personaGetById = async (personaId: string): Promise<Persona> => {
   return persona;
 };
 
-export const personaCreate = async (loopId: string, input: PersonaInsert, ownerId: string): Promise<Persona> => {
-  validateLoopId(loopId);
+export const personaCreate = async (input: PersonaWritable, ownerId: string): Promise<Persona> => {
+  return queryPersonaCreate(input, false, ownerId);
+};
 
-  if (!(await queryLoopMembership(loopId, ownerId))) {
+export const personaDelete = async (personaId: string, requestUserId: string): Promise<void> => {
+  validatePersonaId(personaId);
+
+  const existing = await queryPersonaById(personaId);
+
+  if (!existing) {
     throw new PersonaNotFoundError(`Persona not found.`);
   }
 
-  return queryPersonaCreate(loopId, input, false, ownerId);
+  if (existing.owner !== requestUserId) {
+    throw new PersonaForbiddenError(`Only the persona owner may delete it.`);
+  }
+
+  const deleted = await queryPersonaDelete(personaId, requestUserId);
+
+  if (!deleted) {
+    throw new PersonaNotFoundError(`Persona not found.`);
+  }
 };
 
-export const personaCreateGlobal = async (input: PersonaInsert, ownerId: string): Promise<Persona> => {
-  return queryPersonaCreateGlobal(input, false, ownerId);
-};
-
-export const personaUpdateGlobal = async (personaId: string, input: PersonaUpdate, requestUserId: string): Promise<Persona> => {
+export const personaUpdateGlobal = async (personaId: string, input: PersonaWritable, requestUserId: string): Promise<Persona> => {
   validatePersonaId(personaId);
 
   const existing = await queryPersonaById(personaId);
@@ -124,16 +111,26 @@ export const personaAssignToLoop = async (loopId: string, personaId: string, use
     throw new PersonaNotFoundError(`Cannot assign persona: loop not found or access denied.`);
   }
 
-  const persona = await queryPersonaById(personaId);
+  // First try to get persona owned by user
+  let persona = await queryPersonaForUser(personaId, userId);
 
+  // If not owned by user, check if it's a default persona from catalog
   if (!persona) {
-    throw new PersonaNotFoundError(`Persona not found.`);
+    persona = await queryPersonaById(personaId);
+
+    if (!persona) {
+      throw new PersonaNotFoundError(`Cannot assign persona: persona not found.`);
+    }
+
+    if (!persona.isDefault) {
+      throw new PersonaForbiddenError(`Cannot assign persona: only owned personas or default catalog personas can be assigned.`);
+    }
   }
 
   await queryPersonaAssignToLoop(loopId, personaId);
 };
 
-export const personaDelete = async (loopId: string, personaId: string, userId: string): Promise<void> => {
+export const personaUnassign = async (loopId: string, personaId: string, userId: string): Promise<void> => {
   validateLoopId(loopId);
   validatePersonaId(personaId);
 
@@ -147,11 +144,7 @@ export const personaDelete = async (loopId: string, personaId: string, userId: s
     throw new PersonaNotFoundError(`Persona not found.`);
   }
 
-  if (existing.isDefault) {
-    throw new PersonaValidationError(`Default personas cannot be deleted.`);
-  }
-
-  const deleted = await queryPersonaDelete(personaId, loopId);
+  const deleted = await queryPersonaUnassign(personaId, loopId);
 
   if (!deleted) {
     throw new PersonaNotFoundError(`Persona not found.`);

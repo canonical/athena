@@ -1,18 +1,25 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchLoop, fetchLoopList, fetchProviderSelectionPolicy } from "./loop.client.js";
-import type { Loop, ProviderSelectionPolicy } from "./loop.schema.js";
+import { fetchLoop, fetchLoopList, fetchLoopReadiness, fetchProviderSelectionPolicy } from "./loop.client.js";
+import type { Loop, LoopReadiness, ProviderSelectionPolicy } from "./loop.schema.js";
 
 export type LoopListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; loops: Loop[] };
 
 export type LoopState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; loop: Loop };
 
 export type ProviderSelectionPolicyState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; policy: ProviderSelectionPolicy };
+export type LoopReadinessState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; readiness: LoopReadiness };
 
-export const useLoopList = () => {
+type UseLoopListOptions = {
+  enabled?: boolean;
+};
+
+export const useLoopList = (options: UseLoopListOptions = {}) => {
+  const { enabled = true } = options;
   const queryClient = useQueryClient();
   const { isPending, isError, data, error } = useQuery({
     queryKey: [`loops`],
     queryFn: fetchLoopList,
+    enabled,
   });
 
   const state: LoopListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, loops: data };
@@ -51,6 +58,22 @@ export const useProviderSelectionPolicy = (loopId: string) => {
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`loopProviderSelectionPolicy`, loopId] });
+  };
+
+  return { state, reload };
+};
+
+export const useLoopReadiness = (loopId: string) => {
+  const queryClient = useQueryClient();
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`loopReadiness`, loopId],
+    queryFn: () => fetchLoopReadiness(loopId),
+  });
+
+  const state: LoopReadinessState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, readiness: data };
+
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
   };
 
   return { state, reload };

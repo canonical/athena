@@ -9,18 +9,8 @@ export const primarySideNavigationItems: SideNavigationProps["items"] = [
     items: [
       {
         icon: "status",
-        label: "Overview",
-        href: `/`,
-      },
-      {
-        icon: "applications",
         label: "Loops",
-        href: `/loop/list`,
-      },
-      {
-        icon: "topic",
-        label: "Events",
-        href: `/event/list`,
+        href: `/`,
       },
       {
         icon: "user-group",
@@ -33,9 +23,14 @@ export const primarySideNavigationItems: SideNavigationProps["items"] = [
         href: `/provider/list`,
       },
       {
+        icon: "repository",
+        label: "Connections",
+        href: `/connection`,
+      },
+      {
         icon: "settings",
-        label: "Harnesses",
-        href: `/harness/list`,
+        label: "Runners",
+        href: `/runner/list`,
       },
     ],
   },
