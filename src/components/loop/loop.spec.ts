@@ -1,4 +1,4 @@
-import { authenticate, createLoop, expect, test } from "../../../testing/playwright/index.js";
+import { authenticate, createLoop, dexEmail, dexLoopMemberEmail, expect, test } from "../../../testing/playwright/index.js";
 
 test(`loop list requires authentication`, async ({ page }) => {
   await page.context().clearCookies();
@@ -95,39 +95,126 @@ test(`loop tools API exposes requiresApproval metadata`, async ({ page }) => {
   expect(readItem?.requiresApproval).toBe(false);
 });
 
+test(`loop membership UI lists members and pending invites`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Membership UI loop ${Date.now()}`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/members`);
+
+  await expect(page.getByRole(`heading`, { name: `Loop members` })).toBeVisible();
+  await expect(page.getByRole(`row`, { name: new RegExp(`${dexEmail}.*Admin`) })).toBeVisible();
+  await expect(page.getByText(`No pending invites for this loop.`)).toBeVisible();
+
+  const invitedEmail = `pending-invite-${Date.now()}@example.com`;
+  await page.getByRole(`button`, { name: `Invite member` }).click();
+  await page.getByLabel(`Email`).fill(invitedEmail);
+  await page.getByRole(`button`, { name: `Send invite` }).click();
+
+  await expect(page.getByText(`Pending invite for ${invitedEmail} created successfully.`)).toBeVisible();
+  await expect(page.getByRole(`row`, { name: new RegExp(invitedEmail) })).toBeVisible();
+});
+
+test(`loop membership UI prevents demoting the last admin`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Last admin guard loop ${Date.now()}`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/members`);
+
+  const adminRow = page.getByRole(`row`).filter({ hasText: dexEmail }).filter({ hasText: `Admin` });
+  await expect(adminRow).toBeVisible();
+  await expect(adminRow.getByRole(`button`, { name: `Demote` })).toBeDisabled();
+});
+
+test(`loop invite can be accepted by another dex user and promoted to admin`, async ({ page }) => {
+  await authenticate(page, { email: dexEmail, password: `password` });
+
+  const loop = await createLoop(page, `Invite acceptance loop ${Date.now()}`);
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/members`);
+  await expect(page.getByRole(`heading`, { name: `Loop members` })).toBeVisible();
+  await page.getByRole(`button`, { name: `Invite member` }).click();
+  await page.getByLabel(`Email`).fill(dexLoopMemberEmail);
+  await page.getByRole(`button`, { name: `Send invite` }).click();
+
+  await expect(page.getByText(`Pending invite for ${dexLoopMemberEmail} created successfully.`)).toBeVisible();
+  await expect(page.getByRole(`row`, { name: new RegExp(dexLoopMemberEmail) })).toBeVisible();
+
+  await authenticate(page, { email: dexLoopMemberEmail, password: `password` });
+  await page.goto(`http://athena.localhost/`);
+
+  await expect(page.getByRole(`row`, { name: new RegExp(loop.name) })).toBeVisible();
+  await page
+    .getByRole(`row`, { name: new RegExp(loop.name) })
+    .getByRole(`button`, { name: `Accept invite` })
+    .click();
+  await expect(page.getByText(`You have joined ${loop.name}.`)).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/task/list$`));
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/members`, { waitUntil: `domcontentloaded` });
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/members$`));
+  await expect(page.getByRole(`heading`, { name: `Loop members` })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(`Loading page...`)).toHaveCount(0);
+  await expect(page.getByText(`Loading members...`)).toHaveCount(0);
+  const invitedMemberRow = page.getByRole(`row`).filter({ hasText: dexLoopMemberEmail });
+  await expect(invitedMemberRow).toBeVisible();
+  await expect(invitedMemberRow).toContainText(`Member`);
+
+  await authenticate(page, { email: dexEmail, password: `password` });
+  await page.goto(`http://athena.localhost/loop/${loop.id}/members`);
+  await page
+    .getByRole(`row`, { name: new RegExp(dexLoopMemberEmail) })
+    .getByRole(`button`, { name: `Promote` })
+    .click();
+  await expect(page.getByText(`${dexLoopMemberEmail} is now an admin.`)).toBeVisible();
+
+  await authenticate(page, { email: dexLoopMemberEmail, password: `password` });
+  await page.goto(`http://athena.localhost/loop/${loop.id}/members`);
+  await expect(page.getByRole(`heading`, { name: `Loop members` })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(`Loading page...`)).toHaveCount(0);
+  await expect(page.getByText(`Loading members...`)).toHaveCount(0);
+  const promotedMemberRow = page.getByRole(`row`).filter({ hasText: dexLoopMemberEmail });
+  await expect(promotedMemberRow).toBeVisible();
+  await expect(promotedMemberRow).toContainText(`Admin`);
+});
+
 test(`loops page supports create update and delete`, async ({ page }) => {
   await authenticate(page);
   await page.goto(`http://athena.localhost/`);
 
+  const createName = `UI loop ${Date.now()}`;
+  const updateName = `${createName} updated`;
+
   await expect(page.getByRole(`button`, { name: `Create` })).toBeVisible();
   await page.getByRole(`button`, { name: `Create` }).click();
-  await page.getByLabel(`Loop name`).fill(`UI loop`);
+  await page.getByLabel(`Loop name`).fill(createName);
   await page.getByLabel(`Loop description`).fill(`Loop created through the UI`);
   await page.getByRole(`button`, { name: `Create loop` }).click();
 
-  await expect(page.getByText(`UI loop is ready to receive tasks.`)).toBeVisible();
+  await expect(page.getByText(`${createName} is ready to receive tasks.`)).toBeVisible();
   await expect(page.getByRole(`grid`)).toBeVisible();
-  await expect(page.getByRole(`gridcell`, { name: `UI loop`, exact: true }).first()).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: createName, exact: true }).first()).toBeVisible();
 
-  await page
-    .getByRole(`row`, { name: /UI loop/ })
-    .getByRole(`button`, { name: `Edit` })
-    .click();
-  await page.getByLabel(`Loop name`).first().fill(`UI loop updated`);
+  const createdRow = page
+    .getByRole(`row`)
+    .filter({ has: page.getByRole(`link`, { name: createName, exact: true }) })
+    .first();
+  await createdRow.getByRole(`button`, { name: `Edit` }).click();
+  await page.getByLabel(`Loop name`).first().fill(updateName);
   await page.getByLabel(`Loop description`).first().fill(`Updated through the UI`);
   await page.getByRole(`button`, { name: `Save loop` }).click();
 
-  await expect(page.getByText(`UI loop updated has been updated.`)).toBeVisible();
-  await expect(page.getByRole(`gridcell`, { name: `UI loop updated`, exact: true }).first()).toBeVisible();
+  await expect(page.getByText(`${updateName} has been updated.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: updateName, exact: true }).first()).toBeVisible();
 
   page.once(`dialog`, (dialog) => dialog.accept());
-  await page
-    .getByRole(`row`, { name: /UI loop updated/ })
-    .getByRole(`button`, { name: `Delete` })
-    .click();
+  const updatedRow = page
+    .getByRole(`row`)
+    .filter({ has: page.getByRole(`link`, { name: updateName, exact: true }) })
+    .first();
+  await updatedRow.getByRole(`button`, { name: `Delete` }).click();
 
-  await expect(page.getByText(`UI loop updated has been deleted.`)).toBeVisible();
-  await expect(page.getByRole(`gridcell`, { name: `UI loop updated`, exact: true })).toHaveCount(0);
+  await expect(page.getByText(`${updateName} has been deleted.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: updateName, exact: true })).toHaveCount(0);
 });
 
 test(`loop list allows navigating to loop detail page`, async ({ page }) => {
@@ -153,15 +240,23 @@ test(`loop detail page routes are deep-linkable`, async ({ page }) => {
   const loop = await createLoop(page, `Deep link tab loop`);
 
   await page.goto(`http://athena.localhost/loop/${loop.id}/personas`);
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/personas$`));
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 
   await page.goto(`http://athena.localhost/loop/${loop.id}/providers`);
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/providers$`));
   await expect(page.getByRole(`heading`, { name: `Assigned providers` })).toBeVisible();
   await expect(page.getByRole(`button`, { name: `Selection algorithm` })).toBeVisible();
   await expect(page.getByRole(`button`, { name: `Assign provider` })).toBeVisible();
 
+  await page.goto(`http://athena.localhost/loop/${loop.id}/members`);
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/members$`));
+  await expect(page.getByRole(`heading`, { name: `Loop members` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Invite member` })).toBeVisible();
+
   await page.goto(`http://athena.localhost/loop/${loop.id}/runners`);
-  await expect(page.getByRole(`heading`, { name: `Assigned runners` })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/runners$`));
+  await expect(page.getByRole(`heading`, { name: `Assigned runners` })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole(`button`, { name: `Selection algorithm` })).toBeVisible();
   await expect(page.getByRole(`button`, { name: `Assign runner` })).toBeVisible();
 });

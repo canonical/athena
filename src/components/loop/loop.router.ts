@@ -3,14 +3,71 @@ import { defineRoutes } from "@components/express/express.router.js";
 import { uuid } from "@components/utilities/zod.utilities.js";
 import { Router } from "express";
 import { z } from "zod";
-import { loopCreate, loopDelete, loopGet, loopList, loopProviderSelectionPolicyGet, loopProviderSelectionPolicyUpdate, loopReadinessGet, loopToolsGet, loopToolsUpdate, loopUpdate } from "./loop.controller.js";
-import { loopInsertSchema, loopToolsUpdateRequestSchema, loopUpdateSchema, providerSelectionPolicyUpdateSchema } from "./loop.schema.js";
+import {
+  loopCreate,
+  loopDelete,
+  loopGet,
+  loopInviteAccept,
+  loopInviteCreate,
+  loopInvitePendingForUserList,
+  loopInviteReject,
+  loopInviteRevoke,
+  loopList,
+  loopMembershipGet,
+  loopProviderSelectionPolicyGet,
+  loopProviderSelectionPolicyUpdate,
+  loopReadinessGet,
+  loopToolsGet,
+  loopToolsUpdate,
+  loopUpdate,
+  loopUserAdminUpdate,
+} from "./loop.controller.js";
+import { loopInsertSchema, loopInviteCreateSchema, loopToolsUpdateRequestSchema, loopUpdateSchema, loopUserAdminUpdateSchema, providerSelectionPolicyUpdateSchema } from "./loop.schema.js";
 
 export const loopRouter = Router();
 const route = defineRoutes(loopRouter);
 
 const loopParamsSchema = z.object({
   loop: uuid(`loop must be a valid UUID.`),
+});
+
+const inviteParamsSchema = z.object({
+  invite: uuid(`invite must be a valid UUID.`),
+});
+
+const loopInviteParamsSchema = loopParamsSchema.merge(inviteParamsSchema);
+
+route({
+  method: `get`,
+  route: `/invite/pending`,
+  handler: async ({ response, respond }) => {
+    const invites = await loopInvitePendingForUserList(getAuthenticatedUserId(response));
+    respond({ status: 200, data: invites });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/invite/:invite/accept`,
+  validators: {
+    params: inviteParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const member = await loopInviteAccept(params.invite, getAuthenticatedUserId(response));
+    respond({ status: 200, data: member });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/invite/:invite/reject`,
+  validators: {
+    params: inviteParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    await loopInviteReject(params.invite, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
 });
 
 route({
@@ -41,6 +98,56 @@ route({
   handler: async ({ params, response, respond }) => {
     const loop = await loopGet(params.loop, getAuthenticatedUserId(response));
     respond({ status: 200, data: loop });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/:loop/users`,
+  validators: {
+    params: loopParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const membership = await loopMembershipGet(params.loop, getAuthenticatedUserId(response));
+    respond({ status: 200, data: membership });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/:loop/invite`,
+  validators: {
+    params: loopParamsSchema,
+    body: loopInviteCreateSchema,
+  },
+  handler: async ({ params, body, response, respond }) => {
+    const invite = await loopInviteCreate(params.loop, getAuthenticatedUserId(response), body);
+    respond({ status: 201, data: invite });
+  },
+});
+
+route({
+  method: `delete`,
+  route: `/:loop/invite/:invite`,
+  validators: {
+    params: loopInviteParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    await loopInviteRevoke(params.loop, params.invite, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
+});
+
+route({
+  method: `put`,
+  route: `/:loop/user/admin`,
+  validators: {
+    params: loopParamsSchema,
+    body: loopUserAdminUpdateSchema,
+  },
+  handler: async ({ params, body, response, respond }) => {
+    const member = await loopUserAdminUpdate(params.loop, getAuthenticatedUserId(response), body);
+    respond({ status: 200, data: member });
   },
 });
 

@@ -1,13 +1,105 @@
 import { execFileSync } from "node:child_process";
+import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { v5 as uuidv5 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const workspaceRoot = join(__dirname, `..`);
 const statusUrl = `http://athena.localhost/_status/check`;
-const dexDiscoveryUrl = `http://dex.localhost/dex/.well-known/openid-configuration`;
 const frontendUrl = `http://athena.localhost`;
+const dexDiscoveryUrl = `${frontendUrl}/dex/.well-known/openid-configuration`;
+const authUsersPath = join(workspaceRoot, `testing`, `auth-users.json`);
+const dexConfigTemplatePath = join(workspaceRoot, `scripts`, `dex-config.template.yaml`);
+const dexConfigPath = join(workspaceRoot, `scripts`, `dex-config.yaml`);
+const defaultPasswordHash = `$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W`;
+const dexUserNamespace = `dd7f8cc5-1cb4-4237-b29f-d44709f908ec`;
+
+type AuthUser = {
+  email: string;
+  password: string;
+  username?: string;
+  userID?: string;
+  hash?: string;
+};
+
+const parseAuthUsers = (rawValue: string): AuthUser[] => {
+  const parsed = JSON.parse(rawValue) as unknown;
+
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Auth users file must be a JSON array.`);
+  }
+
+  return parsed.map((entry, index) => {
+    if (!entry || typeof entry !== `object`) {
+      throw new Error(`Auth user at index ${index} must be an object.`);
+    }
+
+    const candidate = entry as Partial<AuthUser>;
+
+    if (!candidate.email || typeof candidate.email !== `string`) {
+      throw new Error(`Auth user at index ${index} must include an email.`);
+    }
+
+    if (!candidate.password || typeof candidate.password !== `string`) {
+      throw new Error(`Auth user at index ${index} must include a password.`);
+    }
+
+    return {
+      email: candidate.email.trim().toLowerCase(),
+      password: candidate.password,
+      username: typeof candidate.username === `string` && candidate.username.trim().length > 0 ? candidate.username.trim() : undefined,
+      userID: typeof candidate.userID === `string` && candidate.userID.trim().length > 0 ? candidate.userID.trim() : undefined,
+      hash: typeof candidate.hash === `string` && candidate.hash.trim().length > 0 ? candidate.hash.trim() : undefined,
+    };
+  });
+};
+
+const resolvePasswordHash = (user: AuthUser): string => {
+  if (user.hash) {
+    return user.hash;
+  }
+
+  if (user.password === `password`) {
+    return defaultPasswordHash;
+  }
+
+  throw new Error(`Auth user ${user.email} uses a non-default password. Provide a bcrypt hash in auth-users.json as "hash".`);
+};
+
+const resolveUsername = (user: AuthUser): string => {
+  if (user.username) {
+    return user.username;
+  }
+
+  return user.email.split(`@`)[0] ?? user.email;
+};
+
+const resolveUserId = (user: AuthUser): string => user.userID ?? uuidv5(user.email, dexUserNamespace);
+
+const buildStaticPasswordsBlock = (users: AuthUser[]): string =>
+  users
+    .map((user) => {
+      const hash = resolvePasswordHash(user);
+      const username = resolveUsername(user);
+      const userID = resolveUserId(user);
+
+      return `  - email: ${user.email}\n    hash: ${hash}\n    username: ${username}\n    userID: ${userID}`;
+    })
+    .join(`\n`);
+
+const renderDexConfig = async (): Promise<void> => {
+  const [authUsersRaw, templateRaw] = await Promise.all([readFile(authUsersPath, `utf8`), readFile(dexConfigTemplatePath, `utf8`)]);
+  const authUsers = parseAuthUsers(authUsersRaw);
+
+  if (authUsers.length === 0) {
+    throw new Error(`Auth users file is empty. Provide at least one test user.`);
+  }
+
+  const rendered = templateRaw.replace(/^[ \t]*# __STATIC_PASSWORDS__[ \t]*$/m, buildStaticPasswordsBlock(authUsers));
+  await writeFile(dexConfigPath, rendered, `utf8`);
+};
 
 const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -28,6 +120,8 @@ const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
 };
 
 const globalSetup = async (): Promise<void> => {
+  await renderDexConfig();
+
   execFileSync(`docker`, [`compose`, `down`, `-v`], {
     cwd: workspaceRoot,
     stdio: `inherit`,

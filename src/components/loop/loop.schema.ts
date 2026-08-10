@@ -10,13 +10,14 @@ export const loopSchema = z.object({
   name: requiredString("name is required."),
   description: nullableString,
   iterationCostLimitUsd: z.number().nonnegative().nullable(),
+  currentUserIsAdmin: z.boolean().optional(),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
 });
 
 export type Loop = z.infer<typeof loopSchema>;
 
-export const loopInsertSchema = loopSchema.omit({ id: true, createdAt: true, updatedAt: true }).extend({
+export const loopInsertSchema = loopSchema.omit({ id: true, currentUserIsAdmin: true, createdAt: true, updatedAt: true }).extend({
   description: nullableString,
   iterationCostLimitUsd: z.number().nonnegative().nullable().optional(),
 });
@@ -57,9 +58,54 @@ export const loopToolsUpdateRequestSchema = z.object({
   enabledToolNames: z.array(z.string().min(1)),
 });
 
+export const loopMemberSchema = z.object({
+  user: z.string().min(1),
+  name: z.string(),
+  picture: z.string(),
+  isAdmin: z.boolean(),
+  createdAt: isoDateTime,
+});
+
+export const loopInviteSchema = z.object({
+  id: uuid(),
+  loop: uuid(),
+  loopName: requiredString("loopName is required."),
+  invitedEmail: z.string().check(z.email()),
+  invitedBy: z.string().min(1),
+  invitedByName: z.string(),
+  acceptedBy: z.string().nullable(),
+  revokedBy: z.string().nullable(),
+  acceptedAt: isoDateTime.nullable(),
+  revokedAt: isoDateTime.nullable(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+});
+
+export const loopMembershipSchema = z.object({
+  loop: uuid(),
+  currentUser: z.string().min(1),
+  currentUserIsAdmin: z.boolean(),
+  members: z.array(loopMemberSchema),
+  pendingInvites: z.array(loopInviteSchema),
+});
+
+export const loopInviteCreateSchema = z.object({
+  email: z.string().trim().toLowerCase().check(z.email()),
+});
+
+export const loopUserAdminUpdateSchema = z.object({
+  user: z.string().trim().toLowerCase().check(z.email()),
+  isAdmin: z.boolean(),
+});
+
 export type LoopTool = z.infer<typeof loopToolSchema>;
 export type LoopTools = z.infer<typeof loopToolsSchema>;
 export type LoopToolsUpdateRequest = z.infer<typeof loopToolsUpdateRequestSchema>;
+export type LoopMember = z.infer<typeof loopMemberSchema>;
+export type LoopInvite = z.infer<typeof loopInviteSchema>;
+export type LoopMembership = z.infer<typeof loopMembershipSchema>;
+export type LoopInviteCreate = z.infer<typeof loopInviteCreateSchema>;
+export type LoopUserAdminUpdate = z.infer<typeof loopUserAdminUpdateSchema>;
 
 export const loopReadinessBlockerCodes = [
   `NO_ACTIVE_ROUTING_PERSONA`,
@@ -107,7 +153,7 @@ export type Feedback = {
   message: string;
 };
 
-export const loopTabs = [`tasks`, `details`, `tools`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
+export const loopTabs = [`tasks`, `details`, `tools`, `members`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
 export const loopTabSchema = z.enum(loopTabs);
 
 export type Tab = z.infer<typeof loopTabSchema>;
@@ -145,6 +191,11 @@ export type LoopProvidersProps = {
 };
 
 export type LoopToolsProps = {
+  loopId: string;
+  onFeedback: (feedback: Feedback | null) => void;
+};
+
+export type LoopMembersProps = {
   loopId: string;
   onFeedback: (feedback: Feedback | null) => void;
 };

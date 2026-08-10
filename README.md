@@ -164,11 +164,13 @@ Useful defaults in the current bootstrap:
 
 - OIDC callback URL: `http://athena.localhost/api/authentication/callback`
 - Local OIDC discovery URL: `http://dex.localhost/dex/.well-known/openid-configuration`
+- Local Dex issuer URL: `http://athena.localhost/dex`
 - Session max age: `86400000` (24 hours)
 
 Authentication-related runtime variables:
 
 - `APP_ATHENA_OIDC_DISCOVERY_URL`
+- `APP_ATHENA_DEX_ISSUER_URL`
 - `APP_ATHENA_OIDC_CLIENT_ID`
 - `APP_ATHENA_OIDC_CLIENT_SECRET`
 - `APP_ATHENA_OAUTH_CALLBACK_URL`

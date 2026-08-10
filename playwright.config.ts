@@ -12,12 +12,14 @@ const config = defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: workerCount,
   reporter: `line`,
-  timeout: 10_000,
+  timeout: 200_000,
   expect: {
     timeout: 10_000,
   },
   use: {
     baseURL: `http://athena.localhost`,
+    actionTimeout: 10_000,
+    navigationTimeout: 10_000,
     trace: `on-first-retry`,
   },
   globalSetup: `./testing/playwright-global-setup.ts`,

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchLoop, fetchLoopList, fetchLoopReadiness, fetchProviderSelectionPolicy } from "./loop.client.js";
-import type { Loop, LoopReadiness, ProviderSelectionPolicy } from "./loop.schema.js";
+import { fetchLoop, fetchLoopList, fetchLoopMembership, fetchLoopReadiness, fetchPendingLoopInvites, fetchProviderSelectionPolicy } from "./loop.client.js";
+import type { Loop, LoopInvite, LoopMembership, LoopReadiness, ProviderSelectionPolicy } from "./loop.schema.js";
 
 export type LoopListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; loops: Loop[] };
 
@@ -8,6 +8,8 @@ export type LoopState = { status: "loading" } | { status: "error"; message: stri
 
 export type ProviderSelectionPolicyState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; policy: ProviderSelectionPolicy };
 export type LoopReadinessState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; readiness: LoopReadiness };
+export type LoopMembershipState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; membership: LoopMembership };
+export type LoopInviteListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; invites: LoopInvite[] };
 
 type UseLoopListOptions = {
   enabled?: boolean;
@@ -74,6 +76,38 @@ export const useLoopReadiness = (loopId: string) => {
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
+  };
+
+  return { state, reload };
+};
+
+export const useLoopMembership = (loopId: string) => {
+  const queryClient = useQueryClient();
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`loopMembers`, loopId],
+    queryFn: () => fetchLoopMembership(loopId),
+  });
+
+  const state: LoopMembershipState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, membership: data };
+
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: [`loopMembers`, loopId] });
+  };
+
+  return { state, reload };
+};
+
+export const usePendingLoopInvites = () => {
+  const queryClient = useQueryClient();
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`pendingLoopInvites`],
+    queryFn: fetchPendingLoopInvites,
+  });
+
+  const state: LoopInviteListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, invites: data };
+
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: [`pendingLoopInvites`] });
   };
 
   return { state, reload };

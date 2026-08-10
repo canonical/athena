@@ -16,7 +16,44 @@ services:
 
   dex:
     image: dexidp/dex:v2.45.1
-    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        set -eu
+        : "$${APP_ATHENA_DEX_ISSUER_URL:=http://dex.localhost/dex}"
+        : "$${APP_ATHENA_OAUTH_CALLBACK_URL:=http://athena.localhost/api/authentication/callback}"
+        : "$${APP_ATHENA_DEX_EXTRA_REDIRECT_URIS:=}"
+
+        if [ -n "$${APP_ATHENA_DEX_EXTRA_REDIRECT_URIS}" ]; then
+          printf '%s' "$${APP_ATHENA_DEX_EXTRA_REDIRECT_URIS}" \
+            | tr ',' '\n' \
+            | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+            | awk 'NF { print "      - " $$0 }' > /tmp/dex-extra-redirect-uris.yaml
+        else
+          : > /tmp/dex-extra-redirect-uris.yaml
+        fi
+
+        sed \
+          -e "s|__DEX_ISSUER__|$${APP_ATHENA_DEX_ISSUER_URL}|g" \
+          -e "s|__DEX_REDIRECT_URI__|$${APP_ATHENA_OAUTH_CALLBACK_URL}|g" \
+          /etc/dex/config.yaml > /tmp/dex-config.base.yaml
+
+        awk '
+          /# __DEX_EXTRA_REDIRECT_URIS__/ {
+            while ((getline line < "/tmp/dex-extra-redirect-uris.yaml") > 0) {
+              print line
+            }
+            close("/tmp/dex-extra-redirect-uris.yaml")
+            next
+          }
+          { print }
+        ' /tmp/dex-config.base.yaml > /tmp/dex-config.yaml
+        exec dex serve /tmp/dex-config.yaml
+    environment:
+      APP_ATHENA_DEX_ISSUER_URL: ${APP_ATHENA_DEX_ISSUER_URL:-http://dex.localhost/dex}
+      APP_ATHENA_OAUTH_CALLBACK_URL: ${APP_ATHENA_OAUTH_CALLBACK_URL:-http://athena.localhost/api/authentication/callback}
+      APP_ATHENA_DEX_EXTRA_REDIRECT_URIS: ${APP_ATHENA_DEX_EXTRA_REDIRECT_URIS:-}
     volumes:
       - ./scripts/dex-config.yaml:/etc/dex/config.yaml:ro
     ports:
@@ -25,6 +62,9 @@ services:
       - traefik.enable=true
       - traefik.http.routers.dex.rule=Host(`dex.localhost`)
       - traefik.http.routers.dex.entrypoints=web
+      - traefik.http.routers.dex-athena.rule=(Host(`athena.localhost`) || HostRegexp(`{subdomain:[a-z0-9-]+}.lclhst.stream`)) && PathPrefix(`/dex`)
+      - traefik.http.routers.dex-athena.entrypoints=web
+      - traefik.http.routers.dex-athena.priority=200
       - traefik.http.services.dex.loadbalancer.server.port=5556
 
   postgres:

@@ -14,6 +14,23 @@ const oidcSessionKey = `athenaOidc`;
 const oidcRetryCount = 3;
 const oidcRetryIntervalMs = 1000;
 
+const parseCfVisitorScheme = (value: string | undefined): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as { scheme?: string };
+    if (parsed.scheme === `http` || parsed.scheme === `https`) {
+      return parsed.scheme;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
 const allowedReturnToOrigins = new Set(
   config.cors.allowedOrigins
     .map((origin) => {
@@ -193,6 +210,51 @@ export const storeReturnTo = (session: Session | null, returnTo: string | undefi
 
 export const resolveFrontendReturnTo = (returnTo: string | undefined): string => new URL(returnTo ?? `/`, config.frontend.baseUrl).toString();
 
+export const resolveExternalOrigin = (request: Request): string | undefined => {
+  const host = request.get(`x-forwarded-host`) ?? request.get(`host`);
+
+  if (!host) {
+    return undefined;
+  }
+
+  const cfVisitorScheme = parseCfVisitorScheme(request.get(`cf-visitor`));
+  const forwardedProto = request
+    .get(`x-forwarded-proto`)
+    ?.split(`,`)
+    .map((value) => value.trim())
+    .find((value) => value.length > 0);
+  const protocol = cfVisitorScheme ?? forwardedProto ?? request.protocol;
+
+  try {
+    return new URL(`/`, `${protocol}://${host}`).origin;
+  } catch {
+    return undefined;
+  }
+};
+
+export const resolveFrontendReturnToForRequest = (request: Request, returnTo: string | undefined): string => {
+  const origin = resolveExternalOrigin(request);
+  if (origin) {
+    return new URL(returnTo ?? `/`, origin).toString();
+  }
+
+  return resolveFrontendReturnTo(returnTo);
+};
+
+export const resolveOidcCallbackUrl = (request: Request): string => {
+  const origin = resolveExternalOrigin(request);
+
+  if (!origin) {
+    return config.authentication.oidc.oauthCallbackUrl;
+  }
+
+  try {
+    return new URL(`/api/authentication/callback`, origin).toString();
+  } catch {
+    return config.authentication.oidc.oauthCallbackUrl;
+  }
+};
+
 export const pruneSessionToCookieFields = (session: Session | null | undefined): void => {
   if (!session) {
     return;
@@ -298,8 +360,8 @@ export const deleteAuthenticationSession = async (sessionId: string | undefined)
   await getPool().query(`DELETE FROM "session" WHERE "id" = $1`, [sessionId]);
 };
 
-export const consumeReturnTo = (session: Session | null): string => {
-  const returnTo = resolveFrontendReturnTo(session?.returnTo);
+export const consumeReturnTo = (session: Session | null, request: Request): string => {
+  const returnTo = resolveFrontendReturnToForRequest(request, session?.returnTo);
 
   if (session) {
     delete session.returnTo;
