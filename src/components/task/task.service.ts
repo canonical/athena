@@ -255,6 +255,12 @@ export const queryTaskPick = async (processorId: string, readyLoopIds: string[])
             FROM jsonb_array_elements(t."queue") AS queue_item
             WHERE queue_item->>'status' = 'awaiting-approval'
           )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "runnerQueue" rq
+            WHERE rq."task" = t."id"
+              AND rq."status" IN ('pending', 'claimed')
+          )
         ORDER BY t."createdAt" ASC
         FOR UPDATE SKIP LOCKED
         LIMIT 1

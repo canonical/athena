@@ -8,6 +8,7 @@ import { loopRouter } from "@components/loop/loop.router.js";
 import { personaRouter } from "@components/persona/persona.router.js";
 import { providerRouter } from "@components/provider/provider.router.js";
 import { repositoryRouter } from "@components/repository/repository.router.js";
+import { startRunnerQueueConsumer } from "@components/runner/runner.queue.consumer.js";
 import { runnerRouter } from "@components/runner/runner.router.js";
 import { staticRouter } from "@components/static/static.router.js";
 import { statusRouter } from "@components/status/status.router.js";
@@ -58,4 +59,5 @@ app.listen(port, () => {
 
   startTaskProcessor();
   startWebhookItemProcessor();
+  startRunnerQueueConsumer();
 });

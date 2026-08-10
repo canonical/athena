@@ -389,6 +389,14 @@ export const iterateTaskFirstPendingToolCall = async (task: Task, processorId: s
     hadToolError: batchResult.hadError,
   });
 
+  // No LLM continuation after enqueue — task blocks on runnerQueue until the runner completes.
+  const hasEnqueueRun = firstPendingToolCallMessage.value.tool_calls.some((tc) => tc.function.name === `athena_enqueue_run`);
+
+  if (hasEnqueueRun) {
+    console.log(`[task-iterator] task paused — waiting for runner`, { taskId: task.id, loopId: task.loop });
+    return createPrimaryIterationOutcome(true);
+  }
+
   const reloadedTask = (await queryTaskGet(task.loop, task.id)) ?? task;
 
   const persona = task.currentPersona ? await queryLoopPersonaById(task.currentPersona, task.loop) : undefined;

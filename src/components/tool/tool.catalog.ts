@@ -327,6 +327,18 @@ export const providerToolDefinitions: ReadonlyArray<ProviderToolDefinition> = [
       })
       .strict(),
   },
+  {
+    name: `athena_enqueue_run`,
+    label: `Enqueue Runner`,
+    description: `Dispatch work to a runner harness by pushing a prompt and plan to the runner queue. The task will pause until the runner completes the work. Requires user approval before execution.`,
+    requiresApproval: true,
+    inputSchema: z
+      .object({
+        prompt: requiredString(`prompt is required.`).describe(`Full task context and instructions for the runner harness.`),
+        plan: requiredString(`plan is required.`).describe(`Step-by-step plan for the runner to follow.`),
+      })
+      .strict(),
+  },
 ];
 
 const providerToolDefinitionByName = new Map(providerToolDefinitions.map((tool) => [tool.name, tool]));
