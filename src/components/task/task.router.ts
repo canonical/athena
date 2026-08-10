@@ -72,7 +72,7 @@ route({
     body: taskToolCallApprovalSchema,
   },
   handler: async ({ body, response, respond }) => {
-    const result = await taskApproveToolCall(getAuthenticatedUserId(response), body);
+    const result = await taskApproveToolCall(getAuthenticatedUser(response), body);
     respond({ status: 200, data: result });
   },
 });
@@ -82,7 +82,7 @@ route({
   route: `/reject-tool-call`,
   validators: { body: taskToolCallApprovalSchema },
   handler: async ({ body, response, respond }) => {
-    const result = await taskRejectToolCall(getAuthenticatedUserId(response), body);
+    const result = await taskRejectToolCall(getAuthenticatedUser(response), body);
     respond({ status: 200, data: result });
   },
 });

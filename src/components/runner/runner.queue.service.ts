@@ -43,7 +43,7 @@ export const queryRunnerQueueClaimNext = async (runnerType: string, consumerId: 
           "claimedAt" = NOW()
       FROM next_item
       WHERE rq."id" = next_item."id"
-      RETURNING ${runnerQueueColumns}
+      RETURNING rq."id", rq."loop", rq."task", rq."runner", rq."prompt", rq."plan", rq."status", rq."claimedBy", rq."claimedAt", rq."result", rq."error", rq."createdAt", rq."updatedAt"
     `,
     [runnerType, consumerId],
   );
