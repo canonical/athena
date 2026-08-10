@@ -27,7 +27,7 @@ staticClients:
 enablePasswordDB: true
 
 staticPasswords:
-  #   - email: dev.user@canonical.com
+  - email: dev.user@canonical.com
     hash: $2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W
     username: devuser
     userID: 50f31e6f-26f2-4d93-9fd6-947f8f3f23a8

@@ -8,8 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const workspaceRoot = join(__dirname, `..`);
 const statusUrl = `http://athena.localhost/_status/check`;
-const dexDiscoveryUrl = `http://dex.localhost/dex/.well-known/openid-configuration`;
 const frontendUrl = `http://athena.localhost`;
+const dexDiscoveryUrl = `${frontendUrl}/dex/.well-known/openid-configuration`;
 const authUsersPath = join(workspaceRoot, `testing`, `auth-users.json`);
 const dexConfigTemplatePath = join(workspaceRoot, `scripts`, `dex-config.template.yaml`);
 const dexConfigPath = join(workspaceRoot, `scripts`, `dex-config.yaml`);
@@ -97,7 +97,7 @@ const renderDexConfig = async (): Promise<void> => {
     throw new Error(`Auth users file is empty. Provide at least one test user.`);
   }
 
-  const rendered = templateRaw.replace(`__STATIC_PASSWORDS__`, buildStaticPasswordsBlock(authUsers));
+  const rendered = templateRaw.replace(/^[ \t]*# __STATIC_PASSWORDS__[ \t]*$/m, buildStaticPasswordsBlock(authUsers));
   await writeFile(dexConfigPath, rendered, `utf8`);
 };
 

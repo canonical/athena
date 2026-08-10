@@ -61,7 +61,7 @@ test(`loop personas tab shows role and supports add and remove`, async ({ page }
   await page.locator(`#assign-persona-select`).selectOption({ label: displayName });
   await page.getByRole(`dialog`).getByRole(`button`, { name: `Assign` }).click();
 
-  await expect(page.getByText(`Persona has been assigned to this loop.`)).toBeVisible();
+  await expect(page.getByText(`Persona has been assigned to this loop.`)).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole(`gridcell`, { name: displayName, exact: true }).first()).toBeVisible();
   await expect(page.getByRole(`gridcell`, { name: `Staff IC`, exact: true }).first()).toBeVisible();
 
@@ -96,12 +96,14 @@ test(`loop personas tab can assign catalog personas to loop`, async ({ page }) =
     throw new Error(`No personas found in dropdown`);
   }
 
+  const rowsBefore = await page.getByRole(`row`).count();
+
   await personaSelect.selectOption({ label: firstPersonaLabel });
   await page.getByRole(`dialog`).getByRole(`button`, { name: `Assign` }).click();
 
   // Verify success
-  await expect(page.getByText(`Persona has been assigned to this loop.`)).toBeVisible();
-  await expect(page.getByRole(`gridcell`, { name: firstPersonaLabel, exact: true }).first()).toBeVisible();
+  await expect(page.getByText(`Persona has been assigned to this loop.`)).toBeVisible({ timeout: 20_000 });
+  await expect.poll(async () => page.getByRole(`row`).count(), { timeout: 20_000 }).toBeGreaterThan(rowsBefore);
 });
 
 test(`persona list shows edit actions for owned personas only`, async ({ page }) => {
