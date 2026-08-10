@@ -4,7 +4,7 @@
 
 This definition specifies cross-cutting non-functional requirements for Athena runtime behavior and implementation quality.
 
-These requirements are normative and apply across all loop, event, tool, and provider integrations.
+These requirements are normative and apply across all loop, task, tool, and provider integrations.
 
 ## Deterministic behavior
 
@@ -17,21 +17,21 @@ These requirements are normative and apply across all loop, event, tool, and pro
 Athena must support horizontal scaling across multiple runtime instances without changing orchestration semantics.
 
 - Deterministic outcomes must be preserved under concurrent processing across instances.
-- Event dispatch and state transitions must be concurrency-safe so only one effective active execution claim is in force per event at a time.
+- Task dispatch and state transitions must be concurrency-safe so only one effective active execution claim is in force per task at a time.
 - Side-effecting orchestration steps must be idempotent or protected by deterministic deduplication keys.
-- Routing and assignment decisions must remain deterministic regardless of which runtime instance processes an event.
+- Routing and assignment decisions must remain deterministic regardless of which runtime instance processes a task.
 - Cross-instance coordination mechanisms (for example claim leasing, optimistic concurrency checks, or transactional guards) must be auditable.
 
 ## Availability and graceful recovery
 
-- Provider and harness outages must not cause implicit event completion.
-- When required providers are unavailable, Athena must pause affected loop execution, keep events open, and resume deterministically after availability checks succeed.
-- Recovery behavior must preserve ordering and consistency guarantees defined by loop and event semantics.
+- Provider and harness outages must not cause implicit task completion.
+- When required providers are unavailable, Athena must pause affected loop execution, keep tasks open, and resume deterministically after availability checks succeed.
+- Recovery behavior must preserve ordering and consistency guarantees defined by loop and task semantics.
 
 ## Validation and safety gates
 
 - Structured LLM and harness conversation payloads must pass schema validation before side-effecting orchestration actions.
-- Invalid outputs must follow deterministic retry and blocked-handoff behavior without violating event integrity.
+- Invalid outputs must follow deterministic retry and blocked-handoff behavior without violating task integrity.
 
 ## Observability and auditability
 
@@ -41,6 +41,6 @@ Athena must support horizontal scaling across multiple runtime instances without
 ## References
 
 - Loop orchestration semantics: [theloop.md](./theloop.md)
-- Event lifecycle semantics: [event.md](./event.md)
+- Task lifecycle semantics: [task.md](./task.md)
 - Harness and provider policies: [llm-harness.md](./llm-harness.md)
 - Tool execution semantics: [tool-usage.md](./tool-usage.md)

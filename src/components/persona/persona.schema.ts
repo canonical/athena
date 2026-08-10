@@ -1,40 +1,36 @@
 import type { NotificationSeverity } from "@canonical/react-components";
+import { isoDateTime, nullableString, requiredString, uuid } from "@components/utilities/zod.utilities.js";
 import { z } from "zod";
 
 export const personaLifecycleStatuses = [`active`, `deprecated`, `archived`] as const;
 export type PersonaLifecycleStatus = (typeof personaLifecycleStatuses)[number];
 
-const requiredString = (message: string) => z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string(message));
-
-export const personaInsertSchema = z.object({
+export const personaSchema = z.object({
+  id: uuid(),
   displayName: requiredString(`displayName is required.`),
-  role: z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string().optional()),
+  role: nullableString,
   personality: requiredString(`personality is required.`),
+  isRouting: z.boolean().default(false),
+  isDefault: z.boolean().default(false),
+  owner: nullableString,
   lifecycleStatus: z.enum(personaLifecycleStatuses).default(`active`),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
 });
 
-export const personaUpdateSchema = z.object({
-  displayName: requiredString(`displayName is required.`),
-  role: z.preprocess((v) => (typeof v === "string" ? v.trim() || undefined : undefined), z.string().optional()),
-  personality: requiredString(`personality is required.`),
-  lifecycleStatus: z.enum(personaLifecycleStatuses),
+export type Persona = z.infer<typeof personaSchema>;
+export type PersonaId = Persona["id"];
+
+export const personaWritableSchema = personaSchema.omit({
+  id: true,
+  isRouting: true,
+  isDefault: true,
+  owner: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
-export type Persona = {
-  id: string;
-  displayName: string;
-  role: string | null;
-  personality: string;
-  isRouting: boolean;
-  isDefault: boolean;
-  owner: string | null;
-  lifecycleStatus: PersonaLifecycleStatus;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-};
-
-export type PersonaInsert = z.infer<typeof personaInsertSchema>;
-export type PersonaUpdate = z.infer<typeof personaUpdateSchema>;
+export type PersonaWritable = z.infer<typeof personaWritableSchema>;
 
 export type Feedback = {
   severity: (typeof NotificationSeverity)[keyof typeof NotificationSeverity];
@@ -54,10 +50,11 @@ export type PersonaDetailProps = {
 };
 
 export type PersonaEditorProps = {
-  loopId?: string;
   editingPersona: Persona | null;
   cloneSource?: Persona | null;
   catalogTemplates?: Persona[];
   onSuccess: (message: string) => void;
   onCancel?: () => void;
+  onDelete?: (persona: Persona) => Promise<void>;
+  isDeleting?: boolean;
 };

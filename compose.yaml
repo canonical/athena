@@ -9,6 +9,10 @@ services:
       - "80:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      default:
+        aliases:
+          - nginx
 
   dex:
     image: dexidp/dex:v2.45.1
@@ -55,6 +59,11 @@ services:
       - |
         set -eu
         psql -h postgres -U athena -d athena -v APP_ROLE_NAME=athena -f /migrations/pg/migrate.sql
+        for f in /migrations/pg/seed.local/*.sql; do
+          [ -e "$$f" ] || continue
+          echo ">>> Running local seed: $$f"
+          psql -h postgres -U athena -d athena -v APP_ROLE_NAME=athena -f "$$f"
+        done
 
   athena:
     build:
@@ -98,9 +107,18 @@ services:
       start_period: 10s
     labels:
       - traefik.enable=true
-      - traefik.http.routers.athena.rule=Host(`athena.localhost`)
+      - traefik.http.routers.athena.rule=Host(`athena.localhost`) || HostRegexp(`{subdomain:[a-z0-9-]+}.lclhst.stream`)
       - traefik.http.routers.athena.entrypoints=web
       - traefik.http.services.athena.loadbalancer.server.port=8000
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARED_TUNNEL_TOKEN}
+    depends_on:
+      - athena
+    restart: unless-stopped
 
 volumes:
   athena-postgres-data:

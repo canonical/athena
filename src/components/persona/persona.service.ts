@@ -1,5 +1,5 @@
 import { getPool } from "@components/postgres/postgres.js";
-import type { Persona, PersonaInsert, PersonaUpdate } from "./persona.schema.js";
+import type { Persona, PersonaWritable } from "./persona.schema.js";
 
 const personaColumns = `p."id", p."displayName", p."role", p."personality", p."isRouting", p."isDefault", p."owner", p."lifecycleStatus", p."createdAt", p."updatedAt"`;
 
@@ -20,13 +20,15 @@ export const queryLoopPersonaList = async (loopId: string): Promise<Persona[]> =
   return result.rows;
 };
 
-export const queryPersonaList = async (): Promise<Persona[]> => {
+export const queryPersonaList = async (ownerId: string): Promise<Persona[]> => {
   const result = await getPool().query<Persona>(
     `
       SELECT ${personaColumnsUnqualified}
       FROM "persona"
+      WHERE "owner" = $1
       ORDER BY "isRouting" DESC, "displayName" ASC
     `,
+    [ownerId],
   );
 
   return result.rows;
@@ -59,6 +61,20 @@ export const queryPersonaById = async (personaId: string): Promise<Persona | und
   return result.rows[0];
 };
 
+export const queryPersonaForUser = async (personaId: string, userId: string): Promise<Persona | undefined> => {
+  const result = await getPool().query<Persona>(
+    `
+      SELECT ${personaColumnsUnqualified}
+      FROM "persona"
+      WHERE "id" = $1
+        AND "owner" = $2
+    `,
+    [personaId, userId],
+  );
+
+  return result.rows[0];
+};
+
 export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: number; routing: number }> => {
   const result = await getPool().query<{ total: string; routing: string }>(
     `
@@ -84,47 +100,14 @@ export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: 
   };
 };
 
-export const queryPersonaCreate = async (loopId: string, input: PersonaInsert, isRouting: boolean, ownerId: string | null): Promise<Persona> => {
-  const client = await getPool().connect();
-
-  try {
-    await client.query(`BEGIN`);
-
-    const result = await client.query<Persona>(
-      `
-        INSERT INTO "persona" ("displayName", "role", "personality", "isRouting", "owner", "lifecycleStatus")
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING ${personaColumnsUnqualified}
-      `,
-      [input.displayName, input.role ?? null, input.personality, isRouting, ownerId, input.lifecycleStatus],
-    );
-
-    const [persona] = result.rows;
-
-    if (!persona) {
-      throw new Error(`Persona was not created.`);
-    }
-
-    await client.query(`INSERT INTO "loopPersona" ("loop", "persona") VALUES ($1, $2)`, [loopId, persona.id]);
-    await client.query(`COMMIT`);
-
-    return persona;
-  } catch (error) {
-    await client.query(`ROLLBACK`);
-    throw error;
-  } finally {
-    client.release();
-  }
-};
-
-export const queryPersonaCreateGlobal = async (input: PersonaInsert, isRouting: boolean, ownerId: string | null): Promise<Persona> => {
+export const queryPersonaCreate = async (input: PersonaWritable, isRouting: boolean, ownerId: string | null): Promise<Persona> => {
   const result = await getPool().query<Persona>(
     `
       INSERT INTO "persona" ("displayName", "role", "personality", "isRouting", "owner", "lifecycleStatus")
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING ${personaColumnsUnqualified}
     `,
-    [input.displayName, input.role ?? null, input.personality, isRouting, ownerId, input.lifecycleStatus],
+    [input.displayName, input.role, input.personality, isRouting, ownerId, input.lifecycleStatus],
   );
 
   const [persona] = result.rows;
@@ -136,7 +119,7 @@ export const queryPersonaCreateGlobal = async (input: PersonaInsert, isRouting: 
   return persona;
 };
 
-export const queryPersonaUpdate = async (personaId: string, input: PersonaUpdate): Promise<Persona | undefined> => {
+export const queryPersonaUpdate = async (personaId: string, input: PersonaWritable): Promise<Persona | undefined> => {
   const result = await getPool().query<Persona>(
     `
       UPDATE "persona"
@@ -148,10 +131,22 @@ export const queryPersonaUpdate = async (personaId: string, input: PersonaUpdate
       WHERE "id" = $5
       RETURNING ${personaColumnsUnqualified}
     `,
-    [input.displayName, input.role ?? null, input.personality, input.lifecycleStatus, personaId],
+    [input.displayName, input.role, input.personality, input.lifecycleStatus, personaId],
   );
 
   return result.rows[0];
+};
+
+export const queryPersonaDelete = async (personaId: string, ownerId: string): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      DELETE FROM "persona"
+      WHERE "id" = $1 AND "owner" = $2
+    `,
+    [personaId, ownerId],
+  );
+
+  return Boolean(result.rowCount);
 };
 
 export const queryPersonaDefaultList = async (): Promise<Persona[]> => {
@@ -170,42 +165,14 @@ export const queryLoopMembership = async (loopId: string, userId: string): Promi
   return Boolean(result.rowCount);
 };
 
-export const queryPersonaDelete = async (personaId: string, loopId: string): Promise<boolean> => {
-  const client = await getPool().connect();
+export const queryPersonaUnassign = async (personaId: string, loopId: string): Promise<boolean> => {
+  const result = await getPool().query(
+    `
+      DELETE FROM "loopPersona"
+      WHERE "persona" = $1 AND "loop" = $2
+    `,
+    [personaId, loopId],
+  );
 
-  try {
-    await client.query(`BEGIN`);
-
-    const unlinkResult = await client.query(
-      `
-        DELETE FROM "loopPersona"
-        WHERE "persona" = $1 AND "loop" = $2
-      `,
-      [personaId, loopId],
-    );
-
-    if (!unlinkResult.rowCount) {
-      await client.query(`ROLLBACK`);
-      return false;
-    }
-
-    // Remove the persona record itself if it is not a default and has no remaining loop assignments
-    await client.query(
-      `
-        DELETE FROM "persona"
-        WHERE "id" = $1
-          AND "isDefault" = FALSE
-          AND NOT EXISTS (SELECT 1 FROM "loopPersona" WHERE "persona" = $1)
-      `,
-      [personaId],
-    );
-
-    await client.query(`COMMIT`);
-    return true;
-  } catch (error) {
-    await client.query(`ROLLBACK`);
-    throw error;
-  } finally {
-    client.release();
-  }
+  return Boolean(result.rowCount);
 };

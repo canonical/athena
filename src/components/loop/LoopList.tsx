@@ -1,5 +1,6 @@
-import { Button, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
+import { Button, Icon, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
+import { useFeedbackToast } from "@components/base/toast.js";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { LoopEditor } from "./LoopEditor.js";
@@ -19,24 +20,31 @@ export function LoopList({ editor, loopId }: LoopListProps) {
   const { state, reload } = useLoopList();
   const [busyLoopId, setBusyLoopId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  useFeedbackToast(feedback, setFeedback);
 
   const openCreateDrawer = () => {
-    void navigate({ to: `/loop/list`, search: { create: true, edit: undefined } });
+    void navigate({ to: `/loops/create` });
     setFeedback(null);
   };
 
   const openEditDrawer = (loop: Loop) => {
-    void navigate({ to: `/loop/list`, search: { create: undefined, edit: loop.id } });
+    void navigate({ to: `/loops/edit/$loopEditorId`, params: { loopEditorId: loop.id } });
     setFeedback(null);
   };
 
   const closeDrawer = () => {
-    void navigate({ to: `/loop/list`, search: { create: undefined, edit: undefined } });
+    void navigate({ to: `/` });
   };
 
   const selectedLoop = state.status === `success` && loopId ? state.loops.find((loop) => loop.id === loopId) : undefined;
 
   const handleDelete = async (loop: Loop) => {
+    const confirmed = window.confirm(`Delete loop "${loop.name}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
     setBusyLoopId(loop.id);
     setFeedback(null);
 
@@ -67,19 +75,13 @@ export function LoopList({ editor, loopId }: LoopListProps) {
 
   return (
     <section className="u-no-max-width">
-      {feedback ? (
-        <Notification severity={feedback.severity} title={feedback.title}>
-          {feedback.message}
-        </Notification>
-      ) : null}
       {state.status === `loading` ? <p className="p-text--default">Loading loops...</p> : null}
       {state.status === `error` ? (
         <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load loops">
           {state.message}
         </Notification>
       ) : null}
-      {state.status === `success` && state.loops.length === 0 ? <p className="p-text--default">No loops yet.</p> : null}
-      <div className="p-card p-strip is-shallow">
+      <div className="p-strip is-shallow">
         <div className="p-grid">
           <div className="p-grid__row">
             <div className="p-grid__col-12 u-align--right">
@@ -91,19 +93,29 @@ export function LoopList({ editor, loopId }: LoopListProps) {
         </div>
         {state.status === `success` && state.loops.length > 0 ? (
           <MainTable
-            headers={[{ content: "Actions" }, { content: "Name" }, { content: "Description" }, { content: "Updated at" }]}
+            className="u-table-layout--auto"
+            headers={[{ content: "Name" }, { content: "Description" }, { content: "Updated at" }, { content: "Actions", className: "u-align--right" }]}
             rows={state.loops.map((loop) => ({
               key: loop.id,
               columns: [
                 {
                   content: (
-                    <div>
+                    <Link params={{ loopId: loop.id }} to={`/loop/$loopId/task/list`}>
+                      {loop.name}
+                    </Link>
+                  ),
+                },
+                { content: loop.description ?? "-" },
+                { content: formatTimestamp(loop.updatedAt) },
+                {
+                  content: (
+                    <div className="u-align--right">
                       <Button appearance="base" aria-label="Edit" hasIcon={true} onClick={() => openEditDrawer(loop)} title="Edit" type="button">
                         <i className="p-icon--edit" />
                         <span className="u-off-screen">Edit</span>
                       </Button>
                       <Button
-                        appearance="negative"
+                        appearance="base"
                         aria-label={busyLoopId === loop.id ? `Deleting` : `Delete`}
                         disabled={busyLoopId === loop.id}
                         hasIcon={true}
@@ -111,21 +123,12 @@ export function LoopList({ editor, loopId }: LoopListProps) {
                         title={busyLoopId === loop.id ? `Deleting` : `Delete`}
                         type="button"
                       >
-                        <i className="p-icon--delete" />
+                        <Icon aria-hidden="true" className="text-negative" name="delete" />
                         <span className="u-off-screen">{busyLoopId === loop.id ? `Deleting` : `Delete`}</span>
                       </Button>
                     </div>
                   ),
                 },
-                {
-                  content: (
-                    <Link params={{ loopId: loop.id }} to={`/loop/$loopId`}>
-                      {loop.name}
-                    </Link>
-                  ),
-                },
-                { content: loop.description ?? "-" },
-                { content: formatTimestamp(loop.updatedAt) },
               ],
             }))}
           />
@@ -141,7 +144,7 @@ export function LoopList({ editor, loopId }: LoopListProps) {
         ) : (
           <LoopEditor
             loop={editor === `edit` ? selectedLoop : undefined}
-            onSuccess={(nextFeedback) => {
+            onSuccess={(nextFeedback: Feedback) => {
               setFeedback(nextFeedback);
               closeDrawer();
               reload();

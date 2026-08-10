@@ -1,11 +1,11 @@
-import { Button, Notification, NotificationSeverity, Select } from "@canonical/react-components";
+import { Button, Select, useToastNotification } from "@canonical/react-components";
 import type { User } from "@components/authentication/session.schema.js";
 import { useFormik } from "formik";
-import { assignPersonaToLoop, createPersona, updatePersona } from "./persona.client.js";
-import type { PersonaEditorProps, Persona as PersonaRecord } from "./persona.schema.js";
-import { personaInsertSchema, personaLifecycleStatuses, personaUpdateSchema } from "./persona.schema.js";
+import { createPersona, updatePersona } from "./persona.client.js";
+import type { Persona, PersonaEditorProps } from "./persona.schema.js";
+import { personaLifecycleStatuses, personaWritableSchema } from "./persona.schema.js";
 
-export const isPersonaOwner = (persona: PersonaRecord, currentUser: User | null): boolean => {
+export const isPersonaOwner = (persona: Persona, currentUser: User | null): boolean => {
   if (!currentUser || !persona.owner) {
     return false;
   }
@@ -13,7 +13,7 @@ export const isPersonaOwner = (persona: PersonaRecord, currentUser: User | null)
   return persona.owner === currentUser.id;
 };
 
-export const personaEditorKey = (editingPersona: PersonaRecord | null, cloneSource: PersonaRecord | null): string => editingPersona?.id ?? (cloneSource ? `clone-${cloneSource.id}` : `new`);
+export const personaEditorKey = (editingPersona: Persona | null, cloneSource: Persona | null): string => editingPersona?.id ?? (cloneSource ? `clone-${cloneSource.id}` : `new`);
 
 const lifecycleStatusLabel: Record<string, string> = {
   active: `Active`,
@@ -28,9 +28,8 @@ type PersonaFormValues = {
   lifecycleStatus: (typeof personaLifecycleStatuses)[number];
 };
 
-export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemplates, onSuccess, onCancel }: PersonaEditorProps) {
-  const isEdit = Boolean(editingPersona);
-
+export function PersonaEditor({ editingPersona, cloneSource, catalogTemplates, onSuccess, onCancel, onDelete, isDeleting = false }: PersonaEditorProps) {
+  const toastNotify = useToastNotification();
   const formik = useFormik<PersonaFormValues>({
     enableReinitialize: true,
     initialValues: editingPersona
@@ -54,7 +53,7 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
             lifecycleStatus: `active`,
           },
     validate: (values) => {
-      const parseResult = (isEdit ? personaUpdateSchema : personaInsertSchema).safeParse(values);
+      const parseResult = personaWritableSchema.safeParse(values);
 
       if (parseResult.success) {
         return {};
@@ -75,10 +74,10 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
     onSubmit: async (values, helpers) => {
       helpers.setStatus(undefined);
 
-      const parseResult = (isEdit ? personaUpdateSchema : personaInsertSchema).safeParse(values);
+      const parseResult = personaWritableSchema.safeParse(values);
 
       if (!parseResult.success) {
-        helpers.setStatus(parseResult.error.issues[0]?.message ?? `Invalid input.`);
+        toastNotify.failure(editingPersona ? `Unable to update persona` : `Unable to create persona`, new Error(parseResult.error.issues[0]?.message ?? `Invalid input.`));
         return;
       }
 
@@ -87,22 +86,17 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
           await updatePersona(editingPersona.id, parseResult.data);
           onSuccess(`${values.displayName} has been updated.`);
         } else {
-          const created = await createPersona(parseResult.data);
-          if (loopId) {
-            await assignPersonaToLoop(loopId, created.id);
-            onSuccess(`${values.displayName} has been added to the loop.`);
-          } else {
-            onSuccess(`${values.displayName} has been created.`);
-          }
+          await createPersona(parseResult.data);
+          onSuccess(`${values.displayName} has been created.`);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        helpers.setStatus(message);
+        toastNotify.failure(editingPersona ? `Unable to update persona` : `Unable to create persona`, error instanceof Error ? error : new Error(message));
       }
     },
   });
 
-  const applyTemplate = (ref: PersonaRecord) => {
+  const applyTemplate = (ref: Persona) => {
     formik.setValues({
       displayName: ref.displayName,
       role: ref.role ?? ``,
@@ -128,11 +122,6 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
         </div>
       ) : null}
       <div className="p-card p-strip is-shallow">
-        {typeof formik.status === `string` ? (
-          <Notification severity={NotificationSeverity.NEGATIVE} title={editingPersona ? `Unable to update persona` : `Unable to create persona`}>
-            {formik.status}
-          </Notification>
-        ) : null}
         <form onSubmit={formik.handleSubmit}>
           <h2 className="p-heading--4">{editingPersona ? `Edit persona` : cloneSource ? `Clone persona` : `Add persona`}</h2>
           <label htmlFor="persona-display-name">Display name</label>
@@ -156,6 +145,11 @@ export function PersonaEditor({ loopId, editingPersona, cloneSource, catalogTemp
             {(editingPersona || cloneSource) && onCancel ? (
               <Button appearance="base" onClick={onCancel} type="button">
                 Cancel edit
+              </Button>
+            ) : null}
+            {editingPersona && onDelete ? (
+              <Button appearance="negative" disabled={formik.isSubmitting || isDeleting} onClick={() => void onDelete(editingPersona)} type="button">
+                {isDeleting ? `Deleting persona...` : `Delete persona`}
               </Button>
             ) : null}
             <Button appearance="positive" disabled={formik.isSubmitting} type="submit">

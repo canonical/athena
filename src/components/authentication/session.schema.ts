@@ -1,15 +1,21 @@
-export type User = {
-  id: string;
-  name: string;
-  email: string;
-  picture: string;
-};
+import { z } from "zod";
 
-export type AuthenticatedUser = User & {
-  subject: string;
-};
+export const userSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  picture: z.string(),
+});
 
-export type Session = {
-  id?: string;
-  returnTo?: string;
-};
+export const authenticatedUserSchema = userSchema.extend({
+  subject: z.string(),
+});
+
+export const sessionSchema = z.object({
+  id: z.string().optional(),
+  returnTo: z.string().optional(),
+});
+
+export type User = z.infer<typeof userSchema>;
+export type AuthenticatedUser = z.infer<typeof authenticatedUserSchema>;
+export type Session = z.infer<typeof sessionSchema>;

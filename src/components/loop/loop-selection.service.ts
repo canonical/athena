@@ -3,7 +3,7 @@ import { decryptSecret } from "@components/utilities/secret-envelope.js";
 import type { PoolClient } from "pg";
 import type { ProviderSelectionPolicy } from "./loop.schema.js";
 
-type SelectionPoolType = `openrouter` | `copilot`;
+type SelectionPoolType = `provider` | `runner`;
 
 type SelectionCandidate = {
   assignmentId: string;
@@ -13,16 +13,20 @@ type SelectionCandidate = {
   selectionWeight: number;
   remainingCreditPercentage: number | null;
   remainingCreditValue: number | null;
-  lastUsedAt: Date | string | null;
-  cooldownUntil: Date | string | null;
+  lastUsedAt: string | null;
+  cooldownUntil: string | null;
   healthStatus: `unknown` | `healthy` | `failing`;
-  assignmentCreatedAt: Date | string;
-  definitionCreatedAt: Date | string;
+  assignmentCreatedAt: string;
+  definitionCreatedAt: string;
+  assignmentOverrides: Record<string, unknown>;
   credentialCiphertext: string;
   credentialIv: string;
   credentialAuthTag: string;
   credentialKeyVersion: string;
   definitionType: string;
+  baseUrl: string | null;
+  defaultModel: string | null;
+  enabledModels: string[];
 };
 
 type SelectionAudit = {
@@ -43,6 +47,9 @@ export type SelectionResolution = {
     secret: string;
     algorithm: string;
     definitionType: string;
+    baseUrl: string | null;
+    defaultModel: string | null;
+    enabledModels: string[];
   } | null;
   audit: SelectionAudit;
 };
@@ -187,11 +194,10 @@ const getLoopProviderSelectionPolicy = async (client: PoolClient, loopId: string
     `
       SELECT
         "id" AS "loop",
-        "openRouterSelectionAlgorithm",
-        "copilotSelectionAlgorithm",
-        "openRouterSelectionCursor",
-        "copilotSelectionCursor",
-        "selectionCooldownWindowMs",
+        "providerSelectionAlgorithm",
+        "providerSelectionCursor",
+        "runnerSelectionAlgorithm",
+        "runnerSelectionCursor",
         "updatedAt"
       FROM "loop"
       WHERE "id" = $1
@@ -204,11 +210,11 @@ const getLoopProviderSelectionPolicy = async (client: PoolClient, loopId: string
 };
 
 const getCandidates = async (client: PoolClient, loopId: string, pool: SelectionPoolType): Promise<SelectionCandidate[]> => {
-  if (pool === `copilot`) {
+  if (pool === `runner`) {
     const result = await client.query<SelectionCandidate>(
       `
         SELECT
-          lh."harness" AS "assignmentId",
+          lh."runner" AS "assignmentId",
           lh."priority",
           lh."priorityOverride",
           lh."enabled",
@@ -220,13 +226,17 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
           lh."healthStatus",
           lh."createdAt" AS "assignmentCreatedAt",
           h."createdAt" AS "definitionCreatedAt",
+          lh."assignmentOverrides",
           h."credentialCiphertext",
           h."credentialIv",
           h."credentialAuthTag",
           h."credentialKeyVersion",
-          h."runnerType" AS "definitionType"
-        FROM "loopHarness" lh
-        JOIN "harness" h ON h."id" = lh."harness"
+          h."runnerType" AS "definitionType",
+          NULL::text AS "baseUrl",
+          NULL::text AS "defaultModel",
+          ARRAY[]::text[] AS "enabledModels"
+        FROM "loopRunner" lh
+        JOIN "runner" h ON h."id" = lh."runner"
         WHERE lh."loop" = $1
           AND h."lifecycleStatus" = 'active'
       `,
@@ -251,11 +261,15 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
         lp."healthStatus",
         lp."createdAt" AS "assignmentCreatedAt",
         p."createdAt" AS "definitionCreatedAt",
+        lp."assignmentOverrides",
         p."credentialCiphertext",
         p."credentialIv",
         p."credentialAuthTag",
         p."credentialKeyVersion",
-        p."providerType" AS "definitionType"
+        p."providerType" AS "definitionType",
+        p."baseUrl",
+        p."defaultModel",
+        p."enabledModels"
       FROM "loopProvider" lp
       JOIN "provider" p ON p."id" = lp."provider"
       WHERE lp."loop" = $1
@@ -269,17 +283,17 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
 };
 
 const updateCursor = async (client: PoolClient, loopId: string, pool: SelectionPoolType, nextCursor: number): Promise<void> => {
-  if (pool === `copilot`) {
-    await client.query(`UPDATE "loop" SET "copilotSelectionCursor" = $1 WHERE "id" = $2`, [nextCursor, loopId]);
+  if (pool === `runner`) {
+    await client.query(`UPDATE "loop" SET "runnerSelectionCursor" = $1 WHERE "id" = $2`, [nextCursor, loopId]);
     return;
   }
 
-  await client.query(`UPDATE "loop" SET "openRouterSelectionCursor" = $1 WHERE "id" = $2`, [nextCursor, loopId]);
+  await client.query(`UPDATE "loop" SET "providerSelectionCursor" = $1 WHERE "id" = $2`, [nextCursor, loopId]);
 };
 
 const touchLastUsed = async (client: PoolClient, loopId: string, pool: SelectionPoolType, assignmentId: string): Promise<void> => {
-  if (pool === `copilot`) {
-    await client.query(`UPDATE "loopHarness" SET "lastUsedAt" = NOW() WHERE "loop" = $1 AND "harness" = $2`, [loopId, assignmentId]);
+  if (pool === `runner`) {
+    await client.query(`UPDATE "loopRunner" SET "lastUsedAt" = NOW() WHERE "loop" = $1 AND "runner" = $2`, [loopId, assignmentId]);
     return;
   }
 
@@ -371,8 +385,8 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
       };
     }
 
-    const algorithmRequested = pool === `copilot` ? policy.copilotSelectionAlgorithm : policy.openRouterSelectionAlgorithm;
-    const cursor = pool === `copilot` ? policy.copilotSelectionCursor : policy.openRouterSelectionCursor;
+    const algorithmRequested = pool === `runner` ? policy.runnerSelectionAlgorithm : policy.providerSelectionAlgorithm;
+    const cursor = pool === `runner` ? policy.runnerSelectionCursor : policy.providerSelectionCursor;
     const candidates = await getCandidates(client, loopId, pool);
 
     const skipped: Array<{ assignmentId: string; reason: string }> = [];
@@ -382,12 +396,12 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
         return false;
       }
 
-      if (pool === `copilot` && candidate.definitionType !== `github-copilot-cloud`) {
+      if (pool === `runner` && candidate.definitionType !== `github-copilot-cloud`) {
         skipped.push({ assignmentId: candidate.assignmentId, reason: `non-mvp-runner` });
         return false;
       }
 
-      if (pool === `openrouter` && candidate.definitionType !== `openrouter`) {
+      if (pool === `provider` && candidate.definitionType !== `openrouter`) {
         skipped.push({ assignmentId: candidate.assignmentId, reason: `non-openrouter-provider` });
         return false;
       }
@@ -430,11 +444,112 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
         }),
         algorithm: selection.algorithmUsed,
         definitionType: selection.selected.definitionType,
+        baseUrl: selection.selected.baseUrl,
+        defaultModel: selection.selected.defaultModel,
+        enabledModels: selection.selected.enabledModels,
       },
       audit: {
         algorithmRequested,
         algorithmUsed: selection.algorithmUsed,
         fallbackReason: selection.fallbackReason,
+        skipped,
+      },
+    };
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+export const resolveLoopSelectionByAssignment = async (loopId: string, pool: SelectionPoolType, assignmentId: string): Promise<SelectionResolution> => {
+  const client = await getPool().connect();
+
+  try {
+    await client.query(`BEGIN`);
+
+    const policy = await getLoopProviderSelectionPolicy(client, loopId);
+
+    if (!policy) {
+      await client.query(`ROLLBACK`);
+      return {
+        selected: null,
+        audit: {
+          algorithmRequested: `priority-failover`,
+          algorithmUsed: `priority-failover`,
+          fallbackReason: `Loop not found.`,
+          skipped: [],
+        },
+      };
+    }
+
+    const algorithmRequested = pool === `runner` ? policy.runnerSelectionAlgorithm : policy.providerSelectionAlgorithm;
+    const candidates = await getCandidates(client, loopId, pool);
+
+    const skipped: Array<{ assignmentId: string; reason: string }> = [];
+    const selected = candidates.find((candidate) => candidate.assignmentId === assignmentId);
+
+    if (!selected) {
+      await client.query(`COMMIT`);
+      return {
+        selected: null,
+        audit: {
+          algorithmRequested,
+          algorithmUsed: `sticky-assignment`,
+          fallbackReason: `Assigned target is not currently available in loop assignments.`,
+          skipped,
+        },
+      };
+    }
+
+    if (!selected.enabled) {
+      skipped.push({ assignmentId: selected.assignmentId, reason: `disabled` });
+    }
+
+    if (pool === `runner` && selected.definitionType !== `github-copilot-cloud`) {
+      skipped.push({ assignmentId: selected.assignmentId, reason: `non-mvp-runner` });
+    }
+
+    if (pool === `provider` && selected.definitionType !== `openrouter`) {
+      skipped.push({ assignmentId: selected.assignmentId, reason: `non-openrouter-provider` });
+    }
+
+    if (skipped.length > 0) {
+      await client.query(`COMMIT`);
+      return {
+        selected: null,
+        audit: {
+          algorithmRequested,
+          algorithmUsed: `sticky-assignment`,
+          fallbackReason: `Assigned target is not eligible for execution.`,
+          skipped,
+        },
+      };
+    }
+
+    await touchLastUsed(client, loopId, pool, selected.assignmentId);
+    await client.query(`COMMIT`);
+
+    return {
+      selected: {
+        assignmentId: selected.assignmentId,
+        secret: decryptSecret({
+          ciphertext: selected.credentialCiphertext,
+          iv: selected.credentialIv,
+          authTag: selected.credentialAuthTag,
+          keyVersion: selected.credentialKeyVersion,
+        }),
+        algorithm: `sticky-assignment`,
+        definitionType: selected.definitionType,
+        baseUrl: selected.baseUrl,
+        defaultModel: selected.defaultModel,
+        enabledModels: selected.enabledModels,
+      },
+      audit: {
+        algorithmRequested,
+        algorithmUsed: `sticky-assignment`,
+        fallbackReason: null,
         skipped,
       },
     };

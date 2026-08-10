@@ -1,8 +1,31 @@
 import { getPool } from "@components/postgres/postgres.js";
+import type { LoopReadinessCounts } from "./loop.readiness.js";
 import type { Loop, LoopInsert, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
 
-const loopColumns = `"id", "name", "description", "createdAt", "updatedAt"`;
-const loopSelectColumns = `l."id", l."name", l."description", l."createdAt", l."updatedAt"`;
+const loopColumns = `"id", "name", "description", "iterationCostLimitUsd", "createdAt", "updatedAt"`;
+const loopSelectColumns = `l."id", l."name", l."description", l."iterationCostLimitUsd", l."createdAt", l."updatedAt"`;
+
+const parseStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(new Set(value.filter((entry): entry is string => typeof entry === `string` && entry.trim().length > 0).map((entry) => entry.trim())));
+};
+
+export const queryLoopById = async (loopId: string): Promise<Loop | undefined> => {
+  const result = await getPool().query<Loop>(
+    `
+      SELECT ${loopSelectColumns}
+      FROM "loop" l
+      WHERE l."id" = $1
+      LIMIT 1
+    `,
+    [loopId],
+  );
+
+  return result.rows[0];
+};
 
 export const queryLoopForUser = async (loopId: string, userId: string): Promise<Loop | undefined> => {
   const result = await getPool().query<Loop>(
@@ -54,11 +77,11 @@ export const queryLoopCreate = async (input: LoopInsert, userId: string): Promis
 
     const result = await client.query<Loop>(
       `
-        INSERT INTO "loop" ("name", "description")
-        VALUES ($1, $2)
+        INSERT INTO "loop" ("name", "description", "iterationCostLimitUsd")
+        VALUES ($1, $2, $3)
         RETURNING ${loopColumns}
       `,
-      [input.name, input.description ?? null],
+      [input.name, input.description ?? null, input.iterationCostLimitUsd ?? null],
     );
 
     const loop = result.rows[0];
@@ -91,15 +114,16 @@ export const queryLoopUpdate = async (loopId: string, input: LoopUpdate, userId:
       UPDATE "loop" AS l
       SET
         "name" = $1,
-        "description" = $2
+        "description" = $2,
+        "iterationCostLimitUsd" = $3
       FROM "loopUser" AS lu
-      WHERE l."id" = $3
+      WHERE l."id" = $4
         AND lu."loop" = l."id"
-        AND lu."user" = $4
+        AND lu."user" = $5
        AND lu."isAdmin" = TRUE
-      RETURNING l."id", l."name", l."description", l."createdAt", l."updatedAt"
+      RETURNING l."id", l."name", l."description", l."iterationCostLimitUsd", l."createdAt", l."updatedAt"
     `,
-    [input.name, input.description ?? null, loopId, userId],
+    [input.name, input.description ?? null, input.iterationCostLimitUsd ?? null, loopId, userId],
   );
 
   return result.rows[0];
@@ -126,11 +150,10 @@ export const queryLoopProviderSelectionPolicy = async (loopId: string, userId: s
     `
       SELECT
         l."id" AS "loop",
-        l."openRouterSelectionAlgorithm",
-        l."copilotSelectionAlgorithm",
-        l."openRouterSelectionCursor",
-        l."copilotSelectionCursor",
-        l."selectionCooldownWindowMs",
+        l."providerSelectionAlgorithm",
+        l."providerSelectionCursor",
+        l."runnerSelectionAlgorithm",
+        l."runnerSelectionCursor",
         l."updatedAt"
       FROM "loop" l
       JOIN "loopUser" lu ON lu."loop" = l."id"
@@ -148,25 +171,280 @@ export const queryLoopProviderSelectionPolicyUpdate = async (loopId: string, use
     `
       UPDATE "loop" AS l
       SET
-        "openRouterSelectionAlgorithm" = COALESCE($1, l."openRouterSelectionAlgorithm"),
-        "copilotSelectionAlgorithm" = COALESCE($2, l."copilotSelectionAlgorithm"),
-        "selectionCooldownWindowMs" = COALESCE($3, l."selectionCooldownWindowMs")
+        "providerSelectionAlgorithm" = COALESCE($1, l."providerSelectionAlgorithm"),
+        "runnerSelectionAlgorithm" = COALESCE($2, l."runnerSelectionAlgorithm")
       FROM "loopUser" AS lu
-      WHERE l."id" = $4
+      WHERE l."id" = $3
         AND lu."loop" = l."id"
-        AND lu."user" = $5
+        AND lu."user" = $4
         AND lu."isAdmin" = TRUE
       RETURNING
         l."id" AS "loop",
-        l."openRouterSelectionAlgorithm",
-        l."copilotSelectionAlgorithm",
-        l."openRouterSelectionCursor",
-        l."copilotSelectionCursor",
-        l."selectionCooldownWindowMs",
+        l."providerSelectionAlgorithm",
+        l."providerSelectionCursor",
+        l."runnerSelectionAlgorithm",
+        l."runnerSelectionCursor",
         l."updatedAt"
     `,
-    [input.openRouterSelectionAlgorithm ?? null, input.copilotSelectionAlgorithm ?? null, input.selectionCooldownWindowMs ?? null, loopId, userId],
+    [input.providerSelectionAlgorithm ?? null, input.runnerSelectionAlgorithm ?? null, loopId, userId],
   );
 
   return result.rows[0];
+};
+
+export const queryLoopDisabledProviderTools = async (loopId: string, userId: string): Promise<string[] | undefined> => {
+  const result = await getPool().query<{ disabledProviderTools: unknown }>(
+    `
+      SELECT COALESCE(l."disabledProviderTools", '[]'::jsonb) AS "disabledProviderTools"
+      FROM "loop" l
+      JOIN "loopUser" lu ON lu."loop" = l."id"
+      WHERE l."id" = $1
+        AND lu."user" = $2
+      LIMIT 1
+    `,
+    [loopId, userId],
+  );
+
+  const row = result.rows[0];
+
+  if (!row) {
+    return undefined;
+  }
+
+  return parseStringArray(row.disabledProviderTools);
+};
+
+export const queryLoopDisabledProviderToolsById = async (loopId: string): Promise<string[]> => {
+  const result = await getPool().query<{ disabledProviderTools: unknown }>(
+    `
+      SELECT COALESCE("disabledProviderTools", '[]'::jsonb) AS "disabledProviderTools"
+      FROM "loop"
+      WHERE "id" = $1
+      LIMIT 1
+    `,
+    [loopId],
+  );
+
+  return parseStringArray(result.rows[0]?.disabledProviderTools);
+};
+
+export const queryLoopDisabledProviderToolsUpdate = async (loopId: string, userId: string, disabledProviderTools: string[]): Promise<string[] | undefined> => {
+  const result = await getPool().query<{ disabledProviderTools: unknown }>(
+    `
+      UPDATE "loop" AS l
+      SET "disabledProviderTools" = $1::jsonb
+      FROM "loopUser" AS lu
+      WHERE l."id" = $2
+        AND lu."loop" = l."id"
+        AND lu."user" = $3
+        AND lu."isAdmin" = TRUE
+      RETURNING COALESCE(l."disabledProviderTools", '[]'::jsonb) AS "disabledProviderTools"
+    `,
+    [JSON.stringify(disabledProviderTools), loopId, userId],
+  );
+
+  const row = result.rows[0];
+
+  if (!row) {
+    return undefined;
+  }
+
+  return parseStringArray(row.disabledProviderTools);
+};
+
+export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopReadinessCounts> => {
+  const result = await getPool().query<{
+    activeRoutingPersonaCount: string;
+    activeExecutionPersonaCount: string;
+    activeProviderCount: string;
+    activeProviderWithModelConfigCount: string;
+    activeProviderMissingModelConfigCount: string;
+    activeRunnerCount: string;
+    activeWorkgraphCount: string;
+  }>(
+    `
+      SELECT
+        (
+          SELECT COUNT(*)::text
+          FROM "loopPersona" lp
+          JOIN "persona" p ON p."id" = lp."persona"
+          WHERE lp."loop" = $1
+            AND p."lifecycleStatus" = 'active'
+            AND p."isRouting" = TRUE
+        ) AS "activeRoutingPersonaCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopPersona" lp
+          JOIN "persona" p ON p."id" = lp."persona"
+          WHERE lp."loop" = $1
+            AND p."lifecycleStatus" = 'active'
+            AND p."isRouting" = FALSE
+        ) AS "activeExecutionPersonaCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopProvider" lp
+          JOIN "provider" p ON p."id" = lp."provider"
+          WHERE lp."loop" = $1
+            AND lp."enabled" = TRUE
+            AND p."lifecycleStatus" = 'active'
+            AND p."providerType" = 'openrouter'
+        ) AS "activeProviderCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopProvider" lp
+          JOIN "provider" p ON p."id" = lp."provider"
+          WHERE lp."loop" = $1
+            AND lp."enabled" = TRUE
+            AND p."lifecycleStatus" = 'active'
+            AND p."providerType" = 'openrouter'
+            AND COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NOT NULL
+            AND COALESCE(array_length(p."enabledModels", 1), 0) > 0
+        ) AS "activeProviderWithModelConfigCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopProvider" lp
+          JOIN "provider" p ON p."id" = lp."provider"
+          WHERE lp."loop" = $1
+            AND lp."enabled" = TRUE
+            AND p."lifecycleStatus" = 'active'
+            AND p."providerType" = 'openrouter'
+            AND (
+              COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NULL
+              OR COALESCE(array_length(p."enabledModels", 1), 0) = 0
+            )
+        ) AS "activeProviderMissingModelConfigCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopRunner" lr
+          JOIN "runner" r ON r."id" = lr."runner"
+          WHERE lr."loop" = $1
+            AND lr."enabled" = TRUE
+            AND r."lifecycleStatus" = 'active'
+            AND r."runnerType" = 'github-copilot-cloud'
+        ) AS "activeRunnerCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopWorkgraph" lw
+          JOIN "workgraph" w ON w."id" = lw."workgraph"
+          WHERE lw."loop" = $1
+            AND lw."enabled" = TRUE
+            AND w."lifecycleStatus" = 'active'
+            AND w."type" = 'jira'
+        ) AS "activeWorkgraphCount"
+    `,
+    [loopId],
+  );
+
+  const row = result.rows[0];
+
+  return {
+    activeRoutingPersonaCount: Number(row?.activeRoutingPersonaCount ?? `0`),
+    activeExecutionPersonaCount: Number(row?.activeExecutionPersonaCount ?? `0`),
+    activeProviderCount: Number(row?.activeProviderCount ?? `0`),
+    activeProviderWithModelConfigCount: Number(row?.activeProviderWithModelConfigCount ?? `0`),
+    activeProviderMissingModelConfigCount: Number(row?.activeProviderMissingModelConfigCount ?? `0`),
+    activeRunnerCount: Number(row?.activeRunnerCount ?? `0`),
+    activeWorkgraphCount: Number(row?.activeWorkgraphCount ?? `0`),
+  };
+};
+
+export type LoopReadinessCountsRow = LoopReadinessCounts & {
+  loopId: string;
+};
+
+export const queryLoopReadinessCountsAll = async (): Promise<LoopReadinessCountsRow[]> => {
+  const result = await getPool().query<{
+    loopId: string;
+    activeRoutingPersonaCount: string;
+    activeExecutionPersonaCount: string;
+    activeProviderCount: string;
+    activeProviderWithModelConfigCount: string;
+    activeProviderMissingModelConfigCount: string;
+    activeRunnerCount: string;
+    activeWorkgraphCount: string;
+  }>(
+    `
+      SELECT
+        l."id" AS "loopId",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopPersona" lp
+          JOIN "persona" p ON p."id" = lp."persona"
+          WHERE lp."loop" = l."id"
+            AND p."lifecycleStatus" = 'active'
+            AND p."isRouting" = TRUE
+        ) AS "activeRoutingPersonaCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopPersona" lp
+          JOIN "persona" p ON p."id" = lp."persona"
+          WHERE lp."loop" = l."id"
+            AND p."lifecycleStatus" = 'active'
+            AND p."isRouting" = FALSE
+        ) AS "activeExecutionPersonaCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopProvider" lp
+          JOIN "provider" p ON p."id" = lp."provider"
+          WHERE lp."loop" = l."id"
+            AND lp."enabled" = TRUE
+            AND p."lifecycleStatus" = 'active'
+            AND p."providerType" = 'openrouter'
+        ) AS "activeProviderCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopProvider" lp
+          JOIN "provider" p ON p."id" = lp."provider"
+          WHERE lp."loop" = l."id"
+            AND lp."enabled" = TRUE
+            AND p."lifecycleStatus" = 'active'
+            AND p."providerType" = 'openrouter'
+            AND COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NOT NULL
+            AND COALESCE(array_length(p."enabledModels", 1), 0) > 0
+        ) AS "activeProviderWithModelConfigCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopProvider" lp
+          JOIN "provider" p ON p."id" = lp."provider"
+          WHERE lp."loop" = l."id"
+            AND lp."enabled" = TRUE
+            AND p."lifecycleStatus" = 'active'
+            AND p."providerType" = 'openrouter'
+            AND (
+              COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NULL
+              OR COALESCE(array_length(p."enabledModels", 1), 0) = 0
+            )
+        ) AS "activeProviderMissingModelConfigCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopRunner" lr
+          JOIN "runner" r ON r."id" = lr."runner"
+          WHERE lr."loop" = l."id"
+            AND lr."enabled" = TRUE
+            AND r."lifecycleStatus" = 'active'
+            AND r."runnerType" = 'github-copilot-cloud'
+        ) AS "activeRunnerCount",
+        (
+          SELECT COUNT(*)::text
+          FROM "loopWorkgraph" lw
+          JOIN "workgraph" w ON w."id" = lw."workgraph"
+          WHERE lw."loop" = l."id"
+            AND lw."enabled" = TRUE
+            AND w."lifecycleStatus" = 'active'
+            AND w."type" = 'jira'
+        ) AS "activeWorkgraphCount"
+      FROM "loop" l
+    `,
+  );
+
+  return result.rows.map((row) => ({
+    loopId: row.loopId,
+    activeRoutingPersonaCount: Number(row.activeRoutingPersonaCount ?? `0`),
+    activeExecutionPersonaCount: Number(row.activeExecutionPersonaCount ?? `0`),
+    activeProviderCount: Number(row.activeProviderCount ?? `0`),
+    activeProviderWithModelConfigCount: Number(row.activeProviderWithModelConfigCount ?? `0`),
+    activeProviderMissingModelConfigCount: Number(row.activeProviderMissingModelConfigCount ?? `0`),
+    activeRunnerCount: Number(row.activeRunnerCount ?? `0`),
+    activeWorkgraphCount: Number(row.activeWorkgraphCount ?? `0`),
+  }));
 };

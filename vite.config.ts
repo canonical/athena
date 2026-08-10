@@ -26,6 +26,33 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "../dist/public",
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes(`node_modules`)) {
+              return undefined;
+            }
+
+            if (id.includes(`/node_modules/react/`) || id.includes(`/node_modules/react-dom/`) || id.includes(`/node_modules/scheduler/`)) {
+              return `vendor-react`;
+            }
+
+            if (id.includes(`/node_modules/@tanstack/react-router/`) || id.includes(`/node_modules/@tanstack/react-query/`)) {
+              return `vendor-tanstack`;
+            }
+
+            if (id.includes(`/node_modules/@canonical/react-components/`) || id.includes(`/node_modules/vanilla-framework/`)) {
+              return `vendor-canonical-ui`;
+            }
+
+            if (id.includes(`/node_modules/formik/`) || id.includes(`/node_modules/zod/`)) {
+              return `vendor-forms-validation`;
+            }
+
+            return `vendor-misc`;
+          },
+        },
+      },
     },
     css: {
       preprocessorOptions: {

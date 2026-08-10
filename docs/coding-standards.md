@@ -45,8 +45,9 @@ Notes:
 - `<componentName>.controller.ts` owns business logic and orchestration for that component.
 - `<componentName>.controller.ts` should stay transport-agnostic and must not depend on Express imports except when absolutely necessary.
 - Controllers must not query the database directly or fetch other applications/services directly; move that work into service files.
+- Define component-specific error classes only in `<componentName>.errors.ts`; do not define custom error classes in controller/service/router/client files.
 - Use `<componentName>.service.ts` when a component has one service dependency target, or `<componentName>.<target>.service.ts` when multiple service targets need separate files.
-- Prefix controller entrypoint names with the component name, for example `loopGet`, `loopList`, and `eventCreate`.
+- Prefix controller entrypoint names with the component name, for example `loopGet`, `loopList`, and `taskCreate`.
 - Name service functions after their source and action, for example `queryLoopList` for database queries and `fetchLoopList` for external API calls.
 - When controller helpers need structured inputs beyond a couple of primitive arguments, define and reuse a named type in `<componentName>.schema.ts` instead of repeating inline object signatures.
 - Prefer controller helpers that return explicit values over helpers that mutate shared in-memory state.
@@ -63,15 +64,15 @@ Notes:
 ## Database and type field naming standard
 
 1. For Athena-owned database columns and TypeScript fields that store another record's `id`, use the related entity name, not `<entity>Id`.
-2. Examples: `event.loop`, `session.user`, `handler.persona`.
-3. This keeps assignments simpler and more semantic: `event.loop = loop.id`.
+2. Examples: `task.loop`, `session.user`, `handler.persona`.
+3. This keeps assignments simpler and more semantic: `task.loop = loop.id`.
 
 ## Component naming standard
 
 1. Name components after the entity or responsibility they represent, not after their role in the UI.
 2. Avoid `View`, `Page`, `Screen`, and similar suffixes unless a component folder contains multiple components that need disambiguation.
-3. Use the entity name directly when a component displays or manages that entity: `Loop` not `LoopView`, `Event` not `EventView`.
-4. Use a descriptive suffix only when multiple components coexist in the same folder: `EventList`, `EventEdit`, `EventLayout`.
+3. Use the entity name directly when a component displays or manages that entity: `Loop` not `LoopView`, `Task` not `TaskView`.
+4. Use a descriptive suffix only when multiple components coexist in the same folder: `TaskList`, `TaskEdit`, `TaskLayout`.
 
 ## Formatting standard
 

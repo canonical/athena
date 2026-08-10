@@ -1,3 +1,4 @@
+import { log } from "@components/logging/logging.service.js";
 import { Pool, types as pgTypes } from "pg";
 
 type PoolOptions = {
@@ -47,7 +48,9 @@ export const ensurePG = (options: PoolOptions): Pool => {
   configureTypeParsers();
   pool = new Pool({ connectionString });
   pool.on(`error`, (error) => {
-    console.error(`Unexpected PostgreSQL client error`, { error });
+    log.error(`Unexpected PostgreSQL client error`, {
+      error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : { message: String(error) },
+    });
   });
   initialized = true;
 

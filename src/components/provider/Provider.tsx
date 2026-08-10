@@ -1,8 +1,12 @@
 import { Notification, NotificationSeverity } from "@canonical/react-components";
+import { Link } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 import { useProviderById } from "./provider.query.js";
+import type { Provider as ProviderEntity } from "./provider.schema.js";
 
 type ProviderDetailProps = {
   providerId: string;
+  tab?: `details` | `settings`;
 };
 
 const lifecycleLabel = {
@@ -11,8 +15,8 @@ const lifecycleLabel = {
   archived: `Archived`,
 } as const;
 
-export function Provider({ providerId }: ProviderDetailProps) {
-  const { state } = useProviderById(providerId);
+export function Provider({ providerId, tab = `details` }: ProviderDetailProps) {
+  const { state, reload } = useProviderById(providerId);
 
   if (state.status === `loading`) {
     return <p className="p-text--default">Loading provider...</p>;
@@ -26,24 +30,54 @@ export function Provider({ providerId }: ProviderDetailProps) {
     );
   }
 
-  const provider = state.provider;
+  return <ProviderDetailContent provider={state.provider} reload={reload} selectedTab={tab} />;
+}
 
+const LazyProviderDetails = lazy(async () => {
+  const module = await import("./ProviderDetails.js");
+
+  return { default: module.ProviderDetails };
+});
+
+const LazyProviderSettings = lazy(async () => {
+  const module = await import("./ProviderSettings.js");
+
+  return { default: module.ProviderSettings };
+});
+
+type ProviderDetailContentProps = {
+  provider: ProviderEntity;
+  reload: () => void;
+  selectedTab: `details` | `settings`;
+};
+
+function ProviderDetailContent({ provider, reload, selectedTab }: ProviderDetailContentProps) {
   return (
     <section className="p-strip is-shallow u-no-max-width">
       <h1 className="p-heading--2">{provider.displayName}</h1>
-      <div className="p-card p-strip is-shallow">
-        <h2 className="p-heading--4">Provider details</h2>
-        <dl>
-          <dt>Type</dt>
-          <dd>{provider.providerType}</dd>
-          <dt>Base URL</dt>
-          <dd>{provider.baseUrl}</dd>
-          <dt>Lifecycle status</dt>
-          <dd>{lifecycleLabel[provider.lifecycleStatus] ?? provider.lifecycleStatus}</dd>
-          <dt>Credential configured</dt>
-          <dd>{provider.hasCredential ? `Yes` : `No`}</dd>
-        </dl>
-      </div>
+      <nav className="p-tabs">
+        <ul className="p-tabs__list">
+          <li className="p-tabs__item">
+            <Link className={`p-tabs__link${selectedTab === `details` ? ` is-active` : ``}`} params={{ providerId: provider.id }} to="/provider/$providerId">
+              Details
+            </Link>
+          </li>
+          <li className="p-tabs__item">
+            <Link className={`p-tabs__link${selectedTab === `settings` ? ` is-active` : ``}`} params={{ providerId: provider.id }} to="/provider/$providerId/settings">
+              Settings
+            </Link>
+          </li>
+        </ul>
+      </nav>
+      <Suspense
+        fallback={
+          <section className="p-strip is-shallow u-no-max-width">
+            <p className="p-text--default">Loading tab...</p>
+          </section>
+        }
+      >
+        {selectedTab === `details` ? <LazyProviderDetails provider={provider} lifecycleLabel={lifecycleLabel} /> : <LazyProviderSettings provider={provider} reload={reload} />}
+      </Suspense>
     </section>
   );
 }

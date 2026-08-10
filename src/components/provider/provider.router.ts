@@ -1,217 +1,190 @@
-import type { AuthenticatedUser } from "@components/authentication/session.schema.js";
-import { isValidUuid } from "@components/utilities/validation.js";
-import { type Request, type Response, Router } from "express";
+import { getAuthenticatedUserId } from "@components/authentication/session.js";
+import { defineRoutes } from "@components/express/express.router.js";
+import { resolveRequestLogger } from "@components/logging/logging.service.js";
+import { uuid } from "@components/utilities/zod.utilities.js";
+import { Router } from "express";
+import { z } from "zod";
 import {
-  loopProviderCreate,
   loopProviderDelete,
   loopProviderList,
   loopProviderUpdateByAdmin,
-  ProviderForbiddenError,
-  ProviderNotFoundError,
-  ProviderValidationError,
+  providerAssign,
   providerCreate,
   providerDelete,
   providerGet,
   providerList,
+  providerModelPreview,
+  providerModels,
   providerUpdate,
-  validateLoopProviderAdminUpdateRequest,
-  validateLoopProviderInsertRequest,
-  validateProviderInsertRequest,
-  validateProviderUpdateRequest,
+  providerValidateModels,
 } from "./provider.controller.js";
+import { loopProviderAdminUpdateSchema, providerInsertSchema, providerModelPreviewRequestSchema, providerModelValidateRequestSchema, providerUpdateSchema } from "./provider.schema.js";
 
 export const providerRouter = Router();
+const route = defineRoutes(providerRouter);
 
-const sendProviderError = (error: unknown, response: Response): boolean => {
-  if (error instanceof ProviderValidationError) {
-    response.status(400).json({ error: error.message });
-    return true;
-  }
-
-  if (error instanceof ProviderNotFoundError) {
-    response.status(404).json({ error: error.message });
-    return true;
-  }
-
-  if (error instanceof ProviderForbiddenError) {
-    response.status(403).json({ error: error.message });
-    return true;
-  }
-
-  return false;
-};
-
-const getUserId = (response: Response): string => {
-  const user = response.locals.user as AuthenticatedUser | undefined;
-
-  if (!user) {
-    throw new Error(`Authenticated user not found in request context.`);
-  }
-
-  return user.id;
-};
-
-const getProviderId = (request: Request, response: Response): string | undefined => {
-  const raw = request.params.providerId;
-  const providerId = Array.isArray(raw) ? (raw[0] ?? ``) : (raw ?? ``);
-
-  if (!isValidUuid(providerId)) {
-    response.status(400).json({ error: `providerId must be a valid UUID.` });
-    return undefined;
-  }
-
-  return providerId;
-};
-
-const getLoopId = (request: Request, response: Response): string | undefined => {
-  const raw = request.params.loopId;
-  const loopId = Array.isArray(raw) ? (raw[0] ?? ``) : (raw ?? ``);
-
-  if (!isValidUuid(loopId)) {
-    response.status(400).json({ error: `loopId must be a valid UUID.` });
-    return undefined;
-  }
-
-  return loopId;
-};
-
-providerRouter.get(`/provider-list`, async (_request: Request, response: Response) => {
-  response.status(200).json(await providerList(getUserId(response)));
+const providerParamsSchema = z.object({
+  provider: uuid(`provider must be a valid UUID.`),
 });
 
-providerRouter.post(`/provider-list`, async (request: Request, response: Response) => {
-  try {
-    response.status(201).json(await providerCreate(validateProviderInsertRequest(request.body), getUserId(response)));
-  } catch (error) {
-    if (!sendProviderError(error, response)) {
-      throw error;
-    }
-  }
+const loopParamsSchema = z.object({
+  loop: uuid(`loop must be a valid UUID.`),
 });
 
-providerRouter.get(`/provider/:providerId`, async (request: Request, response: Response) => {
-  try {
-    const providerId = getProviderId(request, response);
-
-    if (!providerId) {
-      return;
-    }
-
-    response.status(200).json(await providerGet(providerId, getUserId(response)));
-  } catch (error) {
-    if (!sendProviderError(error, response)) {
-      throw error;
-    }
-  }
+const loopProviderParamsSchema = z.object({
+  loop: uuid(`loop must be a valid UUID.`),
+  provider: uuid(`provider must be a valid UUID.`),
 });
 
-providerRouter.put(`/provider/:providerId`, async (request: Request, response: Response) => {
-  try {
-    const providerId = getProviderId(request, response);
-
-    if (!providerId) {
-      return;
-    }
-
-    response.status(200).json(await providerUpdate(providerId, getUserId(response), validateProviderUpdateRequest(request.body)));
-  } catch (error) {
-    if (!sendProviderError(error, response)) {
-      throw error;
-    }
-  }
+const providerDeleteBodySchema = z.object({
+  provider: uuid(`provider must be a valid UUID.`),
 });
 
-providerRouter.delete(`/provider/:providerId`, async (request: Request, response: Response) => {
-  try {
-    const providerId = getProviderId(request, response);
-
-    if (!providerId) {
-      return;
-    }
-
-    await providerDelete(providerId, getUserId(response));
-    response.sendStatus(204);
-  } catch (error) {
-    if (!sendProviderError(error, response)) {
-      throw error;
-    }
-  }
+const providerAssignBodySchema = z.object({
+  loop: uuid(`loop must be a valid UUID.`),
+  provider: uuid(`provider must be a valid UUID.`),
 });
 
-providerRouter.get(`/loop/:loopId/provider-list`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    response.status(200).json(await loopProviderList(loopId, getUserId(response)));
-  } catch (error) {
-    if (!sendProviderError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `get`,
+  route: `/`,
+  handler: async ({ response, respond }) => {
+    const providers = await providerList(getAuthenticatedUserId(response));
+    respond({ status: 200, data: providers });
+  },
 });
 
-providerRouter.post(`/loop/:loopId/provider-list`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    await loopProviderCreate(loopId, getUserId(response), validateLoopProviderInsertRequest(request.body));
-    response.sendStatus(204);
-  } catch (error) {
-    if (!sendProviderError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `post`,
+  route: `/`,
+  validators: {
+    body: providerInsertSchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    const provider = await providerCreate(body, getAuthenticatedUserId(response));
+    respond({ status: 201, data: provider });
+  },
 });
 
-providerRouter.put(`/loop/:loopId/provider/:providerId/admin`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
-
-    if (!loopId) {
-      return;
-    }
-
-    const providerId = getProviderId(request, response);
-
-    if (!providerId) {
-      return;
-    }
-
-    response.status(200).json(await loopProviderUpdateByAdmin(loopId, providerId, getUserId(response), validateLoopProviderAdminUpdateRequest(request.body)));
-  } catch (error) {
-    if (!sendProviderError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `delete`,
+  route: `/`,
+  validators: {
+    body: providerDeleteBodySchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    await providerDelete(body.provider, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
 });
 
-providerRouter.delete(`/loop/:loopId/provider/:providerId/admin`, async (request: Request, response: Response) => {
-  try {
-    const loopId = getLoopId(request, response);
+route({
+  method: `get`,
+  route: `/:provider`,
+  validators: {
+    params: providerParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const provider = await providerGet(params.provider, getAuthenticatedUserId(response));
+    respond({ status: 200, data: provider });
+  },
+});
 
-    if (!loopId) {
-      return;
-    }
+route({
+  method: `put`,
+  route: `/:provider`,
+  validators: {
+    params: providerParamsSchema,
+    body: providerUpdateSchema,
+  },
+  handler: async ({ params, body, response, respond }) => {
+    const provider = await providerUpdate(params.provider, getAuthenticatedUserId(response), body);
+    respond({ status: 200, data: provider });
+  },
+});
 
-    const providerId = getProviderId(request, response);
+route({
+  method: `get`,
+  route: `/:provider/models`,
+  validators: {
+    params: providerParamsSchema,
+  },
+  handler: async ({ params, request, response, respond }) => {
+    const models = await providerModels(params.provider, getAuthenticatedUserId(response), resolveRequestLogger(request));
+    respond({ status: 200, data: { models } });
+  },
+});
 
-    if (!providerId) {
-      return;
-    }
+route({
+  method: `post`,
+  route: `/:provider/models/validate`,
+  validators: {
+    params: providerParamsSchema,
+    body: providerModelValidateRequestSchema,
+  },
+  handler: async ({ params, body, request, response, respond }) => {
+    const results = await providerValidateModels(params.provider, getAuthenticatedUserId(response), body.models, resolveRequestLogger(request));
+    respond({ status: 200, data: { results } });
+  },
+});
 
-    await loopProviderDelete(loopId, providerId, getUserId(response));
-    response.sendStatus(204);
-  } catch (error) {
-    if (!sendProviderError(error, response)) {
-      throw error;
-    }
-  }
+route({
+  method: `post`,
+  route: `/models/preview`,
+  validators: {
+    body: providerModelPreviewRequestSchema,
+  },
+  handler: async ({ body, request, respond }) => {
+    const models = await providerModelPreview(body, resolveRequestLogger(request));
+    respond({ status: 200, data: { models } });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/list`,
+  validators: {
+    params: loopParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const providers = await loopProviderList(params.loop, getAuthenticatedUserId(response));
+    respond({ status: 200, data: providers });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/assign`,
+  validators: {
+    body: providerAssignBodySchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    await providerAssign(body.loop, getAuthenticatedUserId(response), { provider: body.provider });
+    respond({ status: 204 });
+  },
+});
+
+route({
+  method: `put`,
+  route: `/loop/:loop/:provider/admin`,
+  validators: {
+    params: loopProviderParamsSchema,
+    body: loopProviderAdminUpdateSchema,
+  },
+  handler: async ({ params, body, response, respond }) => {
+    const provider = await loopProviderUpdateByAdmin(params.loop, params.provider, getAuthenticatedUserId(response), body);
+    respond({ status: 200, data: provider });
+  },
+});
+
+route({
+  method: `delete`,
+  route: `/unassign`,
+  validators: {
+    body: providerAssignBodySchema,
+  },
+  handler: async ({ body, response, respond }) => {
+    await loopProviderDelete(body.loop, body.provider, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
 });

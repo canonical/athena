@@ -36,7 +36,7 @@ Users can manage personas in a loop with the following constraints:
 4. Users can remove personas from a loop (does not delete the persona unless it is non-default with no remaining loop assignments).
 5. Default personas cannot be deleted.
 6. Each loop must always have exactly one active routing persona.
-7. For each event step, the active routing persona decides whether the assigned persona executes through a runner/harness path or the deterministic Athena thread path, as defined in [llm-harness.md](./llm-harness.md).
+7. For each task step, the active routing persona decides whether the assigned persona executes through a runner/harness path or the deterministic Athena thread path, as defined in [llm-harness.md](./llm-harness.md).
 
 ## Deterministic Routing Inputs
 
@@ -49,17 +49,17 @@ These deterministic inputs are used by the routing persona to select the next as
 
 The same routing decision authority determines whether execution for that step should use runner/harness-backed execution or deterministic Athena thread execution.
 
-## Persona, Loop, and Event Data Model Diagram
+## Persona, Loop, and Task Data Model Diagram
 
 ```mermaid
 erDiagram
 	USER ||--o{ PERSONA : owns
-	LOOP ||--o{ EVENT : contains
+	LOOP ||--o{ TASK : contains
 	LOOP ||--o{ LOOP_USER : has
 	USER ||--o{ LOOP_USER : belongs_to
 	LOOP ||--o{ LOOP_PERSONA : configures
 	PERSONA ||--o{ LOOP_PERSONA : assigned_to
-	PERSONA ||--o{ EVENT : assigned_on
+	PERSONA ||--o{ TASK : assigned_on
 
 	USER {
 		string id PK
@@ -81,11 +81,11 @@ erDiagram
 		string lifecycleStatus
 	}
 
-	EVENT {
+	TASK {
 		uuid id PK
 		uuid loopId FK
 		uuid assignedPersonaId FK
-		string eventType
+		string taskType
 		string status
 	}
 
