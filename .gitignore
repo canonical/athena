@@ -43,6 +43,7 @@ Thumbs.db
 .eslintcache
 tmp/
 temp/
+test-output*.log
 
 # Local task files
 *.tasklist.local.md
