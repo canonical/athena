@@ -44,7 +44,6 @@ Thumbs.db
 tmp/
 temp/
 test-output*.log
-/a
 
 # Local task files
 *.tasklist.local.md
