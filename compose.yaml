@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v2.11
+    image: traefik:v3.7
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
@@ -28,7 +28,7 @@ services:
       - traefik.http.services.dex.loadbalancer.server.port=5556
 
   postgres:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_DB: athena
       POSTGRES_USER: athena
@@ -45,7 +45,7 @@ services:
       start_period: 10s
 
   prepare:
-    image: postgres:16
+    image: postgres:18
     depends_on:
       postgres:
         condition: service_healthy
