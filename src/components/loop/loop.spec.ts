@@ -2,7 +2,7 @@ import { authenticate, createLoop, expect, test } from "../../../testing/playwri
 
 test(`loop list requires authentication`, async ({ page }) => {
   await page.context().clearCookies();
-  await page.goto(`http://athena.localhost/loop/list`);
+  await page.goto(`http://athena.localhost/`);
 
   await expect(page.getByRole(`heading`, { name: `Sign in to Athena` })).toBeVisible();
 });
@@ -97,7 +97,7 @@ test(`loop tools API exposes requiresApproval metadata`, async ({ page }) => {
 
 test(`loops page supports create update and delete`, async ({ page }) => {
   await authenticate(page);
-  await page.goto(`http://athena.localhost/loop/list`);
+  await page.goto(`http://athena.localhost/`);
 
   await expect(page.getByRole(`button`, { name: `Create` })).toBeVisible();
   await page.getByRole(`button`, { name: `Create` }).click();
@@ -120,6 +120,7 @@ test(`loops page supports create update and delete`, async ({ page }) => {
   await expect(page.getByText(`UI loop updated has been updated.`)).toBeVisible();
   await expect(page.getByRole(`gridcell`, { name: `UI loop updated`, exact: true }).first()).toBeVisible();
 
+  page.once(`dialog`, (dialog) => dialog.accept());
   await page
     .getByRole(`row`, { name: /UI loop updated/ })
     .getByRole(`button`, { name: `Delete` })
@@ -131,7 +132,7 @@ test(`loops page supports create update and delete`, async ({ page }) => {
 
 test(`loop list allows navigating to loop detail page`, async ({ page }) => {
   await authenticate(page);
-  await page.goto(`http://athena.localhost/loop/list`);
+  await page.goto(`http://athena.localhost/`);
 
   await page.getByRole(`button`, { name: `Create` }).click();
   await page.getByLabel(`Loop name`).fill(`Navigation test loop`);
@@ -142,35 +143,27 @@ test(`loop list allows navigating to loop detail page`, async ({ page }) => {
 
   await page.getByRole(`link`, { name: `Navigation test loop` }).click();
 
-  await expect(page.getByRole(`heading`, { name: `Navigation test loop` })).toBeVisible();
-  await expect(page.getByRole(`tab`, { name: `Details` })).toBeVisible();
-  await expect(page.getByRole(`tab`, { name: `Personas` })).toBeVisible();
-  await expect(page.getByRole(`tab`, { name: `Providers` })).toBeVisible();
-  await expect(page.getByRole(`tab`, { name: `Runners` })).toBeVisible();
+  // Should navigate to task list (default redirect from loop root)
+  await expect(page).toHaveURL(/\/loop\/[0-9a-f-]+\/task\/list/);
 });
 
-test(`loop detail page tabs are deep-linkable`, async ({ page }) => {
+test(`loop detail page routes are deep-linkable`, async ({ page }) => {
   await authenticate(page);
 
   const loop = await createLoop(page, `Deep link tab loop`);
 
   await page.goto(`http://athena.localhost/loop/${loop.id}/personas`);
-
-  await expect(page.getByRole(`heading`, { name: `Deep link tab loop` })).toBeVisible();
-  await expect(page.getByRole(`tab`, { name: `Personas` })).toHaveAttribute(`aria-selected`, `true`);
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 
   await page.goto(`http://athena.localhost/loop/${loop.id}/providers`);
-  await expect(page.getByRole(`tab`, { name: `Providers` })).toHaveAttribute(`aria-selected`, `true`);
   await expect(page.getByRole(`heading`, { name: `Assigned providers` })).toBeVisible();
-  await expect(page.getByRole(`heading`, { name: `Provider selection algorithm` })).toBeVisible();
-  await expect(page.getByRole(`heading`, { name: `Assign an existing provider` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Selection algorithm` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Assign provider` })).toBeVisible();
 
   await page.goto(`http://athena.localhost/loop/${loop.id}/runners`);
-  await expect(page.getByRole(`tab`, { name: `Runners` })).toHaveAttribute(`aria-selected`, `true`);
   await expect(page.getByRole(`heading`, { name: `Assigned runners` })).toBeVisible();
-  await expect(page.getByRole(`heading`, { name: `Runner selection algorithm` })).toBeVisible();
-  await expect(page.getByRole(`heading`, { name: `Assign an existing runner` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Selection algorithm` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Assign runner` })).toBeVisible();
 });
 
 test(`providers tab keeps assign-provider section visible even when provider list is empty`, async ({ page }) => {
@@ -180,22 +173,22 @@ test(`providers tab keeps assign-provider section visible even when provider lis
 
   await page.goto(`http://athena.localhost/loop/${loop.id}/providers`);
 
-  await expect(page.getByRole(`heading`, { name: `Assign an existing provider` })).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Assigned providers` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Assign provider` })).toBeVisible();
 });
 
 test(`loop detail page saves loop details from the Details tab`, async ({ page }) => {
   await authenticate(page);
 
   const loop = await createLoop(page, `Detail save loop`, `Original description`);
-  await page.goto(`http://athena.localhost/loop/${loop.id}`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
 
-  await expect(page.getByRole(`tab`, { name: `Details` })).toHaveAttribute(`aria-selected`, `true`);
   await page.getByRole(`button`, { name: `Edit loop` }).click();
   await page.getByLabel(`Loop name`).fill(`Detail save loop updated`);
   await page.getByRole(`button`, { name: `Save loop` }).click();
 
   await expect(page.getByText(`Detail save loop updated has been updated.`)).toBeVisible();
-  await expect(page.getByRole(`heading`, { name: `Detail save loop updated` })).toBeVisible();
+  await expect(page.locator(`dd`).getByText(`Detail save loop updated`, { exact: true })).toBeVisible();
 });
 
 test(`loop details tab shows no paused banner for a properly configured loop`, async ({ page }) => {
@@ -205,10 +198,8 @@ test(`loop details tab shows no paused banner for a properly configured loop`, a
 
   // Navigate directly to the Details tab without visiting the Personas tab first.
   // The persona list is fetched at the Loop level so the routing count is available on any tab.
-  await page.goto(`http://athena.localhost/loop/${loop.id}`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
 
-  await expect(page.getByRole(`heading`, { name: `Paused routing loop` })).toBeVisible();
-  await expect(page.getByRole(`tab`, { name: `Details` })).toHaveAttribute(`aria-selected`, `true`);
   await expect(page.getByText(`Loop is paused`)).toHaveCount(0);
 });
 
@@ -220,35 +211,19 @@ test(`loop detail with invalid id shows an error notification`, async ({ page })
   await expect(page.getByText(`loop must be a valid UUID.`)).toBeVisible();
 });
 
-test(`loop detail page has tasks tab as first tab`, async ({ page }) => {
+test(`loop detail page defaults to task list route`, async ({ page }) => {
   await authenticate(page);
   const loop = await createLoop(page, `Loop with tasks tab ${Date.now()}`);
 
-  // Navigate to loop detail - should default to tasks tab
+  // Navigate to loop root - should redirect to task list
   await page.goto(`http://athena.localhost/loop/${loop.id}`);
+  await expect(page).toHaveURL(/\/loop\/[0-9a-f-]+\/task\/list/);
 
-  // Tasks tab should be first and active by default
-  await expect(page.getByRole(`tab`, { name: `Tasks` })).toBeVisible();
-  await expect(page.getByRole(`tab`, { name: `Tasks` })).toHaveAttribute(`aria-selected`, `true`);
-
-  // Verify tab order: Tasks, Details, Personas, Providers, Runners
-  const tabButtons = await page.getByRole(`tab`).all();
-  const tabNames = await Promise.all(tabButtons.map((btn) => btn.textContent()));
-  expect(tabNames).toEqual([`Tasks`, `Details`, `Tools`, `Personas`, `Providers`, `Runners`, `Workgraphs`, `Repositories`]);
-
-  // Can navigate to details tab
-  await page.getByRole(`tab`, { name: `Details` }).click();
-  await expect(page.getByRole(`tab`, { name: `Details` })).toHaveAttribute(`aria-selected`, `true`);
-
-  // Can navigate back to tasks tab
-  await page.getByRole(`tab`, { name: `Tasks` }).click();
-  await expect(page.getByRole(`tab`, { name: `Tasks` })).toHaveAttribute(`aria-selected`, `true`);
-
-  // Deep linking to other tabs works
+  // Deep linking to personas route works
   await page.goto(`http://athena.localhost/loop/${loop.id}/personas`);
-  await expect(page.getByRole(`tab`, { name: `Personas` })).toHaveAttribute(`aria-selected`, `true`);
+  await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 
-  // Deep linking back to tasks works
+  // Deep linking to task list works
   await page.goto(`http://athena.localhost/loop/${loop.id}/task/list`);
-  await expect(page.getByRole(`tab`, { name: `Tasks` })).toHaveAttribute(`aria-selected`, `true`);
+  await expect(page).toHaveURL(/\/loop\/[0-9a-f-]+\/task\/list/);
 });

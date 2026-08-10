@@ -2,7 +2,7 @@ import type { Page } from "./test.js";
 import { expect } from "./test.js";
 
 export const createLoop = async (page: Page, name: string, description = `${name} description`) => {
-  await page.goto(`http://athena.localhost/loop/list`);
+  await page.goto(`http://athena.localhost/`);
 
   await page.getByRole(`button`, { name: `Create` }).click();
   await page.getByLabel(`Loop name`).fill(name);

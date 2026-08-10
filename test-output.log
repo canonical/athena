@@ -1,0 +1,800 @@
+
+> @canonical/athena@1.2.0 test:ci
+> npm run coverage:clean && COVERAGE=true playwright test -c ./playwright.config.ts; test_status=$?; npm run coverage:report; report_status=$?; if [ $test_status -ne 0 ]; then exit $test_status; fi; exit $report_status
+
+
+> @canonical/athena@1.2.0 coverage:clean
+> rm -rf ./testing/results
+
+ Container athena-traefik-1 Stopping 
+ Container athena-athena-1 Stopping 
+ Container athena-traefik-1 Stopped 
+ Container athena-traefik-1 Removing 
+ Container athena-traefik-1 Removed 
+ Container athena-athena-1 Stopped 
+ Container athena-athena-1 Removing 
+ Container athena-athena-1 Removed 
+ Container athena-dex-1 Stopping 
+ Container athena-prepare-1 Stopping 
+ Container athena-prepare-1 Stopped 
+ Container athena-prepare-1 Removing 
+ Container athena-prepare-1 Removed 
+ Container athena-postgres-1 Stopping 
+ Container athena-dex-1 Stopped 
+ Container athena-dex-1 Removing 
+ Container athena-dex-1 Removed 
+ Container athena-postgres-1 Stopped 
+ Container athena-postgres-1 Removing 
+ Container athena-postgres-1 Removed 
+ Network athena_default Removing 
+ Volume athena_athena-postgres-data Removing 
+ Volume athena_athena-postgres-data Removed 
+ Network athena_default Removed 
+ Image athena-athena Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 550B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 553B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/ubuntu:26.04
+#3 DONE 1.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [ 1/12] FROM docker.io/library/ubuntu:26.04@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03
+#5 resolve docker.io/library/ubuntu:26.04@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03 0.0s done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 48.22kB done
+#6 DONE 0.0s
+
+#7 [ 7/12] COPY vite.config.ts ./
+#7 CACHED
+
+#8 [ 2/12] RUN apt-get update 	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm ca-certificates curl 	&& rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [ 4/12] COPY package.json package-lock.json ./
+#9 CACHED
+
+#10 [ 5/12] RUN npm ci
+#10 CACHED
+
+#11 [ 3/12] WORKDIR /app
+#11 CACHED
+
+#12 [ 6/12] COPY playwright.config.ts ./
+#12 CACHED
+
+#13 [ 8/12] COPY tsconfig.json tsconfig.server.json ./
+#13 CACHED
+
+#14 [ 9/12] COPY src ./src
+#14 DONE 0.0s
+
+#15 [10/12] COPY scripts ./scripts
+#15 DONE 0.0s
+
+#16 [11/12] COPY testing ./testing
+#16 DONE 0.0s
+
+#17 [12/12] RUN chmod +x ./scripts/start-athena-container.sh
+#17 DONE 0.2s
+
+#18 exporting to image
+#18 exporting layers 0.1s done
+#18 exporting manifest sha256:b9712ac85bf88860407f9906ffe4a459bc77fd7941af2c354cd77433b4c0e7ce done
+#18 exporting config sha256:ac575d762f873abeb13d73ddc48783b9b6a47f414b1e7b531a5b5d6dc256a29d
+#18 exporting config sha256:ac575d762f873abeb13d73ddc48783b9b6a47f414b1e7b531a5b5d6dc256a29d done
+#18 exporting attestation manifest sha256:e223e09a36df7ce6da77680288cd067452b8e21e33a9a57a5b67e5c7f27bad7d 0.0s done
+#18 exporting manifest list sha256:46e2e94673e4b429b66d3152c12cc9cf630b85c9e483f69d9cbbd2c63cea6bc3 done
+#18 naming to docker.io/library/athena-athena:latest done
+#18 unpacking to docker.io/library/athena-athena:latest 0.1s done
+#18 DONE 0.2s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ Image athena-athena Built 
+ Network athena_default Creating 
+ Network athena_default Created 
+ Volume athena_athena-postgres-data Creating 
+ Volume athena_athena-postgres-data Created 
+ Container athena-traefik-1 Creating 
+ Container athena-dex-1 Creating 
+ Container athena-postgres-1 Creating 
+ Container athena-traefik-1 Created 
+ Container athena-dex-1 Created 
+ Container athena-postgres-1 Created 
+ Container athena-prepare-1 Creating 
+ Container athena-prepare-1 Created 
+ Container athena-athena-1 Creating 
+ Container athena-athena-1 Created 
+ Container athena-dex-1 Starting 
+ Container athena-postgres-1 Starting 
+ Container athena-traefik-1 Starting 
+ Container athena-postgres-1 Started 
+ Container athena-postgres-1 Waiting 
+ Container athena-traefik-1 Started 
+ Container athena-dex-1 Started 
+ Container athena-postgres-1 Healthy 
+ Container athena-prepare-1 Starting 
+ Container athena-prepare-1 Started 
+ Container athena-prepare-1 Waiting 
+ Container athena-postgres-1 Waiting 
+ Container athena-prepare-1 Exited 
+ Container athena-postgres-1 Healthy 
+ Container athena-athena-1 Starting 
+ Container athena-athena-1 Started 
+
+Running 41 tests using 22 workers
+
+[1/41] [athena] › src/components/loop/loop.spec.ts:32:1 › loop provider selection policy uses providerSelectionAlgorithm
+[2/41] [athena] › src/components/loop/loop.spec.ts:215:1 › loop detail with invalid id shows an error notification
+[3/41] [athena] › src/components/authentication/authentication.spec.ts:38:1 › authentication page preserves returnTo path through login
+[4/41] [athena] › src/components/authentication/authentication.spec.ts:16:1 › sign out returns user to unauthenticated state
+[5/41] [athena] › src/components/loop/loop.spec.ts:98:1 › loops page supports create update and delete
+[6/41] [athena] › src/components/authentication/authentication.spec.ts:3:1 › authentication flow signs in through Dex
+[7/41] [athena] › src/components/loop/loop.spec.ts:132:1 › loop list allows navigating to loop detail page
+[8/41] [athena] › src/components/loop/loop.spec.ts:3:1 › loop list requires authentication
+[9/41] [athena] › src/components/persona/persona.spec.ts:15:1 › persona list page supports creating and editing a persona with role
+[10/41] [athena] › src/components/loop/loop.spec.ts:201:1 › loop details tab shows no paused banner for a properly configured loop
+[11/41] [athena] › src/components/loop/loop.spec.ts:152:1 › loop detail page tabs are deep-linkable
+[12/41] [athena] › src/components/loop/loop.spec.ts:223:1 › loop detail page has tasks tab as first tab
+[13/41] [athena] › src/components/loop/loop.spec.ts:75:1 › loop tools API exposes requiresApproval metadata
+[14/41] [athena] › src/components/persona/persona.spec.ts:70:1 › loop personas tab can assign catalog personas to loop
+[15/41] [athena] › src/components/authentication/authentication.spec.ts:28:1 › authentication sign-out route clears session and returns to sign-in
+[16/41] [athena] › src/components/loop/loop.spec.ts:10:1 › loop API uses root routes
+[17/41] [athena] › src/components/persona/persona.spec.ts:105:1 › persona list shows edit actions for owned personas only
+[18/41] [athena] › src/components/loop/loop.spec.ts:186:1 › loop detail page saves loop details from the Details tab
+[19/41] [athena] › src/components/loop/loop.spec.ts:176:1 › providers tab keeps assign-provider section visible even when provider list is empty
+[20/41] [athena] › src/components/persona/persona.spec.ts:121:1 › persona list edit drawer shows not found message for unknown persona id
+[21/41] [athena] › src/components/persona/persona.spec.ts:42:1 › loop personas tab shows role and supports add and remove
+[22/41] [athena] › src/components/persona/persona.spec.ts:8:1 › persona list requires authentication
+[23/41] [athena] › src/components/persona/persona.spec.ts:129:1 › persona list has two tabs: My Personas and Persona Catalog with deep linking
+[24/41] [athena] › src/components/persona/persona.spec.ts:152:1 › persona catalog allows cloning a persona with name only
+[25/41] [athena] › src/components/provider/provider.spec.ts:21:1 › provider list requires authentication
+[26/41] [athena] › src/components/provider/provider.spec.ts:28:1 › providers page supports create edit and delete
+[27/41] [athena] › src/components/provider/provider.spec.ts:49:1 › provider editor validates HTTPS base URL
+[28/41] [athena] › src/components/provider/provider.spec.ts:62:1 › loop providers tab supports assign remove and algorithm save
+[29/41] [athena] › src/components/provider/provider.spec.ts:88:1 › provider detail page renders expected fields
+[30/41] [athena] › src/components/provider/provider.spec.ts:104:1 › provider detail supports enabled models and default model persistence
+[31/41] [athena] › src/components/provider/provider.spec.ts:139:1 › provider detail with invalid id shows an error notification
+[32/41] [athena] › src/components/provider/provider.spec.ts:147:1 › provider list edit drawer shows not found message for unknown provider id
+[33/41] [athena] › src/components/runner/runner.spec.ts:20:1 › runner list requires authentication
+[34/41] [athena] › src/components/runner/runner.spec.ts:27:1 › runners page supports create edit and delete
+[35/41] [athena] › src/components/runner/runner.spec.ts:47:1 › loop runners tab supports assign remove and algorithm save
+[36/41] [athena] › src/components/runner/runner.spec.ts:72:1 › runner detail page renders expected fields
+[37/41] [athena] › src/components/runner/runner.spec.ts:92:1 › runner detail with invalid id shows an error notification
+[38/41] [athena] › src/components/runner/runner.spec.ts:100:1 › runner list edit drawer shows not found message for unknown runner id
+  1) [athena] › src/components/loop/loop.spec.ts:98:1 › loops page supports create update and delete 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('UI loop updated has been deleted.')
+    Expected: visible
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('UI loop updated has been deleted.')
+      - Test timeout of 10000ms exceeded.
+
+
+      126 |     .click();
+      127 |
+    > 128 |   await expect(page.getByText(`UI loop updated has been deleted.`)).toBeVisible();
+          |                                                                     ^
+      129 |   await expect(page.getByRole(`gridcell`, { name: `UI loop updated`, exact: true })).toHaveCount(0);
+      130 | });
+      131 |
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/loop/loop.spec.ts:128:69
+
+    Error Context: testing/results/playwright/components-loop-loop-loops-a36f5-ts-create-update-and-delete-athena/error-context.md
+
+
+  2) [athena] › src/components/loop/loop.spec.ts:32:1 › loop provider selection policy uses providerSelectionAlgorithm 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/loop/loop.spec.ts:35:16
+
+    Error Context: testing/results/playwright/components-loop-loop-loop--8e01d--providerSelectionAlgorithm-athena/error-context.md
+
+
+  3) [athena] › src/components/loop/loop.spec.ts:132:1 › loop list allows navigating to loop detail page 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Navigation test loop' })
+    Expected: visible
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByRole('heading', { name: 'Navigation test loop' })
+      - Test timeout of 10000ms exceeded.
+
+
+      143 |   await page.getByRole(`link`, { name: `Navigation test loop` }).click();
+      144 |
+    > 145 |   await expect(page.getByRole(`heading`, { name: `Navigation test loop` })).toBeVisible();
+          |                                                                             ^
+      146 |   await expect(page.getByRole(`tab`, { name: `Details` })).toBeVisible();
+      147 |   await expect(page.getByRole(`tab`, { name: `Personas` })).toBeVisible();
+      148 |   await expect(page.getByRole(`tab`, { name: `Providers` })).toBeVisible();
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/loop/loop.spec.ts:145:77
+
+    Error Context: testing/results/playwright/components-loop-loop-loop--9b088-igating-to-loop-detail-page-athena/error-context.md
+
+
+  4) [athena] › src/components/loop/loop.spec.ts:152:1 › loop detail page tabs are deep-linkable ───
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/loop/loop.spec.ts:155:16
+
+    Error Context: testing/results/playwright/components-loop-loop-loop-detail-page-tabs-are-deep-linkable-athena/error-context.md
+
+
+  5) [athena] › src/components/loop/loop.spec.ts:223:1 › loop detail page has tasks tab as first tab 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/loop/loop.spec.ts:225:16
+
+    Error Context: testing/results/playwright/components-loop-loop-loop--23a61--has-tasks-tab-as-first-tab-athena/error-context.md
+
+
+  6) [athena] › src/components/loop/loop.spec.ts:201:1 › loop details tab shows no paused banner for a properly configured loop 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/loop/loop.spec.ts:204:16
+
+    Error Context: testing/results/playwright/components-loop-loop-loop--d394c--a-properly-configured-loop-athena/error-context.md
+
+
+  7) [athena] › src/components/persona/persona.spec.ts:70:1 › loop personas tab can assign catalog personas to loop 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/persona/persona.spec.ts:73:16
+
+    Error Context: testing/results/playwright/components-persona-persona-6d910-gn-catalog-personas-to-loop-athena/error-context.md
+
+
+  8) [athena] › src/components/loop/loop.spec.ts:75:1 › loop tools API exposes requiresApproval metadata 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/loop/loop.spec.ts:78:16
+
+    Error Context: testing/results/playwright/components-loop-loop-loop--c9928-s-requiresApproval-metadata-athena/error-context.md
+
+
+  9) [athena] › src/components/loop/loop.spec.ts:176:1 › providers tab keeps assign-provider section visible even when provider list is empty 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/loop/loop.spec.ts:179:16
+
+    Error Context: testing/results/playwright/components-loop-loop-provi-7bb1a-when-provider-list-is-empty-athena/error-context.md
+
+
+[39/41] [athena] › src/components/shell/shell.spec.ts:3:1 › athena.localhost shows the loop list
+[40/41] [athena] › src/components/shell/shell.spec.ts:10:1 › athena.localhost no longer exposes loop list route
+  10) [athena] › src/components/loop/loop.spec.ts:186:1 › loop detail page saves loop details from the Details tab 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/loop/loop.spec.ts:189:16
+
+    Error Context: testing/results/playwright/components-loop-loop-loop--1bef1-etails-from-the-Details-tab-athena/error-context.md
+
+
+[41/41] [athena] › src/components/status/status.spec.ts:3:1 › application root renders the shell
+  11) [athena] › src/components/persona/persona.spec.ts:121:1 › persona list edit drawer shows not found message for unknown persona id 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Persona not found')
+    Expected: visible
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('Persona not found')
+      - Test timeout of 10000ms exceeded.
+
+
+      123 |   await page.goto(`http://athena.localhost/persona/list?edit=00000000-0000-4000-8000-000000000000`);
+      124 |
+    > 125 |   await expect(page.getByText(`Persona not found`)).toBeVisible();
+          |                                                     ^
+      126 |   await expect(page.getByText(`The selected persona no longer exists.`)).toBeVisible();
+      127 | });
+      128 |
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/persona/persona.spec.ts:125:53
+
+    Error Context: testing/results/playwright/components-persona-persona-10800-sage-for-unknown-persona-id-athena/error-context.md
+
+
+  12) [athena] › src/components/persona/persona.spec.ts:42:1 › loop personas tab shows role and supports add and remove 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/persona/persona.spec.ts:45:16
+
+    Error Context: testing/results/playwright/components-persona-persona-dab91-and-supports-add-and-remove-athena/error-context.md
+
+
+  13) [athena] › src/components/persona/persona.spec.ts:152:1 › persona catalog allows cloning a persona with name only 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Persona Catalog' })
+    Expected: visible
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByRole('heading', { name: 'Persona Catalog' })
+      - Test timeout of 10000ms exceeded.
+
+
+      156 |   // Navigate to Persona Catalog tab
+      157 |   await page.getByRole(`tab`, { name: `Persona Catalog` }).click();
+    > 158 |   await expect(page.getByRole(`heading`, { name: `Persona Catalog` })).toBeVisible();
+          |                                                                        ^
+      159 |
+      160 |   // Get first persona name from the catalog
+      161 |   const firstPersonaLink = page.locator(`a`).first();
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/persona/persona.spec.ts:158:72
+
+    Error Context: testing/results/playwright/components-persona-persona-7b2e4-ng-a-persona-with-name-only-athena/error-context.md
+
+
+  14) [athena] › src/components/provider/provider.spec.ts:28:1 › providers page supports create edit and delete 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Edit definition' }).first()
+
+
+      34 |   await createProviderViaUi(page, displayName);
+      35 |
+    > 36 |   await page.getByRole(`button`, { name: `Edit definition` }).first().click();
+         |                                                                       ^
+      37 |   await page.getByLabel(`Display name`).fill(updatedName);
+      38 |   await page.getByRole(`button`, { name: `Save provider` }).click();
+      39 |
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/provider/provider.spec.ts:36:71
+
+    Error Context: testing/results/playwright/components-provider-provid-4bb1f-orts-create-edit-and-delete-athena/error-context.md
+
+
+  15) [athena] › src/components/provider/provider.spec.ts:62:1 › loop providers tab supports assign remove and algorithm save 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/provider/provider.spec.ts:65:16
+
+    Error Context: testing/results/playwright/components-provider-provid-bc7fa-n-remove-and-algorithm-save-athena/error-context.md
+
+
+  16) [athena] › src/components/provider/provider.spec.ts:88:1 › provider detail page renders expected fields 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Model settings' })
+    Expected: visible
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByRole('heading', { name: 'Model settings' })
+      - Test timeout of 10000ms exceeded.
+
+
+       96 |   await expect(page.getByRole(`heading`, { name: displayName })).toBeVisible();
+       97 |   await expect(page.getByRole(`heading`, { name: `Provider details` })).toBeVisible();
+    >  98 |   await expect(page.getByRole(`heading`, { name: `Model settings` })).toBeVisible();
+          |                                                                       ^
+       99 |   await expect(page.getByText(`openrouter`, { exact: true })).toBeVisible();
+      100 |   await expect(page.getByText(`https://openrouter.ai/api/v1`)).toBeVisible();
+      101 |   await expect(page.getByText(`Credential configured`)).toBeVisible();
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/provider/provider.spec.ts:98:71
+
+    Error Context: testing/results/playwright/components-provider-provid-ac0a8-age-renders-expected-fields-athena/error-context.md
+
+
+  17) [athena] › src/components/provider/provider.spec.ts:104:1 › provider detail supports enabled models and default model persistence 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Fetch models' })
+
+
+      124 |   });
+      125 |
+    > 126 |   await page.getByRole(`button`, { name: `Fetch models` }).click();
+          |                                                            ^
+      127 |   await expect(page.getByRole(`checkbox`, { name: `GPT-4.1 Mini` })).toBeVisible();
+      128 |
+      129 |   await page.getByRole(`button`, { name: `Enable all` }).click();
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/provider/provider.spec.ts:126:60
+
+    Error Context: testing/results/playwright/components-provider-provid-a90b8-d-default-model-persistence-athena/error-context.md
+
+
+  18) [athena] › src/components/provider/provider.spec.ts:139:1 › provider detail with invalid id shows an error notification 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('providerId must be a valid UUID.')
+    Expected: visible
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('providerId must be a valid UUID.')
+      - Test timeout of 10000ms exceeded.
+
+
+      142 |
+      143 |   await expect(page.getByText(`Unable to load provider`)).toBeVisible();
+    > 144 |   await expect(page.getByText(`providerId must be a valid UUID.`)).toBeVisible();
+          |                                                                    ^
+      145 | });
+      146 |
+      147 | test(`provider list edit drawer shows not found message for unknown provider id`, async ({ page }) => {
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/provider/provider.spec.ts:144:68
+
+    Error Context: testing/results/playwright/components-provider-provid-1f77a-shows-an-error-notification-athena/error-context.md
+
+
+  19) [athena] › src/components/provider/provider.spec.ts:147:1 › provider list edit drawer shows not found message for unknown provider id 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Provider not found')
+    Expected: visible
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('Provider not found')
+      - Test timeout of 10000ms exceeded.
+
+
+      149 |   await page.goto(`http://athena.localhost/provider/list?edit=00000000-0000-4000-8000-000000000000`);
+      150 |
+    > 151 |   await expect(page.getByText(`Provider not found`)).toBeVisible();
+          |                                                      ^
+      152 |   await expect(page.getByText(`The selected provider no longer exists.`)).toBeVisible();
+      153 | });
+      154 |
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/provider/provider.spec.ts:151:54
+
+    Error Context: testing/results/playwright/components-provider-provid-c0993-age-for-unknown-provider-id-athena/error-context.md
+
+
+  20) [athena] › src/components/runner/runner.spec.ts:47:1 › loop runners tab supports assign remove and algorithm save 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: locator.click: Test timeout of 10000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Create' })
+
+
+       at ../testing/playwright/loop.ts:7
+
+       5 |   await page.goto(`http://athena.localhost/loop/list`);
+       6 |
+    >  7 |   await page.getByRole(`button`, { name: `Create` }).click();
+         |                                                      ^
+       8 |   await page.getByLabel(`Loop name`).fill(name);
+       9 |   await page.getByLabel(`Loop description`).fill(description);
+      10 |   await page.getByRole(`button`, { name: `Create loop` }).click();
+        at createLoop (/home/ali.dikici@canonical.com/repositories/athena/testing/playwright/loop.ts:7:54)
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/runner/runner.spec.ts:50:16
+
+    Error Context: testing/results/playwright/components-runner-runner-l-c6a24-n-remove-and-algorithm-save-athena/error-context.md
+
+
+  21) [athena] › src/components/runner/runner.spec.ts:72:1 › runner detail page renders expected fields 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/runner\/list\?edit=/
+    Received string:  "http://athena.localhost/runner/list/edit/019fea58-585a-7c35-a18a-ef9264437bb2"
+
+    Call log:
+      - Expect "toHaveURL" with timeout 10000ms
+        21 × locator resolved to <html lang="en">…</html>
+           - unexpected value "http://athena.localhost/runner/list/edit/019fea58-585a-7c35-a18a-ef9264437bb2"
+      - Test timeout of 10000ms exceeded.
+
+
+      77 |
+      78 |   await page.getByRole(`button`, { name: `Edit ${displayName}` }).click();
+    > 79 |   await expect(page).toHaveURL(/\/runner\/list\?edit=/);
+         |                      ^
+      80 |   const currentUrl = page.url();
+      81 |   const runnerId = new URL(currentUrl).searchParams.get(`edit`);
+      82 |
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/runner/runner.spec.ts:79:22
+
+    Error Context: testing/results/playwright/components-runner-runner-r-82b8a-age-renders-expected-fields-athena/error-context.md
+
+
+  22) [athena] › src/components/runner/runner.spec.ts:100:1 › runner list edit drawer shows not found message for unknown runner id 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Runner not found')
+    Expected: visible
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('Runner not found')
+      - Test timeout of 10000ms exceeded.
+
+
+      102 |   await page.goto(`http://athena.localhost/runner/list?edit=00000000-0000-4000-8000-000000000000`);
+      103 |
+    > 104 |   await expect(page.getByText(`Runner not found`)).toBeVisible();
+          |                                                    ^
+      105 |   await expect(page.getByText(`The selected runner no longer exists.`)).toBeVisible();
+      106 | });
+      107 |
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/runner/runner.spec.ts:104:52
+
+    Error Context: testing/results/playwright/components-runner-runner-r-2da26-ssage-for-unknown-runner-id-athena/error-context.md
+
+
+  23) [athena] › src/components/shell/shell.spec.ts:10:1 › athena.localhost no longer exposes loop list route 
+
+    Test timeout of 10000ms exceeded.
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Page not found')
+    Expected: visible
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('Page not found')
+      - Test timeout of 10000ms exceeded.
+
+
+      12 |   await page.goto(`http://athena.localhost/loop/list`);
+      13 |
+    > 14 |   await expect(page.getByText(`Page not found`)).toBeVisible();
+         |                                                  ^
+      15 | });
+      16 |
+        at /home/ali.dikici@canonical.com/repositories/athena/src/components/shell/shell.spec.ts:14:50
+
+    Error Context: testing/results/playwright/components-shell-shell-ath-09d5f-ger-exposes-loop-list-route-athena/error-context.md
+
+
+[coverage] backend coverage written
+[coverage] merged coverage written
+  23 failed
+    [athena] › src/components/loop/loop.spec.ts:32:1 › loop provider selection policy uses providerSelectionAlgorithm 
+    [athena] › src/components/loop/loop.spec.ts:75:1 › loop tools API exposes requiresApproval metadata 
+    [athena] › src/components/loop/loop.spec.ts:98:1 › loops page supports create update and delete 
+    [athena] › src/components/loop/loop.spec.ts:132:1 › loop list allows navigating to loop detail page 
+    [athena] › src/components/loop/loop.spec.ts:152:1 › loop detail page tabs are deep-linkable ────
+    [athena] › src/components/loop/loop.spec.ts:176:1 › providers tab keeps assign-provider section visible even when provider list is empty 
+    [athena] › src/components/loop/loop.spec.ts:186:1 › loop detail page saves loop details from the Details tab 
+    [athena] › src/components/loop/loop.spec.ts:201:1 › loop details tab shows no paused banner for a properly configured loop 
+    [athena] › src/components/loop/loop.spec.ts:223:1 › loop detail page has tasks tab as first tab 
+    [athena] › src/components/persona/persona.spec.ts:42:1 › loop personas tab shows role and supports add and remove 
+    [athena] › src/components/persona/persona.spec.ts:70:1 › loop personas tab can assign catalog personas to loop 
+    [athena] › src/components/persona/persona.spec.ts:121:1 › persona list edit drawer shows not found message for unknown persona id 
+    [athena] › src/components/persona/persona.spec.ts:152:1 › persona catalog allows cloning a persona with name only 
+    [athena] › src/components/provider/provider.spec.ts:28:1 › providers page supports create edit and delete 
+    [athena] › src/components/provider/provider.spec.ts:62:1 › loop providers tab supports assign remove and algorithm save 
+    [athena] › src/components/provider/provider.spec.ts:88:1 › provider detail page renders expected fields 
+    [athena] › src/components/provider/provider.spec.ts:104:1 › provider detail supports enabled models and default model persistence 
+    [athena] › src/components/provider/provider.spec.ts:139:1 › provider detail with invalid id shows an error notification 
+    [athena] › src/components/provider/provider.spec.ts:147:1 › provider list edit drawer shows not found message for unknown provider id 
+    [athena] › src/components/runner/runner.spec.ts:47:1 › loop runners tab supports assign remove and algorithm save 
+    [athena] › src/components/runner/runner.spec.ts:72:1 › runner detail page renders expected fields 
+    [athena] › src/components/runner/runner.spec.ts:100:1 › runner list edit drawer shows not found message for unknown runner id 
+    [athena] › src/components/shell/shell.spec.ts:10:1 › athena.localhost no longer exposes loop list route 
+  18 passed (55.0s)
+
+> @canonical/athena@1.2.0 coverage:report
+> nyc report --all --nycrc-path ./testing/.nycrc.json --temp-dir ./testing/results/.nyc_merged --reporter=text-summary --reporter=lcov --reporter=html --reporter=cobertura --reporter=json-summary --report-dir ./testing/results/coverage --exclude-after-remap=false
+
+
+=============================== Coverage summary ===============================
+Statements   : 32.11% ( 1322/4117 )
+Branches     : 7.5% ( 131/1745 )
+Functions    : 22.75% ( 185/813 )
+Lines        : 32.56% ( 1292/3968 )
+================================================================================

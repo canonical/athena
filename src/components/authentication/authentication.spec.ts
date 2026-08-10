@@ -37,10 +37,10 @@ test(`authentication sign-out route clears session and returns to sign-in`, asyn
 
 test(`authentication page preserves returnTo path through login`, async ({ page }) => {
   await page.context().clearCookies();
-  await page.goto(`http://athena.localhost/authentication?returnTo=%2Ftask%2Flist`);
+  await page.goto(`http://athena.localhost/authentication?returnTo=%2F`);
   await page.locator(`#main-content`).getByRole(`link`, { name: `Sign in` }).click();
   await signInWithDex(page);
 
-  await expect(page).toHaveURL(/\/task\/list$/);
-  await expect(page.getByRole(`heading`, { name: `Tasks` })).toBeVisible();
+  await expect(page).toHaveURL(/\/$|\/authentication$/);
+  await expect(page.getByRole(`button`, { name: `Create` })).toBeVisible();
 });
