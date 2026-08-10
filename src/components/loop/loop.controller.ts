@@ -1,20 +1,47 @@
 import { disabledProviderToolNamesFromEnabled, enabledProviderToolNamesFromDisabled, normalizeProviderToolNames, providerToolDefinitions } from "@components/tool/tool.catalog.js";
-import { LoopForbiddenError, LoopNotFoundError } from "./loop.errors.js";
+import { LoopForbiddenError, LoopNotFoundError, LoopValidationError } from "./loop.errors.js";
 import { evaluateLoopReadiness } from "./loop.readiness.js";
-import type { Loop, LoopInsert, LoopReadiness, LoopTools, LoopToolsUpdateRequest, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
+import type {
+  Loop,
+  LoopInsert,
+  LoopInvite,
+  LoopInviteCreate,
+  LoopMember,
+  LoopMembership,
+  LoopReadiness,
+  LoopTools,
+  LoopToolsUpdateRequest,
+  LoopUpdate,
+  LoopUserAdminUpdate,
+  ProviderSelectionPolicy,
+  ProviderSelectionPolicyUpdate,
+} from "./loop.schema.js";
 import {
+  queryLoopAdminCount,
   queryLoopAdminMembership,
   queryLoopCreate,
   queryLoopDelete,
   queryLoopDisabledProviderTools,
   queryLoopDisabledProviderToolsUpdate,
   queryLoopForUser,
+  queryLoopInviteAccept,
+  queryLoopInviteById,
+  queryLoopInviteCreate,
+  queryLoopInvitePendingForUser,
+  queryLoopInviteReject,
+  queryLoopInviteRevoke,
   queryLoopList,
+  queryLoopMemberByEmail,
+  queryLoopMemberByUserId,
+  queryLoopMemberList,
+  queryLoopMembership,
+  queryLoopPendingInviteList,
   queryLoopProviderSelectionPolicy,
   queryLoopProviderSelectionPolicyUpdate,
   queryLoopReadinessCounts,
   queryLoopReadinessCountsAll,
   queryLoopUpdate,
+  queryLoopUserAdminUpdate,
 } from "./loop.service.js";
 
 export const loopList = async (userId: string): Promise<Loop[]> => queryLoopList(userId);
@@ -134,4 +161,114 @@ export const loopToolsUpdate = async (loopId: string, userId: string, input: Loo
   }
 
   return buildLoopTools(loopId, updatedDisabledProviderTools);
+};
+
+export const loopMembershipGet = async (loopId: string, userId: string): Promise<LoopMembership> => {
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new LoopNotFoundError(`Loop not found.`);
+  }
+
+  const [members, pendingInvites, currentUserMember] = await Promise.all([queryLoopMemberList(loopId), queryLoopPendingInviteList(loopId), queryLoopMemberByUserId(loopId, userId)]);
+
+  return {
+    loop: loopId,
+    currentUser: userId,
+    currentUserIsAdmin: currentUserMember?.isAdmin ?? false,
+    members,
+    pendingInvites,
+  };
+};
+
+export const loopInvitePendingForUserList = async (userId: string): Promise<LoopInvite[]> => queryLoopInvitePendingForUser(userId);
+
+export const loopInviteCreate = async (loopId: string, userId: string, input: LoopInviteCreate): Promise<LoopInvite> => {
+  if (!(await queryLoopAdminMembership(loopId, userId))) {
+    if (!(await queryLoopForUser(loopId, userId))) {
+      throw new LoopNotFoundError(`Loop not found.`);
+    }
+
+    throw new LoopForbiddenError(`Only loop admins may invite users.`);
+  }
+
+  const existingMember = await queryLoopMemberByEmail(loopId, input.email);
+
+  if (existingMember) {
+    throw new LoopValidationError(`User is already a loop member.`);
+  }
+
+  return queryLoopInviteCreate(loopId, userId, input.email);
+};
+
+export const loopInviteAccept = async (inviteId: string, userId: string): Promise<LoopMember> => {
+  const invite = await queryLoopInviteAccept(inviteId, userId);
+
+  if (!invite) {
+    throw new LoopNotFoundError(`Invite not found.`);
+  }
+
+  const member = await queryLoopMemberByUserId(invite.loop, userId);
+
+  if (!member) {
+    throw new LoopValidationError(`Invite acceptance failed.`);
+  }
+
+  return member;
+};
+
+export const loopInviteReject = async (inviteId: string, userId: string): Promise<void> => {
+  if (!(await queryLoopInviteReject(inviteId, userId))) {
+    throw new LoopNotFoundError(`Invite not found.`);
+  }
+};
+
+export const loopInviteRevoke = async (loopId: string, inviteId: string, userId: string): Promise<void> => {
+  if (!(await queryLoopAdminMembership(loopId, userId))) {
+    if (!(await queryLoopForUser(loopId, userId))) {
+      throw new LoopNotFoundError(`Loop not found.`);
+    }
+
+    throw new LoopForbiddenError(`Only loop admins may revoke invites.`);
+  }
+
+  const invite = await queryLoopInviteById(inviteId);
+
+  if (!invite || invite.loop !== loopId) {
+    throw new LoopNotFoundError(`Invite not found.`);
+  }
+
+  if (!(await queryLoopInviteRevoke(loopId, inviteId, userId))) {
+    throw new LoopNotFoundError(`Invite not found.`);
+  }
+};
+
+export const loopUserAdminUpdate = async (loopId: string, userId: string, input: LoopUserAdminUpdate): Promise<LoopMember> => {
+  if (!(await queryLoopAdminMembership(loopId, userId))) {
+    if (!(await queryLoopForUser(loopId, userId))) {
+      throw new LoopNotFoundError(`Loop not found.`);
+    }
+
+    throw new LoopForbiddenError(`Only loop admins may update member roles.`);
+  }
+
+  const member = await queryLoopMemberByEmail(loopId, input.user);
+
+  if (!member) {
+    throw new LoopNotFoundError(`Loop member not found.`);
+  }
+
+  if (member.isAdmin && !input.isAdmin) {
+    const adminCount = await queryLoopAdminCount(loopId);
+
+    if (adminCount <= 1) {
+      throw new LoopValidationError(`At least one admin is required for every loop.`);
+    }
+  }
+
+  const updatedMember = await queryLoopUserAdminUpdate(loopId, member.user, userId, input.isAdmin);
+
+  if (!updatedMember) {
+    throw new LoopNotFoundError(`Loop member not found.`);
+  }
+
+  return updatedMember;
 };

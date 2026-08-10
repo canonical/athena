@@ -1,0 +1,13 @@
+[
+  {
+    "email": "dev.user@canonical.com",
+    "password": "password",
+    "username": "devuser",
+    "userID": "50f31e6f-26f2-4d93-9fd6-947f8f3f23a8"
+  },
+  {
+    "email": "loop.member@canonical.com",
+    "password": "password",
+    "username": "loopmember"
+  }
+]

@@ -28,6 +28,7 @@ const loopTaskListRoutePath = `${loopDetailRoutePath}/task/list`;
 const loopTaskDetailRoutePath = `${loopDetailRoutePath}/task/$taskId`;
 const loopDetailsRoutePath = `${loopDetailRoutePath}/details`;
 const loopToolsRoutePath = `${loopDetailRoutePath}/tools`;
+const loopMembersRoutePath = `${loopDetailRoutePath}/members`;
 const loopPersonasRoutePath = `${loopDetailRoutePath}/personas`;
 const loopPersonaCreateRoutePath = `${loopDetailRoutePath}/personas/create`;
 const loopPersonaEditRoutePath = `${loopDetailRoutePath}/personas/edit/$personaId`;
@@ -373,6 +374,12 @@ function LoopToolsRouteView() {
   const { loopId } = loopToolsRoute.useParams();
 
   return <LoopViewRoute loopId={loopId} tab="tools" />;
+}
+
+function LoopMembersRouteView() {
+  const { loopId } = loopMembersRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="members" />;
 }
 
 function LoopPersonasRouteView() {
@@ -819,6 +826,12 @@ const loopToolsRoute = createRoute({
   component: LoopToolsRouteView,
 });
 
+const loopMembersRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopMembersRoutePath,
+  component: LoopMembersRouteView,
+});
+
 const loopPersonasRoute = createRoute({
   getParentRoute: () => loopLayoutRoute,
   path: loopPersonasRoutePath,
@@ -1082,6 +1095,7 @@ const routeTree = rootRoute.addChildren([
       loopTaskDetailRoute,
       loopDetailsRoute,
       loopToolsRoute,
+      loopMembersRoute,
       loopPersonasRoute,
       loopPersonaCreateRoute,
       loopPersonaEditRoute,

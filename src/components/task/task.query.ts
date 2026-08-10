@@ -69,15 +69,7 @@ export const useTask = (loopId: string, taskId: string): { state: TaskState; rel
   const { isPending, isError, data, error, refetch } = useQuery({
     queryKey: taskQueryKeys.detail(loopId, taskId),
     queryFn: () => fetchTask(loopId, taskId),
-    refetchInterval: (query) => {
-      const task = query.state.data as Task | undefined;
-
-      if (!task) {
-        return false;
-      }
-
-      return task.status === `completed` ? false : 2_500;
-    },
+    refetchInterval: 2_500,
   });
 
   if (isPending) {

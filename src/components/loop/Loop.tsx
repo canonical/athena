@@ -29,6 +29,12 @@ const LazyLoopPersonas = lazy(async () => {
   return { default: module.LoopPersonas };
 });
 
+const LazyLoopMembers = lazy(async () => {
+  const module = await import("./LoopMembers");
+
+  return { default: module.LoopMembers };
+});
+
 const LazyLoopProviders = lazy(async () => {
   const module = await import("./LoopProviders");
 
@@ -116,6 +122,11 @@ export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId,
       {tab === `personas` ? (
         <Suspense fallback={<div>Loading personas...</div>}>
           <LazyLoopPersonas editor={editor} loopId={loopId} onFeedback={setFeedback} personaId={personaId} personaListState={personaListState} reloadPersonaList={reloadPersonaList} />
+        </Suspense>
+      ) : null}
+      {tab === `members` ? (
+        <Suspense fallback={<div>Loading members...</div>}>
+          <LazyLoopMembers loopId={loopId} onFeedback={setFeedback} />
         </Suspense>
       ) : null}
       {tab === `providers` ? (

@@ -1,4 +1,4 @@
-import { authenticate, createLoop, expect, test } from "../../../testing/playwright/index.js";
+import { authenticate, createLoop, dexEmail, dexLoopMemberEmail, expect, test } from "../../../testing/playwright/index.js";
 
 test(`loop list requires authentication`, async ({ page }) => {
   await page.context().clearCookies();
@@ -95,6 +95,111 @@ test(`loop tools API exposes requiresApproval metadata`, async ({ page }) => {
   expect(readItem?.requiresApproval).toBe(false);
 });
 
+test(`loop membership API lists members and pending invites`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Membership API loop ${Date.now()}`);
+  const membersPath = `http://athena.localhost/api/loop/${loop.id}/users`;
+
+  const initialMembershipResponse = await page.request.get(membersPath);
+  expect(initialMembershipResponse.ok()).toBe(true);
+
+  const initialMembership = (await initialMembershipResponse.json()) as {
+    currentUserIsAdmin: boolean;
+    members: Array<{ user: string; isAdmin: boolean }>;
+    pendingInvites: Array<{ invitedEmail: string }>;
+  };
+
+  expect(initialMembership.currentUserIsAdmin).toBe(true);
+  expect(initialMembership.members.length).toBe(1);
+  expect(initialMembership.members[0]?.isAdmin).toBe(true);
+  expect(initialMembership.pendingInvites.length).toBe(0);
+
+  const invitedEmail = `pending-invite-${Date.now()}@example.com`;
+  const createInviteResponse = await page.request.post(`http://athena.localhost/api/loop/${loop.id}/invite`, {
+    data: { email: invitedEmail },
+  });
+  expect(createInviteResponse.ok()).toBe(true);
+
+  const pendingInvitesResponse = await page.request.get(`http://athena.localhost/api/loop/invite/pending`);
+  expect(pendingInvitesResponse.ok()).toBe(true);
+  const pendingInvites = (await pendingInvitesResponse.json()) as Array<{ invitedEmail: string }>;
+  expect(pendingInvites.some((invite) => invite.invitedEmail === invitedEmail)).toBe(false);
+
+  const updatedMembershipResponse = await page.request.get(membersPath);
+  expect(updatedMembershipResponse.ok()).toBe(true);
+  const updatedMembership = (await updatedMembershipResponse.json()) as {
+    pendingInvites: Array<{ invitedEmail: string }>;
+  };
+  expect(updatedMembership.pendingInvites.some((invite) => invite.invitedEmail === invitedEmail)).toBe(true);
+});
+
+test(`loop membership API prevents demoting the last admin`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Last admin guard loop ${Date.now()}`);
+
+  const response = await page.request.put(`http://athena.localhost/api/loop/${loop.id}/user/admin`, {
+    data: {
+      user: dexEmail,
+      isAdmin: false,
+    },
+  });
+
+  expect(response.status()).toBe(400);
+  const payload = (await response.json()) as { error?: string };
+  expect(payload.error).toContain(`At least one admin is required`);
+});
+
+test(`loop invite can be accepted by another dex user and promoted to admin`, async ({ page }) => {
+  await authenticate(page, { email: dexEmail, password: `password` });
+
+  const loop = await createLoop(page, `Invite acceptance loop ${Date.now()}`);
+
+  const inviteResponse = await page.request.post(`http://athena.localhost/api/loop/${loop.id}/invite`, {
+    data: {
+      email: dexLoopMemberEmail,
+    },
+  });
+  expect(inviteResponse.ok()).toBe(true);
+
+  await authenticate(page, { email: dexLoopMemberEmail, password: `password` });
+
+  const pendingInvitesResponse = await page.request.get(`http://athena.localhost/api/loop/invite/pending`);
+  expect(pendingInvitesResponse.ok()).toBe(true);
+  const pendingInvites = (await pendingInvitesResponse.json()) as Array<{ id: string; loop: string; invitedEmail: string }>;
+  const pendingInvite = pendingInvites.find((invite) => invite.loop === loop.id && invite.invitedEmail === dexLoopMemberEmail);
+  expect(pendingInvite).toBeTruthy();
+
+  const acceptResponse = await page.request.post(`http://athena.localhost/api/loop/invite/${pendingInvite?.id}/accept`);
+  expect(acceptResponse.ok()).toBe(true);
+
+  const memberLoopListResponse = await page.request.get(`http://athena.localhost/api/loop`);
+  expect(memberLoopListResponse.ok()).toBe(true);
+  const memberLoops = (await memberLoopListResponse.json()) as Array<{ id: string }>;
+  expect(memberLoops.some((item) => item.id === loop.id)).toBe(true);
+
+  const memberMembershipResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/users`);
+  expect(memberMembershipResponse.ok()).toBe(true);
+  const memberMembership = (await memberMembershipResponse.json()) as { currentUserIsAdmin: boolean };
+  expect(memberMembership.currentUserIsAdmin).toBe(false);
+
+  await authenticate(page, { email: dexEmail, password: `password` });
+  const promoteResponse = await page.request.put(`http://athena.localhost/api/loop/${loop.id}/user/admin`, {
+    data: {
+      user: dexLoopMemberEmail,
+      isAdmin: true,
+    },
+  });
+  expect(promoteResponse.ok()).toBe(true);
+
+  await authenticate(page, { email: dexLoopMemberEmail, password: `password` });
+  const updatedMembershipResponse = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/users`);
+  expect(updatedMembershipResponse.ok()).toBe(true);
+  const updatedMembership = (await updatedMembershipResponse.json()) as { currentUserIsAdmin: boolean };
+  expect(updatedMembership.currentUserIsAdmin).toBe(true);
+});
+
 test(`loops page supports create update and delete`, async ({ page }) => {
   await authenticate(page);
   await page.goto(`http://athena.localhost/`);
@@ -148,20 +253,29 @@ test(`loop list allows navigating to loop detail page`, async ({ page }) => {
 });
 
 test(`loop detail page routes are deep-linkable`, async ({ page }) => {
+  test.slow();
   await authenticate(page);
 
   const loop = await createLoop(page, `Deep link tab loop`);
 
   await page.goto(`http://athena.localhost/loop/${loop.id}/personas`);
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/personas$`));
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 
   await page.goto(`http://athena.localhost/loop/${loop.id}/providers`);
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/providers$`));
   await expect(page.getByRole(`heading`, { name: `Assigned providers` })).toBeVisible();
   await expect(page.getByRole(`button`, { name: `Selection algorithm` })).toBeVisible();
   await expect(page.getByRole(`button`, { name: `Assign provider` })).toBeVisible();
 
+  await page.goto(`http://athena.localhost/loop/${loop.id}/members`);
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/members$`));
+  await expect(page.getByRole(`heading`, { name: `Loop members` })).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Invite member` })).toBeVisible();
+
   await page.goto(`http://athena.localhost/loop/${loop.id}/runners`);
-  await expect(page.getByRole(`heading`, { name: `Assigned runners` })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/runners$`));
+  await expect(page.getByRole(`heading`, { name: `Assigned runners` })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole(`button`, { name: `Selection algorithm` })).toBeVisible();
   await expect(page.getByRole(`button`, { name: `Assign runner` })).toBeVisible();
 });
