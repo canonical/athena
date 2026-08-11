@@ -1,11 +1,11 @@
-import { getPool } from "@components/postgres/postgres.js";
+import { query } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
-import type { LoopRunner, LoopRunnerAdminUpdate, Runner, RunnerInsert, RunnerUpdate } from "./runner.schema.js";
+import type { LoopRunner, LoopRunnerAdminUpdate, LoopRunnerRepository, Runner, RunnerInsert, RunnerUpdate } from "./runner.schema.js";
 
 const runnerColumns = `"id", "owner", "displayName", "runnerType", "lifecycleStatus", "createdAt", "updatedAt"`;
 
 export const queryRunnerListByOwner = async (ownerId: string): Promise<Runner[]> => {
-  const result = await getPool().query<Runner>(
+  const result = await query<Runner>(
     `
       SELECT ${runnerColumns}, TRUE AS "hasCredential"
       FROM "runner"
@@ -19,7 +19,7 @@ export const queryRunnerListByOwner = async (ownerId: string): Promise<Runner[]>
 };
 
 export const queryRunnerByIdForOwner = async (runnerId: string, ownerId: string): Promise<Runner | undefined> => {
-  const result = await getPool().query<Runner>(
+  const result = await query<Runner>(
     `
       SELECT ${runnerColumns}, TRUE AS "hasCredential"
       FROM "runner"
@@ -35,7 +35,7 @@ export const queryRunnerByIdForOwner = async (runnerId: string, ownerId: string)
 export const queryRunnerCreate = async (input: RunnerInsert, ownerId: string): Promise<Runner> => {
   const envelope = encryptSecret(input.apiKey);
 
-  const result = await getPool().query<Runner>(
+  const result = await query<Runner>(
     `
       INSERT INTO "runner" (
         "owner",
@@ -65,7 +65,7 @@ export const queryRunnerCreate = async (input: RunnerInsert, ownerId: string): P
 export const queryRunnerUpdate = async (runnerId: string, ownerId: string, input: RunnerUpdate): Promise<Runner | undefined> => {
   if (input.apiKey) {
     const envelope = encryptSecret(input.apiKey);
-    const result = await getPool().query<Runner>(
+    const result = await query<Runner>(
       `
         UPDATE "runner"
         SET
@@ -85,7 +85,7 @@ export const queryRunnerUpdate = async (runnerId: string, ownerId: string, input
     return result.rows[0];
   }
 
-  const result = await getPool().query<Runner>(
+  const result = await query<Runner>(
     `
       UPDATE "runner"
       SET
@@ -102,13 +102,13 @@ export const queryRunnerUpdate = async (runnerId: string, ownerId: string, input
 };
 
 export const queryRunnerDelete = async (runnerId: string, ownerId: string): Promise<boolean> => {
-  const result = await getPool().query(`DELETE FROM "runner" WHERE "id" = $1 AND "owner" = $2`, [runnerId, ownerId]);
+  const result = await query(`DELETE FROM "runner" WHERE "id" = $1 AND "owner" = $2`, [runnerId, ownerId]);
 
   return Boolean(result.rowCount);
 };
 
 export const queryLoopRunnerList = async (loopId: string): Promise<LoopRunner[]> => {
-  const result = await getPool().query<LoopRunner>(
+  const result = await query<LoopRunner>(
     `
       SELECT
         lh."loop",
@@ -143,7 +143,7 @@ export const queryLoopRunnerList = async (loopId: string): Promise<LoopRunner[]>
 };
 
 export const queryLoopRunnerCreate = async (loopId: string, runnerId: string): Promise<void> => {
-  const result = await getPool().query<{ nextPriority: number }>(
+  const result = await query<{ nextPriority: number }>(
     `
       SELECT COALESCE(MAX("priority"), 0) + 1 AS "nextPriority"
       FROM "loopRunner"
@@ -154,7 +154,7 @@ export const queryLoopRunnerCreate = async (loopId: string, runnerId: string): P
 
   const nextPriority = result.rows[0]?.nextPriority ?? 1;
 
-  await getPool().query(
+  await query(
     `
       INSERT INTO "loopRunner" ("loop", "runner", "priority")
       VALUES ($1, $2, $3)
@@ -162,10 +162,85 @@ export const queryLoopRunnerCreate = async (loopId: string, runnerId: string): P
     `,
     [loopId, runnerId, nextPriority],
   );
+
+  await query(
+    `
+      INSERT INTO "loopRunnerRepository" ("loop", "runner", "repository")
+      SELECT lr."loop", $2::uuid, lr."repository"
+      FROM "loopRepository" lr
+      WHERE lr."loop" = $1
+      ON CONFLICT ("loop", "runner", "repository") DO NOTHING
+    `,
+    [loopId, runnerId],
+  );
+};
+
+export const queryLoopRunnerRepositoryReplace = async (loopId: string, runnerId: string, repositoryIds: string[]): Promise<void> => {
+  const filtered = [...new Set(repositoryIds)];
+
+  await query(
+    `
+      DELETE FROM "loopRunnerRepository"
+      WHERE "loop" = $1
+        AND "runner" = $2
+    `,
+    [loopId, runnerId],
+  );
+
+  if (filtered.length === 0) {
+    return;
+  }
+
+  await query(
+    `
+      INSERT INTO "loopRunnerRepository" ("loop", "runner", "repository")
+      SELECT $1::uuid, $2::uuid, repo_id
+      FROM UNNEST($3::uuid[]) AS repo_id
+      WHERE EXISTS (
+        SELECT 1
+        FROM "loopRepository" lr
+        WHERE lr."loop" = $1
+          AND lr."repository" = repo_id
+      )
+      ON CONFLICT ("loop", "runner", "repository") DO NOTHING
+    `,
+    [loopId, runnerId, filtered],
+  );
+};
+
+export const queryLoopRunnerRepositoryList = async (loopId: string, runnerId: string): Promise<LoopRunnerRepository[]> => {
+  const result = await query<LoopRunnerRepository>(
+    `
+      SELECT
+        lr."loop",
+        $2::uuid AS "runner",
+        lr."repository",
+        (lrr."repository" IS NOT NULL) AS "assigned",
+        COALESCE(lrr."enabled", FALSE) AS "enabled",
+        lr."enabled" AS "repositoryEnabled",
+        r."displayName",
+        r."repositoryType",
+        r."repositoryOwner",
+        r."repositoryName",
+        r."defaultBranch",
+        r."lifecycleStatus"
+      FROM "loopRepository" lr
+      JOIN "repository" r ON r."id" = lr."repository"
+      LEFT JOIN "loopRunnerRepository" lrr
+        ON lrr."loop" = lr."loop"
+       AND lrr."runner" = $2
+       AND lrr."repository" = lr."repository"
+      WHERE lr."loop" = $1
+      ORDER BY lr."createdAt" ASC, r."createdAt" ASC
+    `,
+    [loopId, runnerId],
+  );
+
+  return result.rows;
 };
 
 export const queryLoopRunnerUpdateByAdmin = async (loopId: string, runnerId: string, input: LoopRunnerAdminUpdate): Promise<LoopRunner | undefined> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "loopRunner"
       SET
@@ -210,13 +285,13 @@ export const queryLoopRunnerUpdateByAdmin = async (loopId: string, runnerId: str
 };
 
 export const queryLoopRunnerDelete = async (loopId: string, runnerId: string): Promise<boolean> => {
-  const result = await getPool().query(`DELETE FROM "loopRunner" WHERE "loop" = $1 AND "runner" = $2`, [loopId, runnerId]);
+  const result = await query(`DELETE FROM "loopRunner" WHERE "loop" = $1 AND "runner" = $2`, [loopId, runnerId]);
 
   return Boolean(result.rowCount);
 };
 
 export const queryRunnerDecryptCredential = async (runnerId: string): Promise<string | null> => {
-  const result = await getPool().query<{ ciphertext: string; iv: string; authTag: string; keyVersion: string }>(
+  const result = await query<{ ciphertext: string; iv: string; authTag: string; keyVersion: string }>(
     `
       SELECT "credentialCiphertext" AS ciphertext, "credentialIv" AS iv, "credentialAuthTag" AS "authTag", "credentialKeyVersion" AS "keyVersion"
       FROM "runner"
@@ -259,8 +334,8 @@ export type LoopRunnerCandidateRow = {
   displayName: string;
 };
 
-export const queryLoopRunnerCandidates = async (loopId: string): Promise<LoopRunnerCandidateRow[]> => {
-  const result = await getPool().query<LoopRunnerCandidateRow>(
+export const queryLoopRunnerCandidates = async (loopId: string, repositoryId?: string): Promise<LoopRunnerCandidateRow[]> => {
+  const result = await query<LoopRunnerCandidateRow>(
     `
       SELECT
         lh."loop",
@@ -289,15 +364,67 @@ export const queryLoopRunnerCandidates = async (loopId: string): Promise<LoopRun
       JOIN "runner" h ON h."id" = lh."runner"
       WHERE lh."loop" = $1
         AND h."lifecycleStatus" = 'active'
+        AND (
+          $2::uuid IS NULL
+          OR EXISTS (
+            SELECT 1
+            FROM "loopRunnerRepository" lrr
+            WHERE lrr."loop" = lh."loop"
+              AND lrr."runner" = lh."runner"
+              AND lrr."repository" = $2::uuid
+              AND lrr."enabled" = TRUE
+          )
+        )
     `,
-    [loopId],
+    [loopId, repositoryId ?? null],
+  );
+
+  return result.rows;
+};
+
+export const queryLoopRunnersForRepository = async (loopId: string, repositoryId: string): Promise<LoopRunner[]> => {
+  const result = await query<LoopRunner>(
+    `
+      SELECT
+        lh."loop",
+        lh."runner",
+        lh."priority",
+        lh."priorityOverride",
+        lh."enabled",
+        lh."timeoutMs",
+        lh."maxRetries",
+        lh."selectionWeight",
+        lh."assignmentOverrides",
+        lh."remainingCreditPercentage",
+        lh."remainingCreditValue",
+        lh."cooldownUntil",
+        lh."healthStatus",
+        lh."lastUsedAt",
+        lh."lastFailedAt",
+        lh."failureCount",
+        lh."createdAt",
+        lh."updatedAt",
+        h."displayName",
+        h."runnerType"
+      FROM "loopRunner" lh
+      JOIN "runner" h ON h."id" = lh."runner"
+      JOIN "loopRunnerRepository" lrr
+        ON lrr."loop" = lh."loop"
+       AND lrr."runner" = lh."runner"
+       AND lrr."repository" = $2
+       AND lrr."enabled" = TRUE
+      WHERE lh."loop" = $1
+        AND h."lifecycleStatus" = 'active'
+      ORDER BY COALESCE(lh."priorityOverride", lh."priority") ASC, lh."createdAt" ASC, lh."runner" ASC
+    `,
+    [loopId, repositoryId],
   );
 
   return result.rows;
 };
 
 export const queryRunnerCredential = async (runnerId: string, requesterId: string, loopId?: string): Promise<string | undefined> => {
-  const result = await getPool().query<{ credentialCiphertext: string; credentialIv: string; credentialAuthTag: string; credentialKeyVersion: string }>(
+  const result = await query<{ credentialCiphertext: string; credentialIv: string; credentialAuthTag: string; credentialKeyVersion: string }>(
     `
       SELECT h."credentialCiphertext", h."credentialIv", h."credentialAuthTag", h."credentialKeyVersion"
       FROM "runner" h

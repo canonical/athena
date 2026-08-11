@@ -1,7 +1,7 @@
 import { authenticatedJsonDelete, authenticatedJsonGet, authenticatedJsonPost, authenticatedJsonPut } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
 import type { CopilotAgentTask } from "./runner.copilot.adapter.js";
-import type { LoopRunner, Runner, RunnerInsert, RunnerQueueItem, RunnerUpdate } from "./runner.schema.js";
+import type { LoopRunner, LoopRunnerRepository, Runner, RunnerInsert, RunnerQueueItem, RunnerUpdate } from "./runner.schema.js";
 
 export type LoopRunnerSessionsResult = {
   queueItems: RunnerQueueItem[];
@@ -14,6 +14,7 @@ export const runnerApiPaths = {
   byId: (runnerId: string) => getApiUrl(`/runner/${runnerId}`),
   loopList: (loopId: string) => getApiUrl(`/runner/loop/${loopId}/list`),
   loopSessions: (loopId: string) => getApiUrl(`/runner/loop/${loopId}/sessions`),
+  loopRunnerRepositories: (loopId: string, runnerId: string) => getApiUrl(`/runner/loop/${loopId}/${runnerId}/repositories`),
   assign: getApiUrl(`/runner/assign`),
   unassign: getApiUrl(`/runner/unassign`),
 } as const;
@@ -85,8 +86,8 @@ export const fetchLoopRunnerList = async (loopId: string): Promise<LoopRunner[]>
   return response.json() as Promise<LoopRunner[]>;
 };
 
-export const assignRunnerToLoop = async (loopId: string, runnerId: string): Promise<void> => {
-  const response = await authenticatedJsonPost(runnerApiPaths.assign, { loop: loopId, runner: runnerId });
+export const assignRunnerToLoop = async (loopId: string, runnerId: string, repositoryIds?: string[]): Promise<void> => {
+  const response = await authenticatedJsonPost(runnerApiPaths.assign, { loop: loopId, runner: runnerId, repositoryIds });
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Runner assignment failed with status ${response.status}`));
@@ -109,4 +110,22 @@ export const fetchLoopRunnerSessions = async (loopId: string): Promise<LoopRunne
   }
 
   return response.json() as Promise<LoopRunnerSessionsResult>;
+};
+
+export const fetchLoopRunnerRepositoryList = async (loopId: string, runnerId: string): Promise<LoopRunnerRepository[]> => {
+  const response = await authenticatedJsonGet(runnerApiPaths.loopRunnerRepositories(loopId, runnerId));
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Loop runner repositories request failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<LoopRunnerRepository[]>;
+};
+
+export const updateLoopRunnerRepositoryList = async (loopId: string, runnerId: string, repositoryIds: string[]): Promise<void> => {
+  const response = await authenticatedJsonPut(runnerApiPaths.loopRunnerRepositories(loopId, runnerId), { repositoryIds });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Loop runner repositories update failed with status ${response.status}`));
+  }
 };

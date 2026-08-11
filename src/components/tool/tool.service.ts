@@ -28,6 +28,7 @@ const validateToolInput = (request: ProviderToolRequest): string[] => {
 
 const providerToolExecutors: Record<string, ProviderToolExecutor> = {
   task_repositories: async (context) => githubExecutors.executeTaskRepositories(context),
+  task_runners: async (context, input) => runnerExecutors.executeTaskRunners(context, input),
   task_workgraphs: async (context) => workgraphExecutors.executeTaskWorkgraphs(context),
   repo_ls: async (context, input) => githubExecutors.executeRepoLs(context, input),
   repo_read: async (context, input) => githubExecutors.executeRepoRead(context, input),

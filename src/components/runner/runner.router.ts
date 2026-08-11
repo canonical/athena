@@ -3,8 +3,22 @@ import { defineRoutes } from "@components/express/express.router.js";
 import { uuid } from "@components/utilities/zod.utilities.js";
 import { Router } from "express";
 import { z } from "zod";
-import { loopRunnerCreate, loopRunnerDelete, loopRunnerList, loopRunnerSessions, loopRunnerUpdateByAdmin, runnerCreate, runnerDelete, runnerGet, runnerList, runnerSessions, runnerUpdate } from "./runner.controller.js";
-import { loopRunnerAdminUpdateSchema, runnerInsertSchema, runnerUpdateSchema } from "./runner.schema.js";
+import {
+  loopRunnerCreate,
+  loopRunnerDelete,
+  loopRunnerList,
+  loopRunnerRepositoryList,
+  loopRunnerRepositoryUpdate,
+  loopRunnerSessions,
+  loopRunnerUpdateByAdmin,
+  runnerCreate,
+  runnerDelete,
+  runnerGet,
+  runnerList,
+  runnerSessions,
+  runnerUpdate,
+} from "./runner.controller.js";
+import { loopRunnerAdminUpdateSchema, loopRunnerRepositoryUpdateSchema, runnerInsertSchema, runnerUpdateSchema } from "./runner.schema.js";
 
 export const runnerRouter = Router();
 const route = defineRoutes(runnerRouter);
@@ -29,6 +43,7 @@ const runnerDeleteBodySchema = z.object({
 const runnerAssignBodySchema = z.object({
   loop: uuid(`loop must be a valid UUID.`),
   runner: uuid(`runner must be a valid UUID.`),
+  repositoryIds: z.array(uuid(`repositoryIds must contain valid UUID values.`)).min(1).optional(),
 });
 
 route({
@@ -132,7 +147,7 @@ route({
     body: runnerAssignBodySchema,
   },
   handler: async ({ body, response, respond }) => {
-    await loopRunnerCreate(body.loop, getAuthenticatedUserId(response), { runner: body.runner });
+    await loopRunnerCreate(body.loop, getAuthenticatedUserId(response), { runner: body.runner, repositoryIds: body.repositoryIds });
     respond({ status: 204 });
   },
 });
@@ -147,6 +162,31 @@ route({
   handler: async ({ params, body, response, respond }) => {
     const runner = await loopRunnerUpdateByAdmin(params.loop, params.runner, getAuthenticatedUserId(response), body);
     respond({ status: 200, data: runner });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/:runner/repositories`,
+  validators: {
+    params: loopRunnerParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const repositories = await loopRunnerRepositoryList(params.loop, params.runner, getAuthenticatedUserId(response));
+    respond({ status: 200, data: repositories });
+  },
+});
+
+route({
+  method: `put`,
+  route: `/loop/:loop/:runner/repositories`,
+  validators: {
+    params: loopRunnerParamsSchema,
+    body: loopRunnerRepositoryUpdateSchema,
+  },
+  handler: async ({ params, body, response, respond }) => {
+    await loopRunnerRepositoryUpdate(params.loop, params.runner, getAuthenticatedUserId(response), body);
+    respond({ status: 204 });
   },
 });
 

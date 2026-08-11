@@ -1,5 +1,5 @@
 import { pgColumns } from "@components/postgres/pg.utilities.js";
-import { getPool } from "@components/postgres/postgres.js";
+import { query } from "@components/postgres/postgres.js";
 import type { RunnerQueueItem } from "./runner.schema.js";
 
 const runnerQueueColumnNames = [`id`, `loop`, `task`, `runner`, `repository`, `prompt`, `plan`, `status`, `claimedBy`, `claimedAt`, `externalTaskId`, `result`, `error`, `createdAt`, `updatedAt`] as const;
@@ -7,7 +7,7 @@ const runnerQueueColumns = pgColumns(runnerQueueColumnNames, `rq`);
 const runnerQueueColumnsUnscoped = pgColumns(runnerQueueColumnNames);
 
 export const queryRunnerQueueCreate = async (loopId: string, taskId: string, runnerId: string, repository: string, prompt: string, plan: string): Promise<RunnerQueueItem> => {
-  const result = await getPool().query<RunnerQueueItem>(
+  const result = await query<RunnerQueueItem>(
     `
       INSERT INTO "runnerQueue" ("loop", "task", "runner", "repository", "prompt", "plan")
       VALUES ($1, $2, $3, $4, $5, $6)
@@ -28,7 +28,7 @@ export const queryRunnerQueueCreate = async (loopId: string, taskId: string, run
 
 // Atomically claims the oldest pending item for a given runner type.
 export const queryRunnerQueueClaimNext = async (runnerType: string, consumerId: string): Promise<RunnerQueueItem | undefined> => {
-  const result = await getPool().query<RunnerQueueItem>(
+  const result = await query<RunnerQueueItem>(
     `
       WITH next_item AS (
         SELECT rq."id"
@@ -62,7 +62,7 @@ export const queryRunnerQueueClaimNext = async (runnerType: string, consumerId: 
 
 // Lists all claimed items for this consumer so the cycle can poll their external status.
 export const queryRunnerQueueListClaimed = async (consumerId: string): Promise<RunnerQueueItem[]> => {
-  const result = await getPool().query<RunnerQueueItem>(
+  const result = await query<RunnerQueueItem>(
     `
       SELECT ${runnerQueueColumnsUnscoped}
       FROM "runnerQueue"
@@ -77,7 +77,7 @@ export const queryRunnerQueueListClaimed = async (consumerId: string): Promise<R
 };
 
 export const queryRunnerQueueSetExternalTaskId = async (id: string, consumerId: string, externalTaskId: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "runnerQueue"
       SET "externalTaskId" = $3
@@ -94,7 +94,7 @@ export const queryRunnerQueueSetExternalTaskId = async (id: string, consumerId: 
 };
 
 export const queryRunnerQueueSubmitResult = async (id: string, consumerId: string, result: string): Promise<boolean> => {
-  const dbResult = await getPool().query(
+  const dbResult = await query(
     `
       UPDATE "runnerQueue"
       SET "status" = 'completed',
@@ -112,7 +112,7 @@ export const queryRunnerQueueSubmitResult = async (id: string, consumerId: strin
 };
 
 export const queryRunnerQueueMarkFailed = async (id: string, consumerId: string, error: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "runnerQueue"
       SET "status" = 'failed',
@@ -130,7 +130,7 @@ export const queryRunnerQueueMarkFailed = async (id: string, consumerId: string,
 };
 
 export const queryRunnerQueueListByRunner = async (runnerId: string): Promise<RunnerQueueItem[]> => {
-  const result = await getPool().query<RunnerQueueItem>(
+  const result = await query<RunnerQueueItem>(
     `
       SELECT ${runnerQueueColumnsUnscoped}
       FROM "runnerQueue"
@@ -144,7 +144,7 @@ export const queryRunnerQueueListByRunner = async (runnerId: string): Promise<Ru
 };
 
 export const queryRunnerQueueListByLoop = async (loopId: string): Promise<RunnerQueueItem[]> => {
-  const result = await getPool().query<RunnerQueueItem>(
+  const result = await query<RunnerQueueItem>(
     `
       SELECT ${runnerQueueColumnsUnscoped}
       FROM "runnerQueue"

@@ -1,4 +1,4 @@
-import { getPool } from "@components/postgres/postgres.js";
+import { getPool, query } from "@components/postgres/postgres.js";
 import type { LoopReadinessCounts } from "./loop.readiness.js";
 import type { Loop, LoopInsert, LoopInvite, LoopMember, LoopUpdate, ProviderSelectionPolicy, ProviderSelectionPolicyUpdate } from "./loop.schema.js";
 
@@ -16,7 +16,7 @@ const parseStringArray = (value: unknown): string[] => {
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
 export const queryLoopById = async (loopId: string): Promise<Loop | undefined> => {
-  const result = await getPool().query<Loop>(
+  const result = await query<Loop>(
     `
       SELECT ${loopSelectColumns}
       FROM "loop" l
@@ -30,7 +30,7 @@ export const queryLoopById = async (loopId: string): Promise<Loop | undefined> =
 };
 
 export const queryLoopForUser = async (loopId: string, userId: string): Promise<Loop | undefined> => {
-  const result = await getPool().query<Loop>(
+  const result = await query<Loop>(
     `
       SELECT ${loopSelectColumns}
       FROM "loop" l
@@ -45,19 +45,19 @@ export const queryLoopForUser = async (loopId: string, userId: string): Promise<
 };
 
 export const queryLoopMembership = async (loopId: string, userId: string): Promise<boolean> => {
-  const result = await getPool().query(`SELECT 1 FROM "loopUser" WHERE "loop" = $1 AND "user" = $2`, [loopId, userId]);
+  const result = await query(`SELECT 1 FROM "loopUser" WHERE "loop" = $1 AND "user" = $2`, [loopId, userId]);
 
   return Boolean(result.rowCount);
 };
 
 export const queryLoopAdminMembership = async (loopId: string, userId: string): Promise<boolean> => {
-  const result = await getPool().query(`SELECT 1 FROM "loopUser" WHERE "loop" = $1 AND "user" = $2 AND "isAdmin" = TRUE`, [loopId, userId]);
+  const result = await query(`SELECT 1 FROM "loopUser" WHERE "loop" = $1 AND "user" = $2 AND "isAdmin" = TRUE`, [loopId, userId]);
 
   return Boolean(result.rowCount);
 };
 
 export const queryLoopList = async (userId: string): Promise<Loop[]> => {
-  const result = await getPool().query<Loop>(
+  const result = await query<Loop>(
     `
       SELECT ${loopSelectColumns}, lu."isAdmin" AS "currentUserIsAdmin"
       FROM "loop" l
@@ -111,7 +111,7 @@ export const queryLoopCreate = async (input: LoopInsert, userId: string): Promis
 };
 
 export const queryLoopUpdate = async (loopId: string, input: LoopUpdate, userId: string): Promise<Loop | undefined> => {
-  const result = await getPool().query<Loop>(
+  const result = await query<Loop>(
     `
       UPDATE "loop" AS l
       SET
@@ -132,7 +132,7 @@ export const queryLoopUpdate = async (loopId: string, input: LoopUpdate, userId:
 };
 
 export const queryLoopDelete = async (loopId: string, userId: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       DELETE FROM "loop" AS l
       USING "loopUser" AS lu
@@ -148,7 +148,7 @@ export const queryLoopDelete = async (loopId: string, userId: string): Promise<b
 };
 
 export const queryLoopProviderSelectionPolicy = async (loopId: string, userId: string): Promise<ProviderSelectionPolicy | undefined> => {
-  const result = await getPool().query<ProviderSelectionPolicy>(
+  const result = await query<ProviderSelectionPolicy>(
     `
       SELECT
         l."id" AS "loop",
@@ -169,7 +169,7 @@ export const queryLoopProviderSelectionPolicy = async (loopId: string, userId: s
 };
 
 export const queryLoopProviderSelectionPolicyUpdate = async (loopId: string, userId: string, input: ProviderSelectionPolicyUpdate): Promise<ProviderSelectionPolicy | undefined> => {
-  const result = await getPool().query<ProviderSelectionPolicy>(
+  const result = await query<ProviderSelectionPolicy>(
     `
       UPDATE "loop" AS l
       SET
@@ -195,7 +195,7 @@ export const queryLoopProviderSelectionPolicyUpdate = async (loopId: string, use
 };
 
 export const queryLoopDisabledProviderTools = async (loopId: string, userId: string): Promise<string[] | undefined> => {
-  const result = await getPool().query<{ disabledProviderTools: unknown }>(
+  const result = await query<{ disabledProviderTools: unknown }>(
     `
       SELECT COALESCE(l."disabledProviderTools", '[]'::jsonb) AS "disabledProviderTools"
       FROM "loop" l
@@ -217,7 +217,7 @@ export const queryLoopDisabledProviderTools = async (loopId: string, userId: str
 };
 
 export const queryLoopDisabledProviderToolsById = async (loopId: string): Promise<string[]> => {
-  const result = await getPool().query<{ disabledProviderTools: unknown }>(
+  const result = await query<{ disabledProviderTools: unknown }>(
     `
       SELECT COALESCE("disabledProviderTools", '[]'::jsonb) AS "disabledProviderTools"
       FROM "loop"
@@ -231,7 +231,7 @@ export const queryLoopDisabledProviderToolsById = async (loopId: string): Promis
 };
 
 export const queryLoopDisabledProviderToolsUpdate = async (loopId: string, userId: string, disabledProviderTools: string[]): Promise<string[] | undefined> => {
-  const result = await getPool().query<{ disabledProviderTools: unknown }>(
+  const result = await query<{ disabledProviderTools: unknown }>(
     `
       UPDATE "loop" AS l
       SET "disabledProviderTools" = $1::jsonb
@@ -255,7 +255,7 @@ export const queryLoopDisabledProviderToolsUpdate = async (loopId: string, userI
 };
 
 export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopReadinessCounts> => {
-  const result = await getPool().query<{
+  const result = await query<{
     activeRoutingPersonaCount: string;
     activeExecutionPersonaCount: string;
     activeProviderCount: string;
@@ -355,7 +355,7 @@ export type LoopReadinessCountsRow = LoopReadinessCounts & {
 };
 
 export const queryLoopReadinessCountsAll = async (): Promise<LoopReadinessCountsRow[]> => {
-  const result = await getPool().query<{
+  const result = await query<{
     loopId: string;
     activeRoutingPersonaCount: string;
     activeExecutionPersonaCount: string;
@@ -452,7 +452,7 @@ export const queryLoopReadinessCountsAll = async (): Promise<LoopReadinessCounts
 };
 
 export const queryLoopMemberList = async (loopId: string): Promise<LoopMember[]> => {
-  const result = await getPool().query<LoopMember>(
+  const result = await query<LoopMember>(
     `
       SELECT
         lu."user",
@@ -472,7 +472,7 @@ export const queryLoopMemberList = async (loopId: string): Promise<LoopMember[]>
 };
 
 export const queryLoopPendingInviteList = async (loopId: string): Promise<LoopInvite[]> => {
-  const result = await getPool().query<LoopInvite>(
+  const result = await query<LoopInvite>(
     `
       SELECT
         li."id",
@@ -503,7 +503,7 @@ export const queryLoopPendingInviteList = async (loopId: string): Promise<LoopIn
 
 export const queryLoopInvitePendingForUser = async (userId: string): Promise<LoopInvite[]> => {
   const normalizedUserId = normalizeEmail(userId);
-  const result = await getPool().query<LoopInvite>(
+  const result = await query<LoopInvite>(
     `
       SELECT
         li."id",
@@ -533,7 +533,7 @@ export const queryLoopInvitePendingForUser = async (userId: string): Promise<Loo
 };
 
 export const queryLoopMemberByUserId = async (loopId: string, memberUserId: string): Promise<LoopMember | undefined> => {
-  const result = await getPool().query<LoopMember>(
+  const result = await query<LoopMember>(
     `
       SELECT
         lu."user",
@@ -555,7 +555,7 @@ export const queryLoopMemberByUserId = async (loopId: string, memberUserId: stri
 
 export const queryLoopMemberByEmail = async (loopId: string, email: string): Promise<LoopMember | undefined> => {
   const normalizedEmail = normalizeEmail(email);
-  const result = await getPool().query<LoopMember>(
+  const result = await query<LoopMember>(
     `
       SELECT
         lu."user",
@@ -578,7 +578,7 @@ export const queryLoopMemberByEmail = async (loopId: string, email: string): Pro
 export const queryLoopInviteCreate = async (loopId: string, invitedBy: string, invitedEmail: string): Promise<LoopInvite> => {
   const normalizedEmail = normalizeEmail(invitedEmail);
 
-  const insertResult = await getPool().query<{ id: string }>(
+  const insertResult = await query<{ id: string }>(
     `
       INSERT INTO "loopInvite" ("loop", "invitedEmail", "invitedBy")
       VALUES ($1, $2, $3)
@@ -598,7 +598,7 @@ export const queryLoopInviteCreate = async (loopId: string, invitedBy: string, i
     }
   }
 
-  const existing = await getPool().query<LoopInvite>(
+  const existing = await query<LoopInvite>(
     `
       SELECT
         li."id",
@@ -635,7 +635,7 @@ export const queryLoopInviteCreate = async (loopId: string, invitedBy: string, i
 };
 
 export const queryLoopInviteById = async (inviteId: string): Promise<LoopInvite | undefined> => {
-  const result = await getPool().query<LoopInvite>(
+  const result = await query<LoopInvite>(
     `
       SELECT
         li."id",
@@ -725,7 +725,7 @@ export const queryLoopInviteAccept = async (inviteId: string, userId: string): P
 };
 
 export const queryLoopInviteRevoke = async (loopId: string, inviteId: string, userId: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "loopInvite"
       SET
@@ -744,7 +744,7 @@ export const queryLoopInviteRevoke = async (loopId: string, inviteId: string, us
 
 export const queryLoopInviteReject = async (inviteId: string, userId: string): Promise<boolean> => {
   const normalizedUserId = normalizeEmail(userId);
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "loopInvite"
       SET
@@ -762,7 +762,7 @@ export const queryLoopInviteReject = async (inviteId: string, userId: string): P
 };
 
 export const queryLoopAdminCount = async (loopId: string): Promise<number> => {
-  const result = await getPool().query<{ count: string }>(
+  const result = await query<{ count: string }>(
     `
       SELECT COUNT(*)::text AS "count"
       FROM "loopUser"

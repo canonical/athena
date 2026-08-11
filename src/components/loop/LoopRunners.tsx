@@ -155,7 +155,7 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
         {assignedRunnerState.status === `success` && assignedRunners.length > 0 ? (
           <MainTable
             className="u-table-layout--auto"
-            headers={[{ content: `Display name` }, { content: `Runner` }, { content: `Priority` }, { content: `Enabled` }, { content: `Last used` }, { content: `Actions`, className: `u-align--right` }]}
+            headers={[{ content: `Display name` }, { content: `Runner` }, { content: `Assigned repositories` }, { content: `Priority` }, { content: `Enabled` }, { content: `Last used` }, { content: `Actions`, className: `u-align--right` }]}
             rows={assignedRunners.map((runner) => ({
               key: runner.runner,
               columns: [
@@ -167,6 +167,13 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
                   ),
                 },
                 { content: runner.runnerType },
+                {
+                  content: (
+                    <Link params={{ loopId, loopRunnerId: runner.runner }} to="/loop/$loopId/runners/$loopRunnerId/repositories">
+                      Manage
+                    </Link>
+                  ),
+                },
                 { content: String(runner.priority) },
                 { content: runner.enabled ? `Yes` : `No` },
                 { content: formatTimestamp(runner.lastUsedAt) },

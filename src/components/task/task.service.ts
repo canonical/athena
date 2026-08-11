@@ -1,5 +1,5 @@
 import { pgColumns } from "@components/postgres/pg.utilities.js";
-import { getPool } from "@components/postgres/postgres.js";
+import { query } from "@components/postgres/postgres.js";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { v7 as uuidv7 } from "uuid";
 import type { Task, TaskCreate, TaskQueueItemInput } from "./task.schema.js";
@@ -29,7 +29,7 @@ const taskColumns = pgColumns(taskColumnNames);
 const scopeTaskColumns = (scope: string): string => pgColumns(taskColumnNames, scope);
 
 export const queryTaskList = async (loopId: string): Promise<Task[]> => {
-  const result = await getPool().query<Task>(
+  const result = await query<Task>(
     `
       SELECT ${taskColumns}
       FROM "task"
@@ -43,7 +43,7 @@ export const queryTaskList = async (loopId: string): Promise<Task[]> => {
 };
 
 export const queryTaskGet = async (loopId: string, taskId: string): Promise<Task | null> => {
-  const result = await getPool().query<Task>(
+  const result = await query<Task>(
     `
       SELECT ${taskColumns}
       FROM "task"
@@ -58,7 +58,7 @@ export const queryTaskGet = async (loopId: string, taskId: string): Promise<Task
 };
 
 export const queryTaskListByWorkgraphItem = async (loopId: string, workgraphItemId: string): Promise<Task[]> => {
-  const result = await getPool().query<Task>(
+  const result = await query<Task>(
     `
       SELECT ${taskColumns}
       FROM "task"
@@ -74,7 +74,7 @@ export const queryTaskListByWorkgraphItem = async (loopId: string, workgraphItem
 
 export const queryTaskCreate = async (input: TaskCreate): Promise<Task> => {
   const task = taskCreateSchema.parse(input);
-  const result = await getPool().query<Task>(
+  const result = await query<Task>(
     `
       INSERT INTO "task" ("loop", "source", "status", "workgraphItem", "title")
       VALUES ($1, $2, $3, $4, $5)
@@ -93,7 +93,7 @@ export const queryTaskCreate = async (input: TaskCreate): Promise<Task> => {
 };
 
 export const queryTaskCreateForWorkgraphItem = async (input: { loop: string; workgraphItem: string; title?: string | null }): Promise<Task | null> => {
-  const result = await getPool().query<Task>(
+  const result = await query<Task>(
     `
       WITH lock_row AS (
         SELECT pg_advisory_xact_lock(hashtext(($2::uuid)::text))
@@ -127,7 +127,7 @@ export const queryTaskCreateForWorkgraphItem = async (input: { loop: string; wor
 };
 
 export const queryTaskAssignWorkgraphItem = async (loopId: string, taskId: string, workgraphItemId: string, title: string | null): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "task"
       SET
@@ -192,7 +192,7 @@ export type TaskWorkgraphItemContext = {
 };
 
 export const queryTaskWorkgraphItemContext = async (loopId: string, taskId: string): Promise<TaskWorkgraphItemContext | null> => {
-  const result = await getPool().query<{
+  const result = await query<{
     workgraph: string;
     workgraphItem: string;
     itemType: string;
@@ -241,7 +241,7 @@ export const queryTaskPick = async (processorId: string, readyLoopIds: string[])
     return null;
   }
 
-  const result = await getPool().query<Task>(
+  const result = await query<Task>(
     `
       WITH picked AS (
         SELECT t."id"
@@ -279,7 +279,7 @@ export const queryTaskPick = async (processorId: string, readyLoopIds: string[])
 };
 
 export const queryTaskProcessorPing = async (taskId: string, processorId: string): Promise<void> => {
-  await getPool().query(
+  await query(
     `
       UPDATE "task"
       SET "processorPingedAt" = NOW()
@@ -291,7 +291,7 @@ export const queryTaskProcessorPing = async (taskId: string, processorId: string
 };
 
 export const queryTaskResetStaleProcessorClaims = async (): Promise<number> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "task" t
       SET "processorUnit" = NULL,
@@ -307,7 +307,7 @@ export const queryTaskResetStaleProcessorClaims = async (): Promise<number> => {
 };
 
 export const queryTaskResetProcessorClaim = async (loopId: string, taskId: string): Promise<number> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "task" t
       SET "processorUnit" = NULL,
@@ -324,7 +324,7 @@ export const queryTaskResetProcessorClaim = async (loopId: string, taskId: strin
 };
 
 export const queryTaskMarkCompleted = async (loopId: string, taskId: string, processorId: string, checkQueueItems = true): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "task" t
       SET "status" = 'completed'
@@ -347,7 +347,7 @@ export const queryTaskMarkCompleted = async (loopId: string, taskId: string, pro
 };
 
 export const queryTaskAssignCurrentPersona = async (loopId: string, taskId: string, processorId: string): Promise<string | null> => {
-  const result = await getPool().query<{ currentPersona: string }>(
+  const result = await query<{ currentPersona: string }>(
     `
       WITH routing AS (
         SELECT p."id"
@@ -375,7 +375,7 @@ export const queryTaskAssignCurrentPersona = async (loopId: string, taskId: stri
 };
 
 export const queryTaskAssignCurrentProvider = async (loopId: string, taskId: string, processorId: string, providerId: string): Promise<string | null> => {
-  const result = await getPool().query<{ currentProvider: string }>(
+  const result = await query<{ currentProvider: string }>(
     `
       UPDATE "task" t
       SET "currentProvider" = $4,
@@ -393,7 +393,7 @@ export const queryTaskAssignCurrentProvider = async (loopId: string, taskId: str
 };
 
 export const queryTaskAssignCurrentModel = async (loopId: string, taskId: string, processorId: string, providerId: string): Promise<string | null> => {
-  const result = await getPool().query<{ currentModel: string }>(
+  const result = await query<{ currentModel: string }>(
     `
       WITH selected_model AS (
         SELECT COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), p."enabledModels"[1]) AS "model"
@@ -424,7 +424,7 @@ export const queryTaskAssignCurrentModel = async (loopId: string, taskId: string
 };
 
 export const queryTaskCompactQueue = async (loopId: string, taskId: string, processorId: string, summary: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       WITH snapshot AS (
         SELECT
@@ -493,7 +493,7 @@ export const queryTaskCompactQueue = async (loopId: string, taskId: string, proc
 };
 
 export const queryTaskDefineObjective = async (loopId: string, taskId: string, processorId: string, objective: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "task"
       SET "currentObjective" = NULLIF(BTRIM($4), '')
@@ -508,7 +508,7 @@ export const queryTaskDefineObjective = async (loopId: string, taskId: string, p
 };
 
 export const queryTaskDefineTitle = async (loopId: string, taskId: string, processorId: string, title: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "task"
       SET "title" = NULLIF(BTRIM($4), '')
@@ -523,7 +523,7 @@ export const queryTaskDefineTitle = async (loopId: string, taskId: string, proce
 };
 
 export const queryTaskAssignedWorkgraphItem = async (loopId: string, taskId: string): Promise<{ id: string; title: string | null; itemKey: string | null; itemType: string } | null> => {
-  const result = await getPool().query<{ id: string; title: string | null; itemKey: string | null; itemType: string }>(
+  const result = await query<{ id: string; title: string | null; itemKey: string | null; itemType: string }>(
     `
       SELECT lwi."id", lwi."title", lwi."itemKey", lwi."itemType"
       FROM "task" t
@@ -538,20 +538,20 @@ export const queryTaskAssignedWorkgraphItem = async (loopId: string, taskId: str
 };
 
 export const queryTaskUpdateTitleByUser = async (loopId: string, taskId: string, title: string): Promise<boolean> => {
-  const result = await getPool().query(`UPDATE "task" SET "title" = NULLIF(BTRIM($3), '') WHERE "loop" = $1 AND "id" = $2`, [loopId, taskId, title]);
+  const result = await query(`UPDATE "task" SET "title" = NULLIF(BTRIM($3), '') WHERE "loop" = $1 AND "id" = $2`, [loopId, taskId, title]);
 
   return (result.rowCount ?? 0) > 0;
 };
 
 export const queryTaskUpdateObjectiveByUser = async (loopId: string, taskId: string, objective: string): Promise<boolean> => {
-  const result = await getPool().query(`UPDATE "task" SET "currentObjective" = NULLIF(BTRIM($3), '') WHERE "loop" = $1 AND "id" = $2`, [loopId, taskId, objective]);
+  const result = await query(`UPDATE "task" SET "currentObjective" = NULLIF(BTRIM($3), '') WHERE "loop" = $1 AND "id" = $2`, [loopId, taskId, objective]);
 
   return (result.rowCount ?? 0) > 0;
 };
 
 export const queryAppendQueueItem = async (taskId: string, processorId: string | null, queueItem: TaskQueueItemInput, requeueIfCompleted = false): Promise<boolean> => {
   const itemWithId = { ...queueItem, id: uuidv7() };
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "task" t
       SET "queue" = t."queue" || CASE
@@ -577,7 +577,7 @@ export const queryAppendQueueItem = async (taskId: string, processorId: string |
 };
 
 export const queryTaskQueueItemStatusUpdate = async (taskId: string, processorId: string, id: string, status: TaskQueueItemInput["status"]): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "task" t
       SET "queue" = (
@@ -610,7 +610,7 @@ export const queryTaskQueueItemStatusUpdate = async (taskId: string, processorId
 
 // Approve: moves awaiting-approval → approved so the processor can execute the tool calls.
 export const queryTaskToolCallApprove = async (loopId: string, taskId: string, queueItemId: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "task" t
       SET "queue" = (
@@ -645,7 +645,7 @@ export const queryTaskToolCallApprove = async (loopId: string, taskId: string, q
 
 // Reject: moves awaiting-approval → completed and appends a rejection tool response for each tool call.
 export const queryTaskToolCallReject = async (loopId: string, taskId: string, queueItemId: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "task" t
       SET "queue" = (

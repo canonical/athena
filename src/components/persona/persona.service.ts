@@ -1,4 +1,4 @@
-import { getPool } from "@components/postgres/postgres.js";
+import { query } from "@components/postgres/postgres.js";
 import type { Persona, PersonaWritable } from "./persona.schema.js";
 
 const personaColumns = `p."id", p."displayName", p."role", p."personality", p."isRouting", p."isDefault", p."owner", p."lifecycleStatus", p."createdAt", p."updatedAt"`;
@@ -6,7 +6,7 @@ const personaColumns = `p."id", p."displayName", p."role", p."personality", p."i
 const personaColumnsUnqualified = `"id", "displayName", "role", "personality", "isRouting", "isDefault", "owner", "lifecycleStatus", "createdAt", "updatedAt"`;
 
 export const queryLoopPersonaList = async (loopId: string): Promise<Persona[]> => {
-  const result = await getPool().query<Persona>(
+  const result = await query<Persona>(
     `
       SELECT ${personaColumns}
       FROM "persona" p
@@ -21,7 +21,7 @@ export const queryLoopPersonaList = async (loopId: string): Promise<Persona[]> =
 };
 
 export const queryPersonaList = async (ownerId: string): Promise<Persona[]> => {
-  const result = await getPool().query<Persona>(
+  const result = await query<Persona>(
     `
       SELECT ${personaColumnsUnqualified}
       FROM "persona"
@@ -35,7 +35,7 @@ export const queryPersonaList = async (ownerId: string): Promise<Persona[]> => {
 };
 
 export const queryLoopPersonaById = async (personaId: string, loopId: string): Promise<Persona | undefined> => {
-  const result = await getPool().query<Persona>(
+  const result = await query<Persona>(
     `
       SELECT ${personaColumns}
       FROM "persona" p
@@ -49,7 +49,7 @@ export const queryLoopPersonaById = async (personaId: string, loopId: string): P
 };
 
 export const queryPersonaById = async (personaId: string): Promise<Persona | undefined> => {
-  const result = await getPool().query<Persona>(
+  const result = await query<Persona>(
     `
       SELECT ${personaColumnsUnqualified}
       FROM "persona"
@@ -62,7 +62,7 @@ export const queryPersonaById = async (personaId: string): Promise<Persona | und
 };
 
 export const queryPersonaForUser = async (personaId: string, userId: string): Promise<Persona | undefined> => {
-  const result = await getPool().query<Persona>(
+  const result = await query<Persona>(
     `
       SELECT ${personaColumnsUnqualified}
       FROM "persona"
@@ -76,7 +76,7 @@ export const queryPersonaForUser = async (personaId: string, userId: string): Pr
 };
 
 export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: number; routing: number }> => {
-  const result = await getPool().query<{ total: string; routing: string }>(
+  const result = await query<{ total: string; routing: string }>(
     `
       SELECT
         COUNT(*) AS "total",
@@ -101,7 +101,7 @@ export const queryPersonaActiveCount = async (loopId: string): Promise<{ total: 
 };
 
 export const queryPersonaCreate = async (input: PersonaWritable, isRouting: boolean, ownerId: string | null): Promise<Persona> => {
-  const result = await getPool().query<Persona>(
+  const result = await query<Persona>(
     `
       INSERT INTO "persona" ("displayName", "role", "personality", "isRouting", "owner", "lifecycleStatus")
       VALUES ($1, $2, $3, $4, $5, $6)
@@ -120,7 +120,7 @@ export const queryPersonaCreate = async (input: PersonaWritable, isRouting: bool
 };
 
 export const queryPersonaUpdate = async (personaId: string, input: PersonaWritable): Promise<Persona | undefined> => {
-  const result = await getPool().query<Persona>(
+  const result = await query<Persona>(
     `
       UPDATE "persona"
       SET
@@ -138,7 +138,7 @@ export const queryPersonaUpdate = async (personaId: string, input: PersonaWritab
 };
 
 export const queryPersonaDelete = async (personaId: string, ownerId: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       DELETE FROM "persona"
       WHERE "id" = $1 AND "owner" = $2
@@ -150,23 +150,23 @@ export const queryPersonaDelete = async (personaId: string, ownerId: string): Pr
 };
 
 export const queryPersonaDefaultList = async (): Promise<Persona[]> => {
-  const result = await getPool().query<Persona>(`SELECT ${personaColumnsUnqualified} FROM "persona" WHERE "isDefault" = TRUE ORDER BY "displayName" ASC`);
+  const result = await query<Persona>(`SELECT ${personaColumnsUnqualified} FROM "persona" WHERE "isDefault" = TRUE ORDER BY "displayName" ASC`);
 
   return result.rows;
 };
 
 export const queryPersonaAssignToLoop = async (loopId: string, personaId: string): Promise<void> => {
-  await getPool().query(`INSERT INTO "loopPersona" ("loop", "persona") VALUES ($1, $2) ON CONFLICT DO NOTHING`, [loopId, personaId]);
+  await query(`INSERT INTO "loopPersona" ("loop", "persona") VALUES ($1, $2) ON CONFLICT DO NOTHING`, [loopId, personaId]);
 };
 
 export const queryLoopMembership = async (loopId: string, userId: string): Promise<boolean> => {
-  const result = await getPool().query(`SELECT 1 FROM "loopUser" WHERE "loop" = $1 AND "user" = $2`, [loopId, userId]);
+  const result = await query(`SELECT 1 FROM "loopUser" WHERE "loop" = $1 AND "user" = $2`, [loopId, userId]);
 
   return Boolean(result.rowCount);
 };
 
 export const queryPersonaUnassign = async (personaId: string, loopId: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       DELETE FROM "loopPersona"
       WHERE "persona" = $1 AND "loop" = $2

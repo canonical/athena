@@ -1,11 +1,11 @@
-import { getPool } from "@components/postgres/postgres.js";
+import { query } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
 import type { LoopRepository, Repository, RepositoryInsert, RepositoryUpdate } from "./repository.schema.js";
 
 const repositoryColumns = `"id", "owner", "displayName", "repositoryType", "apiBaseUrl", "repositoryOwner", "repositoryName", "defaultBranch", "lifecycleStatus", "createdAt", "updatedAt"`;
 
 export const queryRepositoryListByOwner = async (ownerId: string): Promise<Repository[]> => {
-  const result = await getPool().query<Repository>(
+  const result = await query<Repository>(
     `
       SELECT ${repositoryColumns}, TRUE AS "hasCredential"
       FROM "repository"
@@ -19,7 +19,7 @@ export const queryRepositoryListByOwner = async (ownerId: string): Promise<Repos
 };
 
 export const queryRepositoryByIdForOwner = async (repositoryId: string, ownerId: string): Promise<Repository | undefined> => {
-  const result = await getPool().query<Repository>(
+  const result = await query<Repository>(
     `
       SELECT ${repositoryColumns}, TRUE AS "hasCredential"
       FROM "repository"
@@ -35,7 +35,7 @@ export const queryRepositoryByIdForOwner = async (repositoryId: string, ownerId:
 export const queryRepositoryCreate = async (input: RepositoryInsert, ownerId: string): Promise<Repository> => {
   const envelope = encryptSecret(input.apiKey);
 
-  const result = await getPool().query<Repository>(
+  const result = await query<Repository>(
     `
       INSERT INTO "repository" (
         "owner",
@@ -82,7 +82,7 @@ export const queryRepositoryCreate = async (input: RepositoryInsert, ownerId: st
 export const queryRepositoryUpdate = async (repositoryId: string, ownerId: string, input: RepositoryUpdate): Promise<Repository | undefined> => {
   if (input.apiKey) {
     const envelope = encryptSecret(input.apiKey);
-    const result = await getPool().query<Repository>(
+    const result = await query<Repository>(
       `
         UPDATE "repository"
         SET
@@ -121,7 +121,7 @@ export const queryRepositoryUpdate = async (repositoryId: string, ownerId: strin
     return result.rows[0];
   }
 
-  const result = await getPool().query<Repository>(
+  const result = await query<Repository>(
     `
       UPDATE "repository"
       SET
@@ -143,13 +143,13 @@ export const queryRepositoryUpdate = async (repositoryId: string, ownerId: strin
 };
 
 export const queryRepositoryDelete = async (repositoryId: string, ownerId: string): Promise<boolean> => {
-  const result = await getPool().query(`DELETE FROM "repository" WHERE "id" = $1 AND "owner" = $2`, [repositoryId, ownerId]);
+  const result = await query(`DELETE FROM "repository" WHERE "id" = $1 AND "owner" = $2`, [repositoryId, ownerId]);
 
   return Boolean(result.rowCount);
 };
 
 export const queryLoopRepositoryList = async (loopId: string): Promise<LoopRepository[]> => {
-  const result = await getPool().query<LoopRepository>(
+  const result = await query<LoopRepository>(
     `
       SELECT
         lr."loop",
@@ -177,7 +177,7 @@ export const queryLoopRepositoryList = async (loopId: string): Promise<LoopRepos
 };
 
 export const queryLoopRepositoryAssign = async (loopId: string, repositoryId: string): Promise<void> => {
-  await getPool().query(
+  await query(
     `
       INSERT INTO "loopRepository" ("loop", "repository")
       VALUES ($1, $2)
@@ -188,7 +188,7 @@ export const queryLoopRepositoryAssign = async (loopId: string, repositoryId: st
 };
 
 export const queryLoopRepositoryDelete = async (loopId: string, repositoryId: string): Promise<boolean> => {
-  const result = await getPool().query(`DELETE FROM "loopRepository" WHERE "loop" = $1 AND "repository" = $2`, [loopId, repositoryId]);
+  const result = await query(`DELETE FROM "loopRepository" WHERE "loop" = $1 AND "repository" = $2`, [loopId, repositoryId]);
 
   return Boolean(result.rowCount);
 };
@@ -205,7 +205,7 @@ export type RepositoryApiConnection = {
 };
 
 export const queryRepositoryApiConnectionByOwner = async (repositoryId: string, ownerId: string): Promise<RepositoryApiConnection | undefined> => {
-  const result = await getPool().query<{
+  const result = await query<{
     repositoryId: string;
     displayName: string;
     repositoryType: string;
@@ -262,7 +262,7 @@ export const queryRepositoryApiConnectionByOwner = async (repositoryId: string, 
 };
 
 export const queryLoopRepositoryApiConnectionList = async (loopId: string): Promise<RepositoryApiConnection[]> => {
-  const result = await getPool().query<{
+  const result = await query<{
     repositoryId: string;
     displayName: string;
     repositoryType: string;

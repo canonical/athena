@@ -31,6 +31,7 @@ export const runnerUpdateSchema = runnerInsertSchema.pick({ displayName: true, l
 
 export const loopRunnerInsertSchema = z.object({
   runner: uuid(),
+  repositoryIds: z.array(uuid()).min(1).optional(),
 });
 
 export const loopRunnerAdminUpdateSchema = z.object({
@@ -68,6 +69,25 @@ export const loopRunnerSchema = runnerSchema.pick({ displayName: true, runnerTyp
   updatedAt: isoDateTime,
 });
 
+export const loopRunnerRepositorySchema = z.object({
+  loop: uuid(),
+  runner: uuid(),
+  repository: uuid(),
+  assigned: z.boolean(),
+  enabled: z.boolean(),
+  repositoryEnabled: z.boolean(),
+  displayName: requiredString(`displayName is required.`),
+  repositoryType: z.string().min(1),
+  repositoryOwner: requiredString(`repositoryOwner is required.`),
+  repositoryName: requiredString(`repositoryName is required.`),
+  defaultBranch: z.string().nullable(),
+  lifecycleStatus: z.enum(lifecycleStatuses),
+});
+
+export const loopRunnerRepositoryUpdateSchema = z.object({
+  repositoryIds: z.array(uuid()),
+});
+
 export const runnerQueueStatuses = [`pending`, `claimed`, `completed`, `failed`] as const;
 
 export const runnerQueueItemSchema = z.object({
@@ -99,4 +119,6 @@ export type LoopRunnerInsert = z.infer<typeof loopRunnerInsertSchema>;
 export type LoopRunnerAdminUpdate = z.infer<typeof loopRunnerAdminUpdateSchema>;
 export type Runner = z.infer<typeof runnerSchema>;
 export type LoopRunner = z.infer<typeof loopRunnerSchema>;
+export type LoopRunnerRepository = z.infer<typeof loopRunnerRepositorySchema>;
+export type LoopRunnerRepositoryUpdate = z.infer<typeof loopRunnerRepositoryUpdateSchema>;
 export type RunnerQueueItem = z.infer<typeof runnerQueueItemSchema>;

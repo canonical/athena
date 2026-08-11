@@ -1,11 +1,11 @@
-import { getPool } from "@components/postgres/postgres.js";
+import { query } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
 import type { LoopProvider, LoopProviderAdminUpdate, Provider, ProviderInsert, ProviderUpdate } from "./provider.schema.js";
 
 const providerColumns = `"id", "owner", "displayName", "providerType", "baseUrl", "defaultModel", "enabledModels", "lifecycleStatus", "createdAt", "updatedAt"`;
 
 export const queryProviderListByOwner = async (ownerId: string): Promise<Provider[]> => {
-  const result = await getPool().query<Provider>(
+  const result = await query<Provider>(
     `
       SELECT ${providerColumns}, TRUE AS "hasCredential"
       FROM "provider"
@@ -19,7 +19,7 @@ export const queryProviderListByOwner = async (ownerId: string): Promise<Provide
 };
 
 export const queryProviderByIdForOwner = async (providerId: string, ownerId: string): Promise<Provider | undefined> => {
-  const result = await getPool().query<Provider>(
+  const result = await query<Provider>(
     `
       SELECT ${providerColumns}, TRUE AS "hasCredential"
       FROM "provider"
@@ -35,7 +35,7 @@ export const queryProviderByIdForOwner = async (providerId: string, ownerId: str
 export const queryProviderCreate = async (input: ProviderInsert, ownerId: string): Promise<Provider> => {
   const envelope = encryptSecret(input.apiKey);
 
-  const result = await getPool().query<Provider>(
+  const result = await query<Provider>(
     `
       INSERT INTO "provider" (
         "owner",
@@ -68,7 +68,7 @@ export const queryProviderCreate = async (input: ProviderInsert, ownerId: string
 export const queryProviderUpdate = async (providerId: string, ownerId: string, input: ProviderUpdate): Promise<Provider | undefined> => {
   if (input.apiKey) {
     const envelope = encryptSecret(input.apiKey);
-    const result = await getPool().query<Provider>(
+    const result = await query<Provider>(
       `
         UPDATE "provider"
         SET
@@ -92,7 +92,7 @@ export const queryProviderUpdate = async (providerId: string, ownerId: string, i
     return result.rows[0];
   }
 
-  const result = await getPool().query<Provider>(
+  const result = await query<Provider>(
     `
       UPDATE "provider"
       SET
@@ -113,13 +113,13 @@ export const queryProviderUpdate = async (providerId: string, ownerId: string, i
 };
 
 export const queryProviderDelete = async (providerId: string, ownerId: string): Promise<boolean> => {
-  const result = await getPool().query(`DELETE FROM "provider" WHERE "id" = $1 AND "owner" = $2`, [providerId, ownerId]);
+  const result = await query(`DELETE FROM "provider" WHERE "id" = $1 AND "owner" = $2`, [providerId, ownerId]);
 
   return Boolean(result.rowCount);
 };
 
 export const queryLoopProviderList = async (loopId: string): Promise<LoopProvider[]> => {
-  const result = await getPool().query<LoopProvider>(
+  const result = await query<LoopProvider>(
     `
       SELECT
         lp."loop",
@@ -156,7 +156,7 @@ export const queryLoopProviderList = async (loopId: string): Promise<LoopProvide
 };
 
 export const queryLoopProviderAssign = async (loopId: string, providerId: string): Promise<void> => {
-  const result = await getPool().query<{ nextPriority: number }>(
+  const result = await query<{ nextPriority: number }>(
     `
       SELECT COALESCE(MAX("priority"), 0) + 1 AS "nextPriority"
       FROM "loopProvider"
@@ -167,7 +167,7 @@ export const queryLoopProviderAssign = async (loopId: string, providerId: string
 
   const nextPriority = result.rows[0]?.nextPriority ?? 1;
 
-  await getPool().query(
+  await query(
     `
       INSERT INTO "loopProvider" ("loop", "provider", "priority")
       VALUES ($1, $2, $3)
@@ -178,7 +178,7 @@ export const queryLoopProviderAssign = async (loopId: string, providerId: string
 };
 
 export const queryLoopProviderUpdateByAdmin = async (loopId: string, providerId: string, input: LoopProviderAdminUpdate): Promise<LoopProvider | undefined> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "loopProvider"
       SET
@@ -223,7 +223,7 @@ export const queryLoopProviderUpdateByAdmin = async (loopId: string, providerId:
 };
 
 export const queryLoopProviderDelete = async (loopId: string, providerId: string): Promise<boolean> => {
-  const result = await getPool().query(`DELETE FROM "loopProvider" WHERE "loop" = $1 AND "provider" = $2`, [loopId, providerId]);
+  const result = await query(`DELETE FROM "loopProvider" WHERE "loop" = $1 AND "provider" = $2`, [loopId, providerId]);
 
   return Boolean(result.rowCount);
 };
@@ -256,7 +256,7 @@ export type LoopProviderCandidateRow = {
 };
 
 export const queryLoopProviderCandidates = async (loopId: string): Promise<LoopProviderCandidateRow[]> => {
-  const result = await getPool().query<LoopProviderCandidateRow>(
+  const result = await query<LoopProviderCandidateRow>(
     `
       SELECT
         lp."loop",
@@ -303,7 +303,7 @@ type ProviderApiConnection = {
 };
 
 export const queryProviderApiConnectionByOwner = async (providerId: string, ownerId: string): Promise<ProviderApiConnection | undefined> => {
-  const result = await getPool().query<{
+  const result = await query<{
     providerType: string;
     baseUrl: string;
     credentialCiphertext: string;
@@ -345,7 +345,7 @@ export const queryProviderApiConnectionByOwner = async (providerId: string, owne
 };
 
 export const queryProviderCredential = async (providerId: string, requesterId: string, loopId?: string): Promise<string | undefined> => {
-  const result = await getPool().query<{ credentialCiphertext: string; credentialIv: string; credentialAuthTag: string; credentialKeyVersion: string }>(
+  const result = await query<{ credentialCiphertext: string; credentialIv: string; credentialAuthTag: string; credentialKeyVersion: string }>(
     `
       SELECT p."credentialCiphertext", p."credentialIv", p."credentialAuthTag", p."credentialKeyVersion"
       FROM "provider" p
