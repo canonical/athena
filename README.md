@@ -1,48 +1,64 @@
 # Athena
 
-Athena is a multi-agent orchestration service. This repository is the bootstrap workspace for the service runtime, packaging, and deployment artifacts.
+Athena is a full-stack multi-agent orchestration service. This repository contains the Express runtime, React SPA, PostgreSQL migrations, Playwright E2E tests, and deployment packaging for the current Athena application.
 
-Athena itself is fully deterministic code. Agents that integrate with Athena loops handle LLM business and domain-specific reasoning.
-
-At the moment, the implementation is still early-stage. The application now includes a first OIDC-backed session authentication flow alongside bootstrap packaging files.
+Athena is deterministic application code. Personas, providers, runners, repositories, and workgraphs are configured inside Athena loops; LLM behavior comes from configured external systems rather than from hidden logic in the Athena server itself.
 
 ## Current status
 
 - Service name: Athena
-- Version: 0.0.1
-- Runtime: Node.js and TypeScript in the repository root
-- Packaging: Rockcraft in [rockcraft.yaml](./rockcraft.yaml)
-- Operator packaging: Juju charm in [charm](./charm)
-- Current API surface: `GET /_status/check`
+- Version: `1.2.0`
+- Runtime: Node.js + TypeScript backend with a React 19 frontend
+- Persistence: PostgreSQL, with schema under [migrations/pg](./migrations/pg)
+- Authentication: OIDC-backed session auth with Passport and `cookie-session`
+- Current external integration types:
+  - Providers: `openrouter`
+  - Repositories: `github`
+  - Workgraphs: `jira`
+  - Runners: `github-copilot-cloud`, `juju-vm`
+- Packaging:
+  - Rockcraft in [rockcraft.yaml](./rockcraft.yaml)
+  - Juju charm in [charm](./charm)
 
 ## Repository layout
 
-- Runtime sources and build configs in repository root (`src`, `testing`, and top-level Node/TypeScript config files)
-- [charm](./charm): Juju charm sources for deploying Athena.
-- [migrations](./migrations): Repository-level PostgreSQL schema and seed files.
-- [docs/specs/index.md](./docs/specs/index.md): Local specification, reference, and persona artifacts index.
-- [rockcraft.yaml](./rockcraft.yaml): Rock packaging definition for Athena.
+- [src](./src): application source.
+  - [src/server.ts](./src/server.ts): Express entrypoint.
+  - [src/components](./src/components): co-located frontend/backend feature modules.
+- [testing](./testing): Playwright setup, coverage helpers, and test data.
+- [migrations](./migrations): PostgreSQL migrations and seed files.
+- [docs](./docs): repository standards and product concepts.
+- [docs/specs/index.md](./docs/specs/index.md): local specification, implementation-plan, and persona index.
+- [scripts](./scripts): local/dev packaging helpers, Dex config templates, and release helpers.
+- [rockcraft.yaml](./rockcraft.yaml): rock definition.
+- [charm](./charm): Juju charm sources and charm tests.
 
 ## Coding standards
 
-Athena uses a co-located, flat component structure in [src/components](./src/components): frontend and backend files for the same feature live side-by-side in the same component folder, and component folders contain files only.
+Athena uses a co-located, flat component structure in [src/components](./src/components): frontend, backend, schemas, queries, and service files for the same feature live side-by-side in the same folder.
 
 See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rules, including file move conventions.
 
 ## Task model
 
-Task support is currently minimal and intentionally breaking-change oriented.
+Task behavior is implemented in [src/components/task](./src/components/task).
 
-- Task shape is defined in [src/components/task/task.schema.ts](./src/components/task/task.schema.ts).
+- Task records are defined in [src/components/task/task.schema.ts](./src/components/task/task.schema.ts).
+- A task belongs to a loop and tracks:
+  - current persona, provider, model, and objective
+  - status (`queued`, `wip`, `completed`)
+  - optional assigned workgraph item
+  - active queue items and archived queue history
+- Queue items are message entries with approval states (`pending`, `awaiting-approval`, `approved`, `completed`).
+- The server starts a background task processor from [src/server.ts](./src/server.ts), and task iteration logic lives in [src/components/task/task.processor.ts](./src/components/task/task.processor.ts) and [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
+- The loop-level tool catalog is defined in [src/components/tool/tool.catalog.ts](./src/components/tool/tool.catalog.ts); some tools require explicit user approval before completion.
 - Task iteration notes are tracked in [docs/task-iteration.md](./docs/task-iteration.md).
-- Only `id` and `title` are part of the task schema.
-- Legacy task lifecycle, routing, queue dispatch, and autonomy runtime behavior has been removed.
 
 ## PR publishing and updating standards
 
 Athena requires validation before creating and updating pull requests.
 
-See [docs/pr-publishing-updating-standards.md](./docs/pr-publishing-updating-standards.md) for the canonical pull request publishing and update requirements.
+See [docs/pr-publishing-updating-standards.md](./docs/pr-publishing-updating-standards.md) for the canonical requirements.
 
 ## Development model
 
@@ -51,34 +67,169 @@ Athena development is local-spec-first.
 - Specification, reference, and description artifacts are maintained in [docs/specs/index.md](./docs/specs/index.md).
 - Before implementation, agents gather scope, acceptance criteria, and dependency context from local specs.
 - Keep local specs synchronized with implementation and behavioral changes.
-- Personas are persisted per loop, with lifecycle constraints defined in [docs/specs/definitions/persona.md](./docs/specs/definitions/persona.md).
-- Jira is an optional external task source and only participates when a loop is configured to ingest Jira events.
+- Personas are defined under [docs/specs/personas](./docs/specs/personas) and constrained by [docs/specs/definitions/persona.md](./docs/specs/definitions/persona.md).
+- Jira is an optional external task source and only participates when a loop is configured to ingest it.
 
-See [AGENTS.md](./AGENTS.md) for agent workflow guidance.
+See [AGENTS.md](./AGENTS.md) for the repository’s agent workflow guide.
 
 ## What the app does today
 
-The current service starts an Express server with session-based authentication:
+The current application serves an authenticated SPA plus a JSON API.
 
-- Frontend route:
-  - `GET /authentication`: React authentication view that allows sign-in and sign-out via backend auth endpoints.
+- The frontend is mounted from the Express server and uses TanStack Router and TanStack Query.
+- All SPA routes except `/authentication` and `/authentication/sign-out` are guarded by authentication checks.
+- The root route (`/`) opens the loop list.
+- Loop views expose tabs for tasks, details, tools, members, personas, providers, runners, workgraphs, and repositories.
+- Global views also exist for:
+  - workgraph and repository connections under `/connection/...`
+  - persona management under `/persona/...`
+  - provider management under `/provider/...`
+  - runner management under `/runner/...`
+  - workgraph management under `/workgraph/...`
+- Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
+- The server also starts background processors for tasks and inbound webhook items.
 
-- Public health endpoints:
+## API surface
+
+Routes are mounted in [src/server.ts](./src/server.ts).
+
+### Public routes
+
+- Frontend routes:
+  - `GET /authentication`
+  - `GET /authentication/sign-out`
+- Health routes:
   - `GET /_status/check`
   - `GET /_status/ping`
-- Public auth endpoints:
+- Authentication API:
   - `GET /api/authentication/login`
   - `GET /api/authentication/callback`
   - `POST /api/authentication/logout`
   - `GET /api/authentication/profile`
-- Backend route policy:
-  - Non-public backend routes require an authenticated session.
-  - Unauthenticated requests return HTTP `401 Unauthorized`.
-  - Static assets and SPA fallback are served by the Express backend static router.
+- Public webhook API:
+  - `POST /api/webhook/inbound/:receiverId`
+- Coverage API when `COVERAGE=true`:
+  - `GET /api/__coverage__`
+
+### Authenticated API routes
+
+All routes below are mounted under `/api` after `requireAuthentication`.
+
+#### Loops
+
+- `GET /api/loop/invite/pending`
+- `POST /api/loop/invite/:invite/accept`
+- `POST /api/loop/invite/:invite/reject`
+- `POST /api/loop`
+- `GET /api/loop`
+- `GET /api/loop/:loop`
+- `GET /api/loop/:loop/users`
+- `POST /api/loop/:loop/invite`
+- `DELETE /api/loop/:loop/invite/:invite`
+- `PUT /api/loop/:loop/user/admin`
+- `PUT /api/loop/:loop`
+- `DELETE /api/loop/:loop`
+- `GET /api/loop/:loop/provider-selection-policy`
+- `PUT /api/loop/:loop/provider-selection-policy`
+- `GET /api/loop/:loop/readiness`
+- `GET /api/loop/:loop/tools`
+- `PUT /api/loop/:loop/tools`
+
+#### Tasks
+
+- `GET /api/task/loop/:loopId`
+- `GET /api/task/loop/:loopId/:taskId/workgraph-item`
+- `GET /api/task/loop/:loopId/:taskId`
+- `POST /api/task`
+- `POST /api/task/append-user-message`
+- `POST /api/task/approve-tool-call`
+- `POST /api/task/reject-tool-call`
+- `POST /api/task/update-title`
+- `POST /api/task/update-objective`
+- `POST /api/task/assign-workgraph-item`
+
+#### Personas
+
+- `GET /api/persona/catalog`
+- `GET /api/persona`
+- `POST /api/persona`
+- `DELETE /api/persona`
+- `POST /api/persona/assign`
+- `DELETE /api/persona/unassign`
+- `GET /api/persona/:persona`
+- `PUT /api/persona/:persona`
+- `GET /api/persona/loop/:loop/list`
+
+#### Providers
+
+- `GET /api/provider`
+- `POST /api/provider`
+- `DELETE /api/provider`
+- `GET /api/provider/:provider`
+- `PUT /api/provider/:provider`
+- `GET /api/provider/:provider/models`
+- `POST /api/provider/:provider/models/validate`
+- `POST /api/provider/models/preview`
+- `GET /api/provider/loop/:loop/list`
+- `POST /api/provider/assign`
+- `PUT /api/provider/loop/:loop/:provider/admin`
+- `DELETE /api/provider/unassign`
+
+#### Runners
+
+- `GET /api/runner`
+- `POST /api/runner`
+- `DELETE /api/runner`
+- `GET /api/runner/:runner`
+- `PUT /api/runner/:runner`
+- `GET /api/runner/loop/:loop/list`
+- `POST /api/runner/assign`
+- `PUT /api/runner/loop/:loop/:runner/admin`
+- `DELETE /api/runner/unassign`
+
+#### Repositories
+
+- `GET /api/repository`
+- `POST /api/repository`
+- `POST /api/repository/test`
+- `POST /api/repository/:repository/test`
+- `DELETE /api/repository`
+- `GET /api/repository/:repository`
+- `PUT /api/repository/:repository`
+- `GET /api/repository/loop/:loop/list`
+- `POST /api/repository/assign`
+- `DELETE /api/repository/unassign`
+
+#### Workgraphs
+
+- `GET /api/workgraph/types`
+- `GET /api/workgraph`
+- `POST /api/workgraph`
+- `POST /api/workgraph/test`
+- `POST /api/workgraph/:workgraph/test`
+- `DELETE /api/workgraph`
+- `GET /api/workgraph/:workgraph`
+- `PUT /api/workgraph/:workgraph`
+- `GET /api/workgraph/loop/:loop/list`
+- `POST /api/workgraph/assign`
+- `PUT /api/workgraph/loop/:loop/:workgraph/admin`
+- `GET /api/workgraph/loop/:loop/items/search`
+- `GET /api/workgraph/loop/:loop/:workgraph/items`
+- `GET /api/workgraph/loop/:loop/:workgraph/issue-types`
+- `POST /api/workgraph/loop/:loop/:workgraph/sync`
+- `POST /api/workgraph/loop/:loop/:workgraph/items/:itemId/start`
+- `DELETE /api/workgraph/unassign`
+
+#### Webhooks
+
+- `GET /api/webhook/loop/:loop/workgraph/:workgraph`
+- `POST /api/webhook/loop/:loop/workgraph/:workgraph`
+- `PUT /api/webhook/loop/:loop/workgraph/:workgraph/:webhook`
+- `DELETE /api/webhook/loop/:loop/workgraph/:workgraph/:webhook`
 
 ## Local development
 
-The application code lives in the repository root.
+The application code lives at repository root.
 
 Install dependencies:
 
@@ -86,10 +237,19 @@ Install dependencies:
 npm install
 ```
 
-Run the TypeScript watcher for local development:
+Run the frontend build watcher and backend watcher together:
 
 ```bash
 npm run watch
+```
+
+- `watch:fe` builds the Vite frontend into `dist/public` in watch mode.
+- `watch:be` rebuilds the backend and starts `npm start` through Nodemon.
+
+Run static checks:
+
+```bash
+npm run check
 ```
 
 Build the service:
@@ -104,120 +264,131 @@ Start the built service:
 npm run start
 ```
 
-Run Athena with PostgreSQL 16 via Docker Compose:
+Run Athena with the local Compose stack:
 
 ```bash
 docker compose up --build
 ```
 
-This starts:
+The Compose stack includes:
 
+- `traefik` on `localhost:80`
 - `postgres` on `localhost:5432`
-- `dex` (local OIDC provider mimic) on `localhost:5556`
-- `athena` on `athena.localhost` (served through Traefik)
+- `prepare`, a one-shot migration runner
+- `dex` on `localhost:5556`, also reachable through `http://athena.localhost/dex`
+- `athena` on `http://athena.localhost`
 
-For public webhook testing from external systems, start Cloudflare tunnel:
+Optional public tunnel:
 
 ```bash
 docker compose up -d cloudflared
 docker compose logs -f cloudflared
 ```
 
-Tunnel behavior:
-
-- Cloudflared runs in managed tunnel mode with `tunnel run`.
-- Set `CLOUDFLARED_TUNNEL_TOKEN` in `.env` before starting `cloudflared`.
-
-The main public endpoints are:
-
-- `GET http://athena.localhost/_status/check`
-- `GET http://athena.localhost/_status/ping`
-
-Compose currently prepares Athena with a PostgreSQL 16 instance, local Dex for OIDC, and the required auth environment variables.
-
-Compose also includes a one-shot `prepare` service that runs Athena migrations before the app starts, mirroring the Portal pattern of bootstrapping the database before application health checks.
-
-Container runtime is controlled by `APP_ATHENA_DEV_MODE`:
-
-- `true`: runs frontend build watch and backend watch mode.
-- `false`: builds Athena and starts the server.
+This requires `CLOUDFLARED_TUNNEL_TOKEN` in your local environment.
 
 ## E2E testing
 
-Athena uses Playwright E2E tests with a local wrapper in [testing/playwright](./testing/playwright), mirroring the lightweight shared-fixture pattern used in Portal.
+Athena uses Playwright E2E tests with co-located `*.spec.ts` files under [src](./src).
 
 See [docs/testing-standards.md](./docs/testing-standards.md) for the canonical test strategy and coverage expectations.
 
-Run the E2E suite from repository root:
+Run the default suite:
 
 ```bash
-npm run test
+npm test
 ```
 
-This uses [playwright.config.ts](./playwright.config.ts), starts the local Compose stack in global setup, runs the migration `prepare` service, waits for Athena to become healthy, and then executes co-located `*.spec.ts` tests under [src](./src).
+Useful variants:
+
+```bash
+npm run test:coverage
+npm run test:ci
+npm run test:ui
+```
+
+What the Playwright setup does:
+
+- uses [playwright.config.ts](./playwright.config.ts)
+- starts the Compose stack in [testing/playwright-global-setup.ts](./testing/playwright-global-setup.ts)
+- waits for Athena, Dex discovery, and the frontend shell to become reachable
+- runs co-located specs from these current feature areas:
+  - authentication
+  - loop
+  - persona
+  - provider
+  - runner
+  - shell
+  - status
+
+Coverage-enabled runs collect frontend and backend coverage data; `npm run test:ci` then generates merged reports under [testing/results/coverage](./testing/results/coverage).
 
 ## Default runtime configuration
 
-Athena reads configuration from environment variables with the prefixes `APP_ATHENA`, `APP`, and `ATHENA`.
+Athena reads backend runtime configuration from environment variables with the prefixes `APP_ATHENA`, `APP`, and `ATHENA`, in that order.
 
-Useful defaults in the current bootstrap:
+### Required backend variables
 
-- OIDC callback URL: `http://athena.localhost/api/authentication/callback`
-- Local OIDC discovery URL: `http://dex.localhost/dex/.well-known/openid-configuration`
-- Local Dex issuer URL: `http://athena.localhost/dex`
-- Session max age: `86400000` (24 hours)
+- `APP_ATHENA_PORT`
+- `APP_ATHENA_ALLOWED_ORIGINS`
+- `APP_ATHENA_FRONTEND_BASE_URL`
+- `APP_ATHENA_OIDC_CLIENT_SECRET`
+- `APP_ATHENA_SECRET_KEY`
+- `APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY`
+- `APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING`
 
-Authentication-related runtime variables:
+### Optional backend variables and current defaults
 
+- `APP_ATHENA_NODE_ENV=development`
+- `APP_ATHENA_LOG_TRACE_HEADER_NAME=traceparent`
+- `APP_ATHENA_LOG_SERVICE_NAME=athena-service`
+- `APP_ATHENA_LOG_LEVEL=info`
+- `APP_ATHENA_LOG_ENABLED=true`
+- `APP_ATHENA_OAUTH_CALLBACK_URL=http://athena.localhost/api/authentication/callback`
+- `APP_ATHENA_OIDC_DISCOVERY_URL=http://dex.localhost/dex/.well-known/openid-configuration`
+- `APP_ATHENA_OIDC_CLIENT_ID=athena`
+- `APP_ATHENA_SESSION_MAX_AGE=86400000`
+
+### Frontend build-time variable
+
+- `VITE_API_BASE_URL` is required and must be non-empty.
+- In local Compose, the default is `/api`.
+- For split frontend/backend deployments, see [docs/deployment.md](./docs/deployment.md).
+
+### Local Compose variables
+
+The checked-in sample is [.example.env](./.example.env). It includes:
+
+- `POSTGRES_PASSWORD`
+- `APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING`
+- `APP_ATHENA_PORT`
+- `APP_ATHENA_DEV_MODE`
+- `APP_ATHENA_OAUTH_CALLBACK_URL`
+- `APP_ATHENA_DEX_EXTRA_REDIRECT_URIS`
 - `APP_ATHENA_OIDC_DISCOVERY_URL`
-- `APP_ATHENA_DEX_ISSUER_URL`
 - `APP_ATHENA_OIDC_CLIENT_ID`
 - `APP_ATHENA_OIDC_CLIENT_SECRET`
-- `APP_ATHENA_OAUTH_CALLBACK_URL`
 - `APP_ATHENA_SECRET_KEY`
 - `APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY`
 - `APP_ATHENA_SESSION_MAX_AGE`
 - `APP_ATHENA_ALLOWED_ORIGINS`
 - `APP_ATHENA_FRONTEND_BASE_URL`
-
-`APP_ATHENA_OIDC_CLIENT_SECRET`, `APP_ATHENA_SECRET_KEY`, and `APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY` are required and must be explicitly set. Do not rely on development sample values outside local development.
-
-Database runtime variables:
-
-- `APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING`
-
-`APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING` is required and is the only database connection string used by Athena.
-
-Frontend API routing variable:
-
 - `VITE_API_BASE_URL`
-
-Frontend behavior:
-
-- `APP_ATHENA_FRONTEND_BASE_URL` is the frontend origin/base URL used by the backend for auth redirects when no safe `returnTo` is available.
-- `VITE_API_BASE_URL` is a build-time variable consumed directly by Vite.
-- `VITE_API_BASE_URL` is required and must be non-empty.
-- The UI always calls backend APIs using this explicit base URL (for example `https://api.athena.example.com`).
-
-Deployment note:
-
-- See [docs/deployment.md](./docs/deployment.md) for deployment guidance focused on `VITE_API_BASE_URL`.
-
-Backend CORS behavior:
-
-- Athena registers CORS middleware with `credentials: true` and an origin allowlist from `APP_ATHENA_ALLOWED_ORIGINS`.
-- `APP_ATHENA_ALLOWED_ORIGINS` is required and must be set to your frontend host list, for example `https://athena.example.com`.
-- `APP_ATHENA_FRONTEND_BASE_URL` is required and must be set to the frontend base URL users should return to after authentication.
-
-For local development with Compose, set these in `.env` and keep defaults/example values in `.example.env`.
-
-For local Compose, PostgreSQL runs as:
-
-- Version: `16`
-- Database: `athena`
-- User: `athena`
-- Password: `athena`
+- `CLOUDFLARED_TUNNEL_TOKEN`
 
 ## Packaging notes
 
-The repository already includes a first-cut rock definition and charm sources, but some packaging files were copied from other services and are still being renamed and simplified. Treat the packaging layer as in-progress while Athena bootstrap work continues.
+- [rockcraft.yaml](./rockcraft.yaml) builds the Node application and stages the built backend, frontend, dependencies, and migrations into the rock.
+- [scripts/stage-app.sh](./scripts/stage-app.sh) assembles an ephemeral `app/` directory for rock builds without changing the tracked repository layout.
+- [charm](./charm) contains a Python-based `expressjs-framework` charm that depends on PostgreSQL and expects Juju secrets for OIDC and credential encryption.
+- Manual charm deployment guidance lives in [charm/tests/manual/README.md](./charm/tests/manual/README.md).
+
+## Related documentation
+
+- [docs/workgraph.md](./docs/workgraph.md): workgraph concept and boundaries
+- [docs/testing-standards.md](./docs/testing-standards.md): E2E-only testing policy
+- [docs/deployment.md](./docs/deployment.md): `VITE_API_BASE_URL` deployment note
+- [docs/database-standards.md](./docs/database-standards.md): database conventions
+- [docs/design-standards.md](./docs/design-standards.md): UI and UX standards
+- [docs/documentation-standards.md](./docs/documentation-standards.md): documentation conventions
+- [docs/specs/index.md](./docs/specs/index.md): specs, implementation plans, and personas
