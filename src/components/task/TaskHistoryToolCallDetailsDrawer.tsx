@@ -11,7 +11,6 @@ type SelectedToolCall = {
 };
 
 type TaskHistoryToolCallDetailsDrawerProps = {
-  loopId: string;
   selectedToolCall: SelectedToolCall | null;
   isApprovalPending: boolean;
   onClose: () => void;

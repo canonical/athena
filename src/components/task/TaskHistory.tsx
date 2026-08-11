@@ -207,7 +207,6 @@ export function TaskHistory({ loopId, task, isRawJsonDrawerOpen, onRawJsonDrawer
 
       <TaskHistoryToolCallDetailsDrawer
         isApprovalPending={approveToolCallMutation.isPending || rejectToolCallMutation.isPending}
-        loopId={loopId}
         onApprove={async (queueItemId, message) => {
           await approveToolCallMutation.mutateAsync({ queueItemId, message });
           setSelectedToolCall(null);

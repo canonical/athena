@@ -61,7 +61,16 @@ const checkClaimedItems = async (): Promise<void> => {
 
   for (const item of claimedItems) {
     if (!item.externalTaskId) {
-      console.log(`[runner-queue-consumer] claimed item has no externalTaskId yet — skipping`, { id: item.id });
+      // Submission never completed — fail after 5 minutes to unblock the task.
+      const claimedAgeMs = Date.now() - new Date(item.claimedAt as string).getTime();
+      if (claimedAgeMs > 5 * 60 * 1000) {
+        console.log(`[runner-queue-consumer] claimed item has no externalTaskId after timeout — marking failed`, { id: item.id });
+        await queryRunnerQueueMarkFailed(item.id, consumerId, `submission-timeout`);
+        await appendRunnerResultToTask(item.task, item.loop, `Runner task submission timed out before reaching GitHub.`);
+        triggerTaskProcessor();
+      } else {
+        console.log(`[runner-queue-consumer] claimed item has no externalTaskId yet — skipping`, { id: item.id });
+      }
       continue;
     }
 
