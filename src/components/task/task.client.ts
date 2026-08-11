@@ -64,8 +64,8 @@ export const appendTaskUserMessage = async (loopId: string, taskId: string, cont
   return response.json() as Promise<{ appended: boolean }>;
 };
 
-export const approveTaskToolCall = async (loopId: string, taskId: string, queueItemId: string): Promise<{ approved: boolean }> => {
-  const response = await authenticatedJsonPost(taskApiPaths.approveToolCall(), { loopId, taskId, queueItemId });
+export const approveTaskToolCall = async (loopId: string, taskId: string, queueItemId: string, message?: string): Promise<{ approved: boolean }> => {
+  const response = await authenticatedJsonPost(taskApiPaths.approveToolCall(), { loopId, taskId, queueItemId, message });
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Tool call approval failed with status ${response.status}`));
@@ -74,8 +74,8 @@ export const approveTaskToolCall = async (loopId: string, taskId: string, queueI
   return response.json() as Promise<{ approved: boolean }>;
 };
 
-export const rejectTaskToolCall = async (loopId: string, taskId: string, queueItemId: string): Promise<{ rejected: boolean }> => {
-  const response = await authenticatedJsonPost(taskApiPaths.rejectToolCall(), { loopId, taskId, queueItemId });
+export const rejectTaskToolCall = async (loopId: string, taskId: string, queueItemId: string, message?: string): Promise<{ rejected: boolean }> => {
+  const response = await authenticatedJsonPost(taskApiPaths.rejectToolCall(), { loopId, taskId, queueItemId, message });
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Tool call rejection failed with status ${response.status}`));

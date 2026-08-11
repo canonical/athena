@@ -7,6 +7,7 @@ import { assignRunnerToLoop, removeRunnerFromLoop } from "@components/runner/run
 import { useLoopRunnerList, useRunnerList } from "@components/runner/runner.query.js";
 import type { LoopRunner } from "@components/runner/runner.schema.js";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useFormik } from "formik";
 import { useState } from "react";
 import type { LoopRunnersProps } from "./loop.schema.js";
@@ -158,7 +159,13 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
             rows={assignedRunners.map((runner) => ({
               key: runner.runner,
               columns: [
-                { content: runner.displayName },
+                {
+                  content: (
+                    <Link params={{ loopId, loopRunnerId: runner.runner }} to="/loop/$loopId/runners/$loopRunnerId">
+                      {runner.displayName}
+                    </Link>
+                  ),
+                },
                 { content: runner.runnerType },
                 { content: String(runner.priority) },
                 { content: runner.enabled ? `Yes` : `No` },

@@ -102,7 +102,7 @@ export const useApproveTaskToolCall = (loopId: string, taskId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (queueItemId: string) => approveTaskToolCall(loopId, taskId, queueItemId),
+    mutationFn: ({ queueItemId, message }: { queueItemId: string; message?: string }) => approveTaskToolCall(loopId, taskId, queueItemId, message),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: taskQueryKeys.detail(loopId, taskId) });
     },
@@ -113,7 +113,7 @@ export const useRejectTaskToolCall = (loopId: string, taskId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (queueItemId: string) => rejectTaskToolCall(loopId, taskId, queueItemId),
+    mutationFn: ({ queueItemId, message }: { queueItemId: string; message?: string }) => rejectTaskToolCall(loopId, taskId, queueItemId, message),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: taskQueryKeys.detail(loopId, taskId) });
     },

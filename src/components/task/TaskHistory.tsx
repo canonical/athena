@@ -26,10 +26,7 @@ type TaskHistoryProps = {
 type SelectedToolCall = {
   queueItemId: string;
   queueItemStatus: Task["queue"][number]["status"];
-  id: string;
-  name: string;
-  label: string;
-  arguments: string;
+  toolCalls: Array<{ id: string; name: string; label: string; arguments: string }>;
 };
 
 type SelectedToolResult = {
@@ -159,38 +156,40 @@ export function TaskHistory({ loopId, task, isRawJsonDrawerOpen, onRawJsonDrawer
                             setSelectedToolCall({
                               queueItemId: queueItem.id,
                               queueItemStatus: queueItem.status,
-                              id: tc.id,
-                              name: tc.function.name,
-                              label: providerToolLabelByName(tc.function.name),
-                              arguments: tc.function.arguments,
+                              toolCalls:
+                                queueItem.value.tool_calls?.map((t) => ({
+                                  id: t.id,
+                                  name: t.function.name,
+                                  label: providerToolLabelByName(t.function.name),
+                                  arguments: t.function.arguments,
+                                })) ?? [],
                             });
                           }}
                         />
                       ))}
-                    </div>
-                  ) : null}
-                  {queueItem.status === `awaiting-approval` ? (
-                    <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
-                      <Button
-                        appearance="positive"
-                        disabled={approveToolCallMutation.isPending || rejectToolCallMutation.isPending}
-                        onClick={() => {
-                          void approveToolCallMutation.mutateAsync(queueItem.id);
-                        }}
-                        type="button"
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        appearance="negative"
-                        disabled={approveToolCallMutation.isPending || rejectToolCallMutation.isPending}
-                        onClick={() => {
-                          void rejectToolCallMutation.mutateAsync(queueItem.id);
-                        }}
-                        type="button"
-                      >
-                        Reject
-                      </Button>
+                      {queueItem.status === `awaiting-approval` ? (
+                        <Button
+                          appearance="base"
+                          disabled={approveToolCallMutation.isPending || rejectToolCallMutation.isPending}
+                          onClick={() => {
+                            setSelectedToolCall({
+                              queueItemId: queueItem.id,
+                              queueItemStatus: queueItem.status,
+                              toolCalls:
+                                queueItem.value.tool_calls?.map((t) => ({
+                                  id: t.id,
+                                  name: t.function.name,
+                                  label: providerToolLabelByName(t.function.name),
+                                  arguments: t.function.arguments,
+                                })) ?? [],
+                            });
+                          }}
+                          style={{ alignSelf: "flex-start", marginTop: "0.25rem" }}
+                          type="button"
+                        >
+                          Review &amp; approve
+                        </Button>
+                      ) : null}
                     </div>
                   ) : null}
                 </TaskHistoryMessageBubble>
@@ -208,14 +207,13 @@ export function TaskHistory({ loopId, task, isRawJsonDrawerOpen, onRawJsonDrawer
 
       <TaskHistoryToolCallDetailsDrawer
         isApprovalPending={approveToolCallMutation.isPending || rejectToolCallMutation.isPending}
-        loopId={loopId}
-        onApprove={async (queueItemId) => {
-          await approveToolCallMutation.mutateAsync(queueItemId);
+        onApprove={async (queueItemId, message) => {
+          await approveToolCallMutation.mutateAsync({ queueItemId, message });
           setSelectedToolCall(null);
         }}
         onClose={() => setSelectedToolCall(null)}
-        onReject={async (queueItemId) => {
-          await rejectToolCallMutation.mutateAsync(queueItemId);
+        onReject={async (queueItemId, message) => {
+          await rejectToolCallMutation.mutateAsync({ queueItemId, message });
           setSelectedToolCall(null);
         }}
         selectedToolCall={selectedToolCall}

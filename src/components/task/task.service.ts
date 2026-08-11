@@ -1,3 +1,4 @@
+import { pgColumns } from "@components/postgres/pg.utilities.js";
 import { getPool } from "@components/postgres/postgres.js";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { v7 as uuidv7 } from "uuid";
@@ -23,11 +24,9 @@ const taskColumnNames = [
   "updatedAt",
 ] as const;
 
-const taskColumns = taskColumnNames.map((column) => `"${column}"`).join(`, `);
+const taskColumns = pgColumns(taskColumnNames);
 
-const scopeTaskColumns = (scope: string): string => {
-  return taskColumnNames.map((column) => `${scope}."${column}"`).join(`, `);
-};
+const scopeTaskColumns = (scope: string): string => pgColumns(taskColumnNames, scope);
 
 export const queryTaskList = async (loopId: string): Promise<Task[]> => {
   const result = await getPool().query<Task>(
@@ -254,6 +253,12 @@ export const queryTaskPick = async (processorId: string, readyLoopIds: string[])
             SELECT 1
             FROM jsonb_array_elements(t."queue") AS queue_item
             WHERE queue_item->>'status' = 'awaiting-approval'
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "runnerQueue" rq
+            WHERE rq."task" = t."id"
+              AND rq."status" IN ('pending', 'claimed')
           )
         ORDER BY t."createdAt" ASC
         FOR UPDATE SKIP LOCKED

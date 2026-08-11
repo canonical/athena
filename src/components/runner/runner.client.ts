@@ -1,11 +1,19 @@
 import { authenticatedJsonDelete, authenticatedJsonGet, authenticatedJsonPost, authenticatedJsonPut } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
-import type { LoopRunner, Runner, RunnerInsert, RunnerUpdate } from "./runner.schema.js";
+import type { CopilotAgentTask } from "./runner.copilot.adapter.js";
+import type { LoopRunner, Runner, RunnerInsert, RunnerQueueItem, RunnerUpdate } from "./runner.schema.js";
+
+export type LoopRunnerSessionsResult = {
+  queueItems: RunnerQueueItem[];
+  githubTasks: CopilotAgentTask[];
+  githubError: string | null;
+};
 
 export const runnerApiPaths = {
   list: getApiUrl(`/runner`),
   byId: (runnerId: string) => getApiUrl(`/runner/${runnerId}`),
   loopList: (loopId: string) => getApiUrl(`/runner/loop/${loopId}/list`),
+  loopSessions: (loopId: string) => getApiUrl(`/runner/loop/${loopId}/sessions`),
   assign: getApiUrl(`/runner/assign`),
   unassign: getApiUrl(`/runner/unassign`),
 } as const;
@@ -91,4 +99,14 @@ export const removeRunnerFromLoop = async (loopId: string, runnerId: string): Pr
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, `Runner removal failed with status ${response.status}`));
   }
+};
+
+export const fetchLoopRunnerSessions = async (loopId: string): Promise<LoopRunnerSessionsResult> => {
+  const response = await authenticatedJsonGet(runnerApiPaths.loopSessions(loopId));
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Loop runner sessions request failed with status ${response.status}`));
+  }
+
+  return response.json() as Promise<LoopRunnerSessionsResult>;
 };

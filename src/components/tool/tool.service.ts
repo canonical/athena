@@ -1,6 +1,7 @@
 import * as athenaExecutors from "./tool.athena.service.js";
 import { providerToolInputSchemas } from "./tool.catalog.js";
 import * as githubExecutors from "./tool.github.service.js";
+import * as runnerExecutors from "./tool.runner.service.js";
 import type { ProviderToolBatchResult, ProviderToolExecutionContext, ProviderToolRequest, ProviderToolResult } from "./tool.schema.js";
 import * as workgraphExecutors from "./tool.workgraph.service.js";
 
@@ -55,6 +56,7 @@ const providerToolExecutors: Record<string, ProviderToolExecutor> = {
   athena_list_personas: async (context) => athenaExecutors.executeAthenaListPersonas(context),
   athena_ask_other_persona: async (context, input) => athenaExecutors.executeAthenaAskOtherPersona(context, input),
   athena_assign_to_workgraph_item: async (context, input) => athenaExecutors.executeAthenaAssignToWorkgraphItem(context, input),
+  athena_enqueue_run: async (context, input) => runnerExecutors.executeAthenaEnqueueRun(context, input),
 };
 
 const executeSingleTool = async (context: ProviderToolExecutionContext, request: ProviderToolRequest): Promise<ProviderToolResult> => {
