@@ -3,7 +3,7 @@ import { defineRoutes } from "@components/express/express.router.js";
 import { uuid } from "@components/utilities/zod.utilities.js";
 import { Router } from "express";
 import { z } from "zod";
-import { loopRunnerCreate, loopRunnerDelete, loopRunnerList, loopRunnerUpdateByAdmin, runnerCreate, runnerDelete, runnerGet, runnerList, runnerUpdate } from "./runner.controller.js";
+import { loopRunnerCreate, loopRunnerDelete, loopRunnerList, loopRunnerSessions, loopRunnerUpdateByAdmin, runnerCreate, runnerDelete, runnerGet, runnerList, runnerSessions, runnerUpdate } from "./runner.controller.js";
 import { loopRunnerAdminUpdateSchema, runnerInsertSchema, runnerUpdateSchema } from "./runner.schema.js";
 
 export const runnerRouter = Router();
@@ -77,6 +77,18 @@ route({
 });
 
 route({
+  method: `get`,
+  route: `/:runner/sessions`,
+  validators: {
+    params: runnerParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const result = await runnerSessions(params.runner, getAuthenticatedUserId(response));
+    respond({ status: 200, data: result });
+  },
+});
+
+route({
   method: `put`,
   route: `/:runner`,
   validators: {
@@ -98,6 +110,18 @@ route({
   handler: async ({ params, response, respond }) => {
     const runners = await loopRunnerList(params.loop, getAuthenticatedUserId(response));
     respond({ status: 200, data: runners });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/loop/:loop/sessions`,
+  validators: {
+    params: loopParamsSchema,
+  },
+  handler: async ({ params, response, respond }) => {
+    const result = await loopRunnerSessions(params.loop, getAuthenticatedUserId(response));
+    respond({ status: 200, data: result });
   },
 });
 

@@ -113,10 +113,26 @@ export const taskAppendUserMessage = async (user: { id: string; name: string }, 
   return { appended };
 };
 
-export const taskApproveToolCall = async (userId: string, input: TaskToolCallApproval): Promise<{ approved: boolean }> => {
-  await requireLoopAccess(input.loopId, userId);
+export const taskApproveToolCall = async (user: { id: string; name: string }, input: TaskToolCallApproval): Promise<{ approved: boolean }> => {
+  await requireLoopAccess(input.loopId, user.id);
 
   const approved = await queryTaskToolCallApprove(input.loopId, input.taskId, input.queueItemId);
+
+  if (approved && input.message) {
+    const task = await queryTaskGet(input.loopId, input.taskId);
+
+    if (task) {
+      const messageQueueItem: TaskQueueItemInput = {
+        type: `message`,
+        // completed so the tool-result LLM continuation picks it up as context, not a new user turn
+        status: `completed`,
+        userId: user.id,
+        userName: user.name,
+        value: { role: `user`, content: `Tool call approved. User note: ${input.message}` },
+      };
+      await queryAppendQueueItem(task.id, task.processorUnit, messageQueueItem, true);
+    }
+  }
 
   if (approved) {
     triggerTaskProcessorAsync();
@@ -159,10 +175,25 @@ export const taskAssignWorkgraphItem = async (userId: string, loopId: string, ta
   return { assigned };
 };
 
-export const taskRejectToolCall = async (userId: string, input: TaskToolCallApproval): Promise<{ rejected: boolean }> => {
-  await requireLoopAccess(input.loopId, userId);
+export const taskRejectToolCall = async (user: { id: string; name: string }, input: TaskToolCallApproval): Promise<{ rejected: boolean }> => {
+  await requireLoopAccess(input.loopId, user.id);
 
   const rejected = await queryTaskToolCallReject(input.loopId, input.taskId, input.queueItemId);
+
+  if (rejected && input.message) {
+    const task = await queryTaskGet(input.loopId, input.taskId);
+
+    if (task) {
+      const messageQueueItem: TaskQueueItemInput = {
+        type: `message`,
+        status: `pending`,
+        userId: user.id,
+        userName: user.name,
+        value: { role: `user`, content: `Tool call rejected. User note: ${input.message}` },
+      };
+      await queryAppendQueueItem(task.id, task.processorUnit, messageQueueItem, true);
+    }
+  }
 
   if (rejected) {
     triggerTaskProcessorAsync();

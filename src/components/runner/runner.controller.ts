@@ -1,8 +1,22 @@
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
+import type { CopilotAgentTask } from "./runner.copilot.adapter.js";
+import { listCopilotAgentTasks } from "./runner.copilot.adapter.js";
 import { RunnerForbiddenError, RunnerNotFoundError, RunnerValidationError } from "./runner.errors.js";
-import type { LoopRunner, LoopRunnerAdminUpdate, LoopRunnerInsert, Runner, RunnerInsert, RunnerUpdate } from "./runner.schema.js";
-import { queryLoopRunnerCreate, queryLoopRunnerDelete, queryLoopRunnerList, queryLoopRunnerUpdateByAdmin, queryRunnerByIdForOwner, queryRunnerCreate, queryRunnerDelete, queryRunnerListByOwner, queryRunnerUpdate } from "./runner.service.js";
+import { queryRunnerQueueListByLoop, queryRunnerQueueListByRunner } from "./runner.queue.service.js";
+import type { LoopRunner, LoopRunnerAdminUpdate, LoopRunnerInsert, Runner, RunnerInsert, RunnerQueueItem, RunnerUpdate } from "./runner.schema.js";
+import {
+  queryLoopRunnerCreate,
+  queryLoopRunnerDelete,
+  queryLoopRunnerList,
+  queryLoopRunnerUpdateByAdmin,
+  queryRunnerByIdForOwner,
+  queryRunnerCreate,
+  queryRunnerDecryptCredential,
+  queryRunnerDelete,
+  queryRunnerListByOwner,
+  queryRunnerUpdate,
+} from "./runner.service.js";
 
 const enforceMvpRunnerType = (runnerType: string): void => {
   if (runnerType !== `github-copilot-cloud`) {
@@ -131,4 +145,88 @@ export const loopRunnerDelete = async (loopId: string, runnerId: string, userId:
   if (!(await queryLoopRunnerDelete(loopId, runnerId))) {
     throw new RunnerNotFoundError(`Loop runner not found.`);
   }
+};
+
+export type RunnerSessionsResult = {
+  runner: Runner;
+  queueItems: RunnerQueueItem[];
+  githubTasks: CopilotAgentTask[];
+  githubError: string | null;
+};
+
+export const runnerSessions = async (runnerId: string, ownerId: string): Promise<RunnerSessionsResult> => {
+  validateRunnerId(runnerId);
+
+  const runner = await queryRunnerByIdForOwner(runnerId, ownerId);
+
+  if (!runner) {
+    throw new RunnerNotFoundError(`Runner not found.`);
+  }
+
+  const queueItems = await queryRunnerQueueListByRunner(runnerId);
+  const repositories = [...new Set(queueItems.map((item) => item.repository))];
+
+  let githubTasks: CopilotAgentTask[] = [];
+  let githubError: string | null = null;
+
+  if (repositories.length > 0) {
+    const apiKey = await queryRunnerDecryptCredential(runnerId);
+
+    if (apiKey) {
+      try {
+        const taskArrays = await Promise.all(repositories.map((repo) => listCopilotAgentTasks(apiKey, repo)));
+        githubTasks = taskArrays.flat();
+      } catch (err) {
+        githubError = err instanceof Error ? err.message : String(err);
+      }
+    } else {
+      githubError = `Runner credential not found.`;
+    }
+  }
+
+  return { runner, queueItems, githubTasks, githubError };
+};
+
+export type LoopRunnerSessionsResult = {
+  queueItems: RunnerQueueItem[];
+  githubTasks: CopilotAgentTask[];
+  githubError: string | null;
+};
+
+export const loopRunnerSessions = async (loopId: string, userId: string): Promise<LoopRunnerSessionsResult> => {
+  validateLoopId(loopId);
+
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new RunnerNotFoundError(`Loop not found.`);
+  }
+
+  const queueItems = await queryRunnerQueueListByLoop(loopId);
+
+  // Group repos by runner so each runner's credential is used for its own repos.
+  const reposByRunner = new Map<string, Set<string>>();
+  for (const item of queueItems) {
+    const repos = reposByRunner.get(item.runner) ?? new Set<string>();
+    repos.add(item.repository);
+    reposByRunner.set(item.runner, repos);
+  }
+
+  let githubTasks: CopilotAgentTask[] = [];
+  let githubError: string | null = null;
+
+  if (reposByRunner.size > 0) {
+    try {
+      const allTaskArrays = await Promise.all(
+        [...reposByRunner.entries()].map(async ([runnerId, repos]) => {
+          const apiKey = await queryRunnerDecryptCredential(runnerId);
+          if (!apiKey) return [];
+          return (await Promise.all([...repos].map((repo) => listCopilotAgentTasks(apiKey, repo)))).flat();
+        }),
+      );
+      githubTasks = allTaskArrays.flat();
+    } catch (err) {
+      githubError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  return { queueItems, githubTasks, githubError };
 };

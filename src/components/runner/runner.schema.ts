@@ -68,9 +68,35 @@ export const loopRunnerSchema = runnerSchema.pick({ displayName: true, runnerTyp
   updatedAt: isoDateTime,
 });
 
+export const runnerQueueStatuses = [`pending`, `claimed`, `completed`, `failed`] as const;
+
+export const runnerQueueItemSchema = z.object({
+  id: uuid(),
+  loop: uuid(),
+  task: uuid(),
+  runner: uuid(),
+  repository: z.string(),
+  prompt: z.string(),
+  plan: z.string(),
+  status: z.enum(runnerQueueStatuses),
+  claimedBy: uuid().nullable(),
+  claimedAt: isoDateTime.nullable(),
+  externalTaskId: z.string().nullable(),
+  result: z.string().nullable(),
+  error: z.string().nullable(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+});
+
+// Runner types whose queue Athena consumes internally (no external polling needed).
+export const athenaConsumedRunnerTypes = [`github-copilot-cloud`] as const;
+
+export const isAthenaConsumedRunner = (runnerType: string): boolean => (athenaConsumedRunnerTypes as ReadonlyArray<string>).includes(runnerType);
+
 export type RunnerInsert = z.infer<typeof runnerInsertSchema>;
 export type RunnerUpdate = z.infer<typeof runnerUpdateSchema>;
 export type LoopRunnerInsert = z.infer<typeof loopRunnerInsertSchema>;
 export type LoopRunnerAdminUpdate = z.infer<typeof loopRunnerAdminUpdateSchema>;
 export type Runner = z.infer<typeof runnerSchema>;
 export type LoopRunner = z.infer<typeof loopRunnerSchema>;
+export type RunnerQueueItem = z.infer<typeof runnerQueueItemSchema>;

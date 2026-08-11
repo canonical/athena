@@ -70,6 +70,7 @@ export const taskToolCallApprovalSchema = z.object({
   loopId: uuid(`loop must be a valid UUID.`),
   taskId: uuid(`task must be a valid UUID.`),
   queueItemId: uuid(`queueItemId must be a valid UUID.`),
+  message: z.string().trim().optional(),
 });
 
 export const taskUpdateTitleSchema = z.object({
