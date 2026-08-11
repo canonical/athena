@@ -35,6 +35,7 @@ const loopPersonaEditRoutePath = `${loopDetailRoutePath}/personas/edit/$personaI
 const loopPersonaCloneRoutePath = `${loopDetailRoutePath}/personas/clone/$personaId`;
 const loopProvidersRoutePath = `${loopDetailRoutePath}/providers`;
 const loopRunnersRoutePath = `${loopDetailRoutePath}/runners`;
+const loopRunnerSessionsRoutePath = `${loopDetailRoutePath}/runners/$loopRunnerId`;
 const loopWorkgraphsRoutePath = `${loopDetailRoutePath}/workgraphs`;
 const loopWorkgraphViewRoutePath = `${loopDetailRoutePath}/workgraphs/$workgraphViewWorkgraphId`;
 const loopWorkgraphConfigRoutePath = `${loopDetailRoutePath}/workgraphs/$workgraphViewWorkgraphId/$workgraphConfigTab`;
@@ -136,6 +137,12 @@ const LazyRunnerList = lazy(async () => {
   const module = await import("@components/runner/RunnerList.js");
 
   return { default: module.RunnerList };
+});
+
+const LazyLoopRunnerSessions = lazy(async () => {
+  const module = await import("@components/loop/LoopRunnerSessions.js");
+
+  return { default: module.LoopRunnerSessions };
 });
 
 const LazyRunnerLayout = lazy(async () => {
@@ -416,6 +423,16 @@ function LoopRunnersRouteView() {
   const { loopId } = loopRunnersRoute.useParams();
 
   return <LoopViewRoute loopId={loopId} tab="runners" />;
+}
+
+function LoopRunnerSessionsRouteView() {
+  const { loopId, loopRunnerId } = loopRunnerSessionsRoute.useParams();
+
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyLoopRunnerSessions loopId={loopId} runnerId={loopRunnerId} />
+    </Suspense>
+  );
 }
 
 function LoopWorkgraphsRouteView() {
@@ -868,6 +885,12 @@ const loopRunnersRoute = createRoute({
   component: LoopRunnersRouteView,
 });
 
+const loopRunnerSessionsRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopRunnerSessionsRoutePath,
+  component: LoopRunnerSessionsRouteView,
+});
+
 const loopWorkgraphsRoute = createRoute({
   getParentRoute: () => loopLayoutRoute,
   path: loopWorkgraphsRoutePath,
@@ -1102,6 +1125,7 @@ const routeTree = rootRoute.addChildren([
       loopPersonaCloneRoute,
       loopProvidersRoute,
       loopRunnersRoute,
+      loopRunnerSessionsRoute,
       loopWorkgraphsRoute,
       loopWorkgraphViewRoute,
       loopWorkgraphConfigRoute,

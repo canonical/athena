@@ -1,3 +1,4 @@
+import { pgColumns } from "@components/postgres/pg.utilities.js";
 import { getPool } from "@components/postgres/postgres.js";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { v7 as uuidv7 } from "uuid";
@@ -23,11 +24,9 @@ const taskColumnNames = [
   "updatedAt",
 ] as const;
 
-const taskColumns = taskColumnNames.map((column) => `"${column}"`).join(`, `);
+const taskColumns = pgColumns(taskColumnNames);
 
-const scopeTaskColumns = (scope: string): string => {
-  return taskColumnNames.map((column) => `${scope}."${column}"`).join(`, `);
-};
+const scopeTaskColumns = (scope: string): string => pgColumns(taskColumnNames, scope);
 
 export const queryTaskList = async (loopId: string): Promise<Task[]> => {
   const result = await getPool().query<Task>(

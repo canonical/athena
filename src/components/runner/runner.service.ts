@@ -215,6 +215,25 @@ export const queryLoopRunnerDelete = async (loopId: string, runnerId: string): P
   return Boolean(result.rowCount);
 };
 
+export const queryRunnerDecryptCredential = async (runnerId: string): Promise<string | null> => {
+  const result = await getPool().query<{ ciphertext: string; iv: string; authTag: string; keyVersion: string }>(
+    `
+      SELECT "credentialCiphertext" AS ciphertext, "credentialIv" AS iv, "credentialAuthTag" AS "authTag", "credentialKeyVersion" AS "keyVersion"
+      FROM "runner"
+      WHERE "id" = $1
+    `,
+    [runnerId],
+  );
+
+  const row = result.rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  return decryptSecret({ ciphertext: row.ciphertext, iv: row.iv, authTag: row.authTag, keyVersion: row.keyVersion });
+};
+
 export type LoopRunnerCandidateRow = {
   loop: string;
   runner: string;

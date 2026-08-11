@@ -330,12 +330,13 @@ export const providerToolDefinitions: ReadonlyArray<ProviderToolDefinition> = [
   {
     name: `athena_enqueue_run`,
     label: `Enqueue Runner`,
-    description: `Dispatch work to a runner harness by pushing a prompt and plan to the runner queue. The task will pause until the runner completes the work. Requires user approval before execution.`,
+    description: `Dispatch an agentic coding task to a runner harness (GitHub Copilot Cloud). Call task_repositories first to get a valid repository value. Provide a self-contained prompt with all necessary context and a step-by-step plan. The task will pause after this call and resume automatically when the runner finishes — do not attempt further tool calls or responses after invoking this tool. Requires user approval before execution.`,
     requiresApproval: true,
     inputSchema: z
       .object({
         prompt: requiredString(`prompt is required.`).describe(`Full task context and instructions for the runner harness.`),
         plan: requiredString(`plan is required.`).describe(`Step-by-step plan for the runner to follow.`),
+        repository: requiredString(`repository is required.`).describe(`Target repository in owner/repo format (e.g. canonical/athena). Use task_repositories to discover available repositories.`),
       })
       .strict(),
   },

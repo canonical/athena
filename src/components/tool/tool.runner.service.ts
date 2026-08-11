@@ -6,8 +6,9 @@ export const executeAthenaEnqueueRun = async (context: ProviderToolExecutionCont
   const { taskId, loopId } = context;
   const prompt = typeof input?.prompt === `string` ? input.prompt.trim() : ``;
   const plan = typeof input?.plan === `string` ? input.plan.trim() : ``;
+  const repository = typeof input?.repository === `string` ? input.repository.trim() : ``;
 
-  console.log(`[athena_enqueue_run] invoked`, { taskId, loopId });
+  console.log(`[athena_enqueue_run] invoked`, { taskId, loopId, repository });
 
   const runnerResolution = await resolveLoopSelection(loopId, `runner`);
 
@@ -19,8 +20,8 @@ export const executeAthenaEnqueueRun = async (context: ProviderToolExecutionCont
   const { assignmentId, definitionType } = runnerResolution.selected;
   console.log(`[athena_enqueue_run] runner selected`, { taskId, loopId, assignmentId, definitionType });
 
-  const queueItem = await queryRunnerQueueCreate(loopId, taskId, assignmentId, prompt, plan);
-  console.log(`[athena_enqueue_run] enqueued`, { taskId, loopId, queueItemId: queueItem.id, runnerType: definitionType });
+  const queueItem = await queryRunnerQueueCreate(loopId, taskId, assignmentId, repository, prompt, plan);
+  console.log(`[athena_enqueue_run] enqueued`, { taskId, loopId, queueItemId: queueItem.id, runnerType: definitionType, repository });
 
-  return { queued: true, queueItemId: queueItem.id, runnerType: definitionType };
+  return { queued: true, queueItemId: queueItem.id, runnerType: definitionType, repository };
 };

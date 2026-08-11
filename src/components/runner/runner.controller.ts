@@ -1,8 +1,22 @@
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
+import type { CopilotAgentTask } from "./runner.copilot.adapter.js";
+import { listCopilotAgentTasks } from "./runner.copilot.adapter.js";
 import { RunnerForbiddenError, RunnerNotFoundError, RunnerValidationError } from "./runner.errors.js";
-import type { LoopRunner, LoopRunnerAdminUpdate, LoopRunnerInsert, Runner, RunnerInsert, RunnerUpdate } from "./runner.schema.js";
-import { queryLoopRunnerCreate, queryLoopRunnerDelete, queryLoopRunnerList, queryLoopRunnerUpdateByAdmin, queryRunnerByIdForOwner, queryRunnerCreate, queryRunnerDelete, queryRunnerListByOwner, queryRunnerUpdate } from "./runner.service.js";
+import { queryRunnerQueueListByLoop, queryRunnerQueueListByRunner } from "./runner.queue.service.js";
+import type { LoopRunner, LoopRunnerAdminUpdate, LoopRunnerInsert, Runner, RunnerInsert, RunnerQueueItem, RunnerUpdate } from "./runner.schema.js";
+import {
+  queryLoopRunnerCreate,
+  queryLoopRunnerDelete,
+  queryLoopRunnerList,
+  queryLoopRunnerUpdateByAdmin,
+  queryRunnerByIdForOwner,
+  queryRunnerCreate,
+  queryRunnerDecryptCredential,
+  queryRunnerDelete,
+  queryRunnerListByOwner,
+  queryRunnerUpdate,
+} from "./runner.service.js";
 
 const enforceMvpRunnerType = (runnerType: string): void => {
   if (runnerType !== `github-copilot-cloud`) {
@@ -131,4 +145,83 @@ export const loopRunnerDelete = async (loopId: string, runnerId: string, userId:
   if (!(await queryLoopRunnerDelete(loopId, runnerId))) {
     throw new RunnerNotFoundError(`Loop runner not found.`);
   }
+};
+
+export type RunnerSessionsResult = {
+  runner: Runner;
+  queueItems: RunnerQueueItem[];
+  githubTasks: CopilotAgentTask[];
+  githubError: string | null;
+};
+
+export const runnerSessions = async (runnerId: string, ownerId: string): Promise<RunnerSessionsResult> => {
+  validateRunnerId(runnerId);
+
+  const runner = await queryRunnerByIdForOwner(runnerId, ownerId);
+
+  if (!runner) {
+    throw new RunnerNotFoundError(`Runner not found.`);
+  }
+
+  const queueItems = await queryRunnerQueueListByRunner(runnerId);
+  const repositories = [...new Set(queueItems.map((item) => item.repository))];
+
+  let githubTasks: CopilotAgentTask[] = [];
+  let githubError: string | null = null;
+
+  if (repositories.length > 0) {
+    const apiKey = await queryRunnerDecryptCredential(runnerId);
+
+    if (apiKey) {
+      try {
+        const taskArrays = await Promise.all(repositories.map((repo) => listCopilotAgentTasks(apiKey, repo)));
+        githubTasks = taskArrays.flat();
+      } catch (err) {
+        githubError = err instanceof Error ? err.message : String(err);
+      }
+    } else {
+      githubError = `Runner credential not found.`;
+    }
+  }
+
+  return { runner, queueItems, githubTasks, githubError };
+};
+
+export type LoopRunnerSessionsResult = {
+  queueItems: RunnerQueueItem[];
+  githubTasks: CopilotAgentTask[];
+  githubError: string | null;
+};
+
+export const loopRunnerSessions = async (loopId: string, userId: string): Promise<LoopRunnerSessionsResult> => {
+  validateLoopId(loopId);
+
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new RunnerNotFoundError(`Loop not found.`);
+  }
+
+  const queueItems = await queryRunnerQueueListByLoop(loopId);
+  const uniqueRunnerIds = [...new Set(queueItems.map((item) => item.runner))];
+  const repositories = [...new Set(queueItems.map((item) => item.repository))];
+
+  let githubTasks: CopilotAgentTask[] = [];
+  let githubError: string | null = null;
+
+  if (repositories.length > 0 && uniqueRunnerIds.length > 0) {
+    // Use the first runner's credential — all runners in a loop share the same type in MVP.
+    const apiKey = await queryRunnerDecryptCredential(uniqueRunnerIds[0] as string);
+
+    if (apiKey) {
+      try {
+        const taskArrays = await Promise.all(repositories.map((repo) => listCopilotAgentTasks(apiKey, repo)));
+        githubTasks = taskArrays.flat();
+      } catch (err) {
+        githubError = err instanceof Error ? err.message : String(err);
+      }
+    } else {
+      githubError = `Runner credential not found.`;
+    }
+  }
+
+  return { queueItems, githubTasks, githubError };
 };

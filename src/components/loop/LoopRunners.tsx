@@ -158,7 +158,7 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
             rows={assignedRunners.map((runner) => ({
               key: runner.runner,
               columns: [
-                { content: runner.displayName },
+                { content: <a href={`/loop/${loopId}/runners/${runner.runner}`}>{runner.displayName}</a> },
                 { content: runner.runnerType },
                 { content: String(runner.priority) },
                 { content: runner.enabled ? `Yes` : `No` },

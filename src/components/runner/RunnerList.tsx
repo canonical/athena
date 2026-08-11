@@ -105,7 +105,7 @@ export function RunnerList({ editor, runnerId }: RunnerListProps) {
           rows={runners.map((runner: Runner) => ({
             key: runner.id,
             columns: [
-              { content: runner.displayName },
+              { content: <a href={`/runner/${runner.id}/sessions`}>{runner.displayName}</a> },
               { content: runner.runnerType },
               { content: lifecycleLabel[runner.lifecycleStatus] ?? runner.lifecycleStatus },
               { content: formatTimestamp(runner.updatedAt) },
