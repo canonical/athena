@@ -1,7 +1,7 @@
 import type { OIDCUserInfo } from "@components/authentication/authentication.schema.js";
 import type { AuthenticatedUser, Session, User } from "@components/authentication/session.schema.js";
 import { config } from "@components/config/config.js";
-import { getPool } from "@components/postgres/postgres.js";
+import { getPool, query } from "@components/postgres/postgres.js";
 import { retry } from "@components/utilities/perseverance.js";
 import type { Request } from "express";
 import * as oidClient from "openid-client";
@@ -333,7 +333,7 @@ export const getAuthenticatedUser = async (sessionId: string | undefined): Promi
     return undefined;
   }
 
-  const result = await getPool().query<AuthenticatedUser>(
+  const result = await query<AuthenticatedUser>(
     `
       SELECT
         u."id",
@@ -357,7 +357,7 @@ export const deleteAuthenticationSession = async (sessionId: string | undefined)
     return;
   }
 
-  await getPool().query(`DELETE FROM "session" WHERE "id" = $1`, [sessionId]);
+  await query(`DELETE FROM "session" WHERE "id" = $1`, [sessionId]);
 };
 
 export const consumeReturnTo = (session: Session | null, request: Request): string => {

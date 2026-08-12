@@ -36,6 +36,7 @@ const loopPersonaCloneRoutePath = `${loopDetailRoutePath}/personas/clone/$person
 const loopProvidersRoutePath = `${loopDetailRoutePath}/providers`;
 const loopRunnersRoutePath = `${loopDetailRoutePath}/runners`;
 const loopRunnerSessionsRoutePath = `${loopDetailRoutePath}/runners/$loopRunnerId`;
+const loopRunnerRepositoriesRoutePath = `${loopDetailRoutePath}/runners/$loopRunnerId/repositories`;
 const loopWorkgraphsRoutePath = `${loopDetailRoutePath}/workgraphs`;
 const loopWorkgraphViewRoutePath = `${loopDetailRoutePath}/workgraphs/$workgraphViewWorkgraphId`;
 const loopWorkgraphConfigRoutePath = `${loopDetailRoutePath}/workgraphs/$workgraphViewWorkgraphId/$workgraphConfigTab`;
@@ -143,6 +144,12 @@ const LazyLoopRunnerSessions = lazy(async () => {
   const module = await import("@components/loop/LoopRunnerSessions.js");
 
   return { default: module.LoopRunnerSessions };
+});
+
+const LazyLoopRunnerRepositories = lazy(async () => {
+  const module = await import("@components/loop/LoopRunnerRepositories.js");
+
+  return { default: module.LoopRunnerRepositories };
 });
 
 const LazyRunnerLayout = lazy(async () => {
@@ -431,6 +438,16 @@ function LoopRunnerSessionsRouteView() {
   return (
     <Suspense fallback={<RouteLoadingView />}>
       <LazyLoopRunnerSessions loopId={loopId} runnerId={loopRunnerId} />
+    </Suspense>
+  );
+}
+
+function LoopRunnerRepositoriesRouteView() {
+  const { loopId, loopRunnerId } = loopRunnerRepositoriesRoute.useParams();
+
+  return (
+    <Suspense fallback={<RouteLoadingView />}>
+      <LazyLoopRunnerRepositories loopId={loopId} runnerId={loopRunnerId} />
     </Suspense>
   );
 }
@@ -891,6 +908,12 @@ const loopRunnerSessionsRoute = createRoute({
   component: LoopRunnerSessionsRouteView,
 });
 
+const loopRunnerRepositoriesRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopRunnerRepositoriesRoutePath,
+  component: LoopRunnerRepositoriesRouteView,
+});
+
 const loopWorkgraphsRoute = createRoute({
   getParentRoute: () => loopLayoutRoute,
   path: loopWorkgraphsRoutePath,
@@ -1126,6 +1149,7 @@ const routeTree = rootRoute.addChildren([
       loopProvidersRoute,
       loopRunnersRoute,
       loopRunnerSessionsRoute,
+      loopRunnerRepositoriesRoute,
       loopWorkgraphsRoute,
       loopWorkgraphViewRoute,
       loopWorkgraphConfigRoute,

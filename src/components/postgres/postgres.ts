@@ -64,3 +64,10 @@ export const getPool = (): Pool => {
 
   return pool;
 };
+
+type PoolQuery = ReturnType<typeof getPool>[`query`];
+
+export const query: PoolQuery = ((...args: Parameters<PoolQuery>) => {
+  const poolInstance = getPool();
+  return poolInstance.query(...args);
+}) as PoolQuery;

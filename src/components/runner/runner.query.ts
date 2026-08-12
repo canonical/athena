@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LoopRunnerSessionsResult } from "./runner.client.js";
-import { fetchLoopRunnerList, fetchLoopRunnerSessions, fetchRunnerById, fetchRunnerList } from "./runner.client.js";
-import type { LoopRunner, Runner } from "./runner.schema.js";
+import { fetchLoopRunnerList, fetchLoopRunnerRepositoryList, fetchLoopRunnerSessions, fetchRunnerById, fetchRunnerList } from "./runner.client.js";
+import type { LoopRunner, LoopRunnerRepository, Runner } from "./runner.schema.js";
 
 export type RunnerListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; runners: Runner[] };
 export type RunnerState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; runner: Runner };
 export type LoopRunnerListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; runners: LoopRunner[] };
+export type LoopRunnerRepositoryListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; repositories: LoopRunnerRepository[] };
 export type LoopRunnerSessionsState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; data: LoopRunnerSessionsResult };
 
 export const useRunnerList = () => {
@@ -68,6 +69,22 @@ export const useLoopRunnerSessions = (loopId: string) => {
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`loopRunnerSessions`, loopId] });
+  };
+
+  return { state, reload };
+};
+
+export const useLoopRunnerRepositoryList = (loopId: string, runnerId: string) => {
+  const queryClient = useQueryClient();
+  const { isPending, isError, data, error } = useQuery({
+    queryKey: [`loopRunnerRepositories`, loopId, runnerId],
+    queryFn: () => fetchLoopRunnerRepositoryList(loopId, runnerId),
+  });
+
+  const state: LoopRunnerRepositoryListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, repositories: data };
+
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: [`loopRunnerRepositories`, loopId, runnerId] });
   };
 
   return { state, reload };

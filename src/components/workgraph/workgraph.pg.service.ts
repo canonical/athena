@@ -1,4 +1,4 @@
-import { getPool } from "@components/postgres/postgres.js";
+import { getPool, query } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
 import type { LoopWorkgraphWebhook, LoopWorkgraphWebhookUpdate } from "@components/webhook/webhook.schema.js";
 import type { JiraSyncedItem } from "./workgraph.jira.service.js";
@@ -7,7 +7,7 @@ import type { LoopWorkgraph, LoopWorkgraphAdminUpdate, LoopWorkgraphItem, Workgr
 const workgraphColumns = `"id", "owner", "name", "type", "baseUrl", "browseBaseUrl", "projectKey", "email", "lifecycleStatus", "createdAt", "updatedAt"`;
 
 export const queryWorkgraphListByOwner = async (ownerId: string): Promise<Workgraph[]> => {
-  const result = await getPool().query<Workgraph>(
+  const result = await query<Workgraph>(
     `
       SELECT ${workgraphColumns}
       FROM "workgraph"
@@ -21,7 +21,7 @@ export const queryWorkgraphListByOwner = async (ownerId: string): Promise<Workgr
 };
 
 export const queryWorkgraphByIdForOwner = async (workgraphId: string, ownerId: string): Promise<Workgraph | undefined> => {
-  const result = await getPool().query<Workgraph>(
+  const result = await query<Workgraph>(
     `
       SELECT ${workgraphColumns}
       FROM "workgraph"
@@ -37,7 +37,7 @@ export const queryWorkgraphByIdForOwner = async (workgraphId: string, ownerId: s
 export const queryWorkgraphCreate = async (input: WorkgraphInsert, ownerId: string): Promise<Workgraph> => {
   const envelope = encryptSecret(input.apiKey);
 
-  const result = await getPool().query<Workgraph>(
+  const result = await query<Workgraph>(
     `
       INSERT INTO "workgraph" (
         "owner",
@@ -71,7 +71,7 @@ export const queryWorkgraphCreate = async (input: WorkgraphInsert, ownerId: stri
 export const queryWorkgraphUpdate = async (workgraphId: string, ownerId: string, input: WorkgraphUpdate): Promise<Workgraph | undefined> => {
   if (input.apiKey) {
     const envelope = encryptSecret(input.apiKey);
-    const result = await getPool().query<Workgraph>(
+    const result = await query<Workgraph>(
       `
         UPDATE "workgraph"
         SET
@@ -96,7 +96,7 @@ export const queryWorkgraphUpdate = async (workgraphId: string, ownerId: string,
     return result.rows[0];
   }
 
-  const result = await getPool().query<Workgraph>(
+  const result = await query<Workgraph>(
     `
       UPDATE "workgraph"
       SET
@@ -117,13 +117,13 @@ export const queryWorkgraphUpdate = async (workgraphId: string, ownerId: string,
 };
 
 export const queryWorkgraphDelete = async (workgraphId: string, ownerId: string): Promise<boolean> => {
-  const result = await getPool().query(`DELETE FROM "workgraph" WHERE "id" = $1 AND "owner" = $2`, [workgraphId, ownerId]);
+  const result = await query(`DELETE FROM "workgraph" WHERE "id" = $1 AND "owner" = $2`, [workgraphId, ownerId]);
 
   return Boolean(result.rowCount);
 };
 
 export const queryLoopWorkgraphList = async (loopId: string): Promise<LoopWorkgraph[]> => {
-  const result = await getPool().query<LoopWorkgraph>(
+  const result = await query<LoopWorkgraph>(
     `
       SELECT
         lw."id",
@@ -154,7 +154,7 @@ export const queryLoopWorkgraphList = async (loopId: string): Promise<LoopWorkgr
 };
 
 export const queryLoopWorkgraphAssign = async (loopId: string, workgraphId: string): Promise<void> => {
-  await getPool().query(
+  await query(
     `
       INSERT INTO "loopWorkgraph" ("loop", "workgraph")
       VALUES ($1, $2)
@@ -165,7 +165,7 @@ export const queryLoopWorkgraphAssign = async (loopId: string, workgraphId: stri
 };
 
 export const queryLoopWorkgraphUpdateByAdmin = async (loopId: string, workgraphId: string, input: LoopWorkgraphAdminUpdate): Promise<LoopWorkgraph | undefined> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "loopWorkgraph"
       SET
@@ -187,7 +187,7 @@ export const queryLoopWorkgraphUpdateByAdmin = async (loopId: string, workgraphI
 };
 
 export const queryLoopWorkgraphDelete = async (loopId: string, workgraphId: string): Promise<boolean> => {
-  const result = await getPool().query(`DELETE FROM "loopWorkgraph" WHERE "loop" = $1 AND "workgraph" = $2`, [loopId, workgraphId]);
+  const result = await query(`DELETE FROM "loopWorkgraph" WHERE "loop" = $1 AND "workgraph" = $2`, [loopId, workgraphId]);
 
   return Boolean(result.rowCount);
 };
@@ -201,7 +201,7 @@ type WorkgraphApiConnection = {
 };
 
 export const queryWorkgraphApiConnectionByOwner = async (workgraphId: string, ownerId: string): Promise<WorkgraphApiConnection | undefined> => {
-  const result = await getPool().query<{
+  const result = await query<{
     type: string;
     baseUrl: string;
     projectKey: string | null;
@@ -262,7 +262,7 @@ export type LoopWorkgraphSyncConnection = {
 };
 
 export const queryLoopWorkgraphSyncConnection = async (loopId: string, workgraphId: string): Promise<LoopWorkgraphSyncConnection | undefined> => {
-  const result = await getPool().query<{
+  const result = await query<{
     loop: string;
     workgraph: string;
     type: string;
@@ -326,7 +326,7 @@ export const queryLoopWorkgraphSyncConnection = async (loopId: string, workgraph
 };
 
 export const queryLoopWorkgraphMarkSyncFailed = async (loopId: string, workgraphId: string, errorMessage: string): Promise<void> => {
-  await getPool().query(
+  await query(
     `
       UPDATE "loopWorkgraph"
       SET
@@ -341,7 +341,7 @@ export const queryLoopWorkgraphMarkSyncFailed = async (loopId: string, workgraph
 };
 
 export const queryLoopWorkgraphMarkSynchronizing = async (loopId: string, workgraphId: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE "loopWorkgraph"
       SET
@@ -464,7 +464,7 @@ export const queryLoopWorkgraphReplaceItems = async (loopId: string, workgraphId
 };
 
 export const queryLoopWorkgraphItemSearch = async (loopId: string, q: string, limit = 20): Promise<LoopWorkgraphItem[]> => {
-  const result = await getPool().query<LoopWorkgraphItem>(
+  const result = await query<LoopWorkgraphItem>(
     `
       SELECT
         lwi."id",
@@ -500,7 +500,7 @@ export const queryLoopWorkgraphItemSearch = async (loopId: string, q: string, li
 };
 
 export const queryLoopWorkgraphItemList = async (loopId: string, workgraphId: string): Promise<LoopWorkgraphItem[]> => {
-  const result = await getPool().query<LoopWorkgraphItem>(
+  const result = await query<LoopWorkgraphItem>(
     `
       SELECT
         lwi."id",
@@ -531,7 +531,7 @@ export const queryLoopWorkgraphItemList = async (loopId: string, workgraphId: st
 };
 
 export const queryLoopWorkgraphItemByIdInLoop = async (loopId: string, itemId: string): Promise<LoopWorkgraphItem | undefined> => {
-  const result = await getPool().query<LoopWorkgraphItem>(
+  const result = await query<LoopWorkgraphItem>(
     `
       SELECT
         lwi."id",
@@ -562,7 +562,7 @@ export const queryLoopWorkgraphItemByIdInLoop = async (loopId: string, itemId: s
 };
 
 export const queryLoopWorkgraphItemById = async (loopId: string, workgraphId: string, itemId: string): Promise<LoopWorkgraphItem | undefined> => {
-  const result = await getPool().query<LoopWorkgraphItem>(
+  const result = await query<LoopWorkgraphItem>(
     `
       SELECT
         lwi."id",
@@ -594,7 +594,7 @@ export const queryLoopWorkgraphItemById = async (loopId: string, workgraphId: st
 };
 
 export const queryLoopWorkgraphId = async (loopId: string, workgraphId: string): Promise<string | undefined> => {
-  const result = await getPool().query<{ id: string }>(
+  const result = await query<{ id: string }>(
     `
       SELECT "id"
       FROM "loopWorkgraph"
@@ -608,7 +608,7 @@ export const queryLoopWorkgraphId = async (loopId: string, workgraphId: string):
 };
 
 export const queryLoopWorkgraphWebhookList = async (loopWorkgraphId: string): Promise<LoopWorkgraphWebhook[]> => {
-  const result = await getPool().query<LoopWorkgraphWebhook>(
+  const result = await query<LoopWorkgraphWebhook>(
     `
       SELECT
         "id",
@@ -633,7 +633,7 @@ export const queryLoopWorkgraphWebhookList = async (loopWorkgraphId: string): Pr
 };
 
 export const queryLoopWorkgraphWebhookCreate = async (input: { loopWorkgraphId: string; label: string; receiverId: string; authHeaderName: string; authSecretHash: string }): Promise<LoopWorkgraphWebhook> => {
-  const result = await getPool().query<LoopWorkgraphWebhook>(
+  const result = await query<LoopWorkgraphWebhook>(
     `
       INSERT INTO "webhook" (
         "label",
@@ -673,7 +673,7 @@ export const queryLoopWorkgraphWebhookCreate = async (input: { loopWorkgraphId: 
 };
 
 export const queryLoopWorkgraphWebhookUpdate = async (webhookId: string, loopWorkgraphId: string, input: LoopWorkgraphWebhookUpdate): Promise<LoopWorkgraphWebhook | undefined> => {
-  const result = await getPool().query<LoopWorkgraphWebhook>(
+  const result = await query<LoopWorkgraphWebhook>(
     `
       UPDATE "webhook"
       SET
@@ -702,7 +702,7 @@ export const queryLoopWorkgraphWebhookUpdate = async (webhookId: string, loopWor
 };
 
 export const queryLoopWorkgraphWebhookDelete = async (webhookId: string, loopWorkgraphId: string): Promise<boolean> => {
-  const result = await getPool().query(
+  const result = await query(
     `
       DELETE FROM "webhook"
       WHERE "id" = $1
@@ -733,7 +733,7 @@ export const queryWebhookByReceiverId = async (
     }
   | undefined
 > => {
-  const result = await getPool().query<{
+  const result = await query<{
     id: string;
     type: string;
     loop: string;
@@ -803,7 +803,7 @@ export const queryWebhookByReceiverId = async (
 };
 
 export const queryWebhookItemCreate = async (payload: Record<string, unknown>): Promise<void> => {
-  await getPool().query(
+  await query(
     `
       INSERT INTO "webhookItem" (
         "payload",
@@ -817,7 +817,7 @@ export const queryWebhookItemCreate = async (payload: Record<string, unknown>): 
 };
 
 export const queryWebhookItemClaimNext = async (): Promise<{ id: string; payload: Record<string, unknown>; retryCount: number } | undefined> => {
-  const result = await getPool().query<{ id: string; payload: Record<string, unknown>; retryCount: number }>(
+  const result = await query<{ id: string; payload: Record<string, unknown>; retryCount: number }>(
     `
       WITH candidate AS (
         SELECT wi."id"
@@ -842,7 +842,7 @@ export const queryWebhookItemClaimNext = async (): Promise<{ id: string; payload
 };
 
 export const queryWebhookItemMarkDone = async (id: string): Promise<void> => {
-  await getPool().query(
+  await query(
     `
       UPDATE "webhookItem"
       SET "status" = 'done'
@@ -853,7 +853,7 @@ export const queryWebhookItemMarkDone = async (id: string): Promise<void> => {
 };
 
 export const queryWebhookItemRequeue = async (id: string): Promise<void> => {
-  await getPool().query(
+  await query(
     `
       UPDATE "webhookItem"
       SET "status" = 'new'
@@ -882,7 +882,7 @@ export const queryLoopWorkgraphUpsertItem = async (input: {
     throw new Error(`Loop workgraph not found.`);
   }
 
-  await getPool().query(
+  await query(
     `
       INSERT INTO "loopWorkgraphItem" (
         "loopWorkgraph",

@@ -209,7 +209,7 @@ const getLoopProviderSelectionPolicy = async (client: PoolClient, loopId: string
   return result.rows[0];
 };
 
-const getCandidates = async (client: PoolClient, loopId: string, pool: SelectionPoolType): Promise<SelectionCandidate[]> => {
+const getCandidates = async (client: PoolClient, loopId: string, pool: SelectionPoolType, repositoryId?: string): Promise<SelectionCandidate[]> => {
   if (pool === `runner`) {
     const result = await client.query<SelectionCandidate>(
       `
@@ -239,8 +239,19 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
         JOIN "runner" h ON h."id" = lh."runner"
         WHERE lh."loop" = $1
           AND h."lifecycleStatus" = 'active'
+          AND (
+            $2::uuid IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM "loopRunnerRepository" lrr
+              WHERE lrr."loop" = lh."loop"
+                AND lrr."runner" = lh."runner"
+                AND lrr."repository" = $2::uuid
+                AND lrr."enabled" = TRUE
+            )
+          )
       `,
-      [loopId],
+      [loopId, repositoryId ?? null],
     );
 
     return result.rows;
@@ -364,7 +375,7 @@ const evaluateSelection = (algorithm: string, candidates: SelectionCandidate[], 
   };
 };
 
-export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolType): Promise<SelectionResolution> => {
+export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolType, options?: { repositoryId?: string }): Promise<SelectionResolution> => {
   const client = await getPool().connect();
 
   try {
@@ -387,7 +398,7 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
 
     const algorithmRequested = pool === `runner` ? policy.runnerSelectionAlgorithm : policy.providerSelectionAlgorithm;
     const cursor = pool === `runner` ? policy.runnerSelectionCursor : policy.providerSelectionCursor;
-    const candidates = await getCandidates(client, loopId, pool);
+    const candidates = await getCandidates(client, loopId, pool, pool === `runner` ? options?.repositoryId : undefined);
 
     const skipped: Array<{ assignmentId: string; reason: string }> = [];
     const eligible = candidates.filter((candidate) => {
@@ -463,7 +474,7 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
   }
 };
 
-export const resolveLoopSelectionByAssignment = async (loopId: string, pool: SelectionPoolType, assignmentId: string): Promise<SelectionResolution> => {
+export const resolveLoopSelectionByAssignment = async (loopId: string, pool: SelectionPoolType, assignmentId: string, options?: { repositoryId?: string }): Promise<SelectionResolution> => {
   const client = await getPool().connect();
 
   try {
@@ -485,7 +496,7 @@ export const resolveLoopSelectionByAssignment = async (loopId: string, pool: Sel
     }
 
     const algorithmRequested = pool === `runner` ? policy.runnerSelectionAlgorithm : policy.providerSelectionAlgorithm;
-    const candidates = await getCandidates(client, loopId, pool);
+    const candidates = await getCandidates(client, loopId, pool, pool === `runner` ? options?.repositoryId : undefined);
 
     const skipped: Array<{ assignmentId: string; reason: string }> = [];
     const selected = candidates.find((candidate) => candidate.assignmentId === assignmentId);

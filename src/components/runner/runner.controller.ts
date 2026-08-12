@@ -1,14 +1,17 @@
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
+import { queryLoopRepositoryList } from "@components/repository/repository.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
 import type { CopilotAgentTask } from "./runner.copilot.adapter.js";
 import { listCopilotAgentTasks } from "./runner.copilot.adapter.js";
 import { RunnerForbiddenError, RunnerNotFoundError, RunnerValidationError } from "./runner.errors.js";
 import { queryRunnerQueueListByLoop, queryRunnerQueueListByRunner } from "./runner.queue.service.js";
-import type { LoopRunner, LoopRunnerAdminUpdate, LoopRunnerInsert, Runner, RunnerInsert, RunnerQueueItem, RunnerUpdate } from "./runner.schema.js";
+import type { LoopRunner, LoopRunnerAdminUpdate, LoopRunnerInsert, LoopRunnerRepository, LoopRunnerRepositoryUpdate, Runner, RunnerInsert, RunnerQueueItem, RunnerUpdate } from "./runner.schema.js";
 import {
   queryLoopRunnerCreate,
   queryLoopRunnerDelete,
   queryLoopRunnerList,
+  queryLoopRunnerRepositoryList,
+  queryLoopRunnerRepositoryReplace,
   queryLoopRunnerUpdateByAdmin,
   queryRunnerByIdForOwner,
   queryRunnerCreate,
@@ -103,6 +106,19 @@ export const loopRunnerCreate = async (loopId: string, userId: string, input: Lo
   enforceMvpRunnerType(runner.runnerType);
 
   await queryLoopRunnerCreate(loopId, input.runner);
+
+  if (input.repositoryIds && input.repositoryIds.length > 0) {
+    const repositories = await queryLoopRepositoryList(loopId);
+    const availableIds = new Set(repositories.map((repository) => repository.repository));
+    const requested = [...new Set(input.repositoryIds)];
+
+    const invalidRepository = requested.find((repositoryId) => !availableIds.has(repositoryId));
+    if (invalidRepository) {
+      throw new RunnerValidationError(`repositoryIds must only contain repositories assigned to this loop.`);
+    }
+
+    await queryLoopRunnerRepositoryReplace(loopId, input.runner, requested);
+  }
 };
 
 export const loopRunnerUpdateByAdmin = async (loopId: string, runnerId: string, userId: string, input: LoopRunnerAdminUpdate): Promise<LoopRunner> => {
@@ -145,6 +161,57 @@ export const loopRunnerDelete = async (loopId: string, runnerId: string, userId:
   if (!(await queryLoopRunnerDelete(loopId, runnerId))) {
     throw new RunnerNotFoundError(`Loop runner not found.`);
   }
+};
+
+export const loopRunnerRepositoryList = async (loopId: string, runnerId: string, userId: string): Promise<LoopRunnerRepository[]> => {
+  validateLoopId(loopId);
+  validateRunnerId(runnerId);
+
+  if (!(await queryLoopMembership(loopId, userId))) {
+    throw new RunnerNotFoundError(`Loop not found.`);
+  }
+
+  const assignedRunners = await queryLoopRunnerList(loopId);
+  const assignedRunner = assignedRunners.find((entry) => entry.runner === runnerId);
+
+  if (!assignedRunner) {
+    throw new RunnerNotFoundError(`Loop runner not found.`);
+  }
+
+  return queryLoopRunnerRepositoryList(loopId, runnerId);
+};
+
+export const loopRunnerRepositoryUpdate = async (loopId: string, runnerId: string, userId: string, input: LoopRunnerRepositoryUpdate): Promise<void> => {
+  validateLoopId(loopId);
+  validateRunnerId(runnerId);
+
+  const loop = await queryLoopForUser(loopId, userId);
+
+  if (!loop) {
+    throw new RunnerNotFoundError(`Loop not found.`);
+  }
+
+  if (!(await queryLoopAdminMembership(loopId, userId))) {
+    throw new RunnerForbiddenError(`Only loop admins may update runner repository assignments.`);
+  }
+
+  const assignedRunners = await queryLoopRunnerList(loopId);
+  const assignedRunner = assignedRunners.find((entry) => entry.runner === runnerId);
+
+  if (!assignedRunner) {
+    throw new RunnerNotFoundError(`Loop runner not found.`);
+  }
+
+  const repositories = await queryLoopRepositoryList(loopId);
+  const availableIds = new Set(repositories.map((repository) => repository.repository));
+  const requested = [...new Set(input.repositoryIds)];
+
+  const invalidRepository = requested.find((repositoryId) => !availableIds.has(repositoryId));
+  if (invalidRepository) {
+    throw new RunnerValidationError(`repositoryIds must only contain repositories assigned to this loop.`);
+  }
+
+  await queryLoopRunnerRepositoryReplace(loopId, runnerId, requested);
 };
 
 export type RunnerSessionsResult = {
