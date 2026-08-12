@@ -17,6 +17,15 @@ const createRunnerViaUi = async (page: Page, displayName: string) => {
   await expect(page.getByRole(`gridcell`, { name: displayName, exact: true }).first()).toBeVisible();
 };
 
+const getRunnerIdFromEditUrl = async (page: Page, displayName: string): Promise<string> => {
+  await page.getByRole(`button`, { name: `Edit ${displayName}` }).click();
+  await expect(page).toHaveURL(/\/runner\/list\/edit\//);
+  const runnerId = page.url().split(`/`).pop() ?? ``;
+  expect(runnerId).toBeTruthy();
+  await page.goBack();
+  return runnerId;
+};
+
 const assignRepositoryToLoopViaUi = async (page: Page, loopId: string, repositoryName: string) => {
   await page.goto(`http://athena.localhost/loop/${loopId}/repositories`);
 
@@ -159,4 +168,43 @@ test(`runner list edit drawer shows not found message for unknown runner id`, as
 
   await expect(page.getByText(`Runner not found`)).toBeVisible();
   await expect(page.getByText(`The selected runner no longer exists.`)).toBeVisible();
+});
+
+test(`loop runner repositories page shows empty state when loop has no assigned repositories`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `No-repo runner loop ${Date.now()}`);
+  const runnerName = `No-repo runner ${Date.now()}`;
+
+  await createRunnerViaUi(page, runnerName);
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/runners`);
+  await page.getByRole(`button`, { name: `Assign runner` }).click();
+  await page.locator(`#assign-runner-select`).selectOption({ label: runnerName });
+  await page.getByRole(`dialog`).getByRole(`button`, { name: `Assign runner` }).click();
+  await expect(page.getByText(`Runner has been assigned to this loop.`)).toBeVisible();
+
+  const runnerRow = page.getByRole(`row`).filter({ hasText: runnerName });
+  await expect(runnerRow.getByRole(`link`, { name: `Manage` })).toBeVisible();
+  await runnerRow.getByRole(`link`, { name: `Manage` }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/runners/.+/repositories`));
+  await expect(page.getByRole(`heading`, { name: /Runner repositories/ })).toBeVisible();
+  await expect(page.getByText(`No repositories are assigned to this loop yet.`)).toBeVisible();
+});
+
+test(`loop runner repositories page shows error for runner not in loop`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Unassigned runner repo loop ${Date.now()}`);
+  const runnerName = `Unassigned repo runner ${Date.now()}`;
+
+  await createRunnerViaUi(page, runnerName);
+  await openRunnerList(page);
+  const runnerId = await getRunnerIdFromEditUrl(page, runnerName);
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/runners/${runnerId}/repositories`);
+
+  await expect(page.getByRole(`heading`, { name: /Runner repositories/ })).toBeVisible();
+  await expect(page.getByText(`Unable to load runner repositories`)).toBeVisible();
 });
