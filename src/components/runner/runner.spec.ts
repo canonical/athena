@@ -17,6 +17,19 @@ const createRunnerViaUi = async (page: Page, displayName: string) => {
   await expect(page.getByRole(`gridcell`, { name: displayName, exact: true }).first()).toBeVisible();
 };
 
+const assignRepositoryToLoopViaUi = async (page: Page, loopId: string, repositoryName: string) => {
+  await page.goto(`http://athena.localhost/loop/${loopId}/repositories`);
+
+  await expect(page.getByRole(`heading`, { name: `Assigned repositories` })).toBeVisible();
+  await page.getByRole(`button`, { name: `Assign repository` }).click();
+  await expect(page.locator(`#assign-repository-select`)).toBeVisible();
+  await page.locator(`#assign-repository-select`).selectOption({ label: repositoryName });
+  await page.getByRole(`dialog`).getByRole(`button`, { name: `Assign repository` }).click();
+
+  await expect(page.getByText(`Repository has been assigned to this loop.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: repositoryName, exact: true }).first()).toBeVisible();
+};
+
 test(`runner list requires authentication`, async ({ page }) => {
   await page.context().clearCookies();
   await page.goto(`http://athena.localhost/runner/list`);
@@ -72,6 +85,44 @@ test(`loop runners tab supports assign remove and algorithm save`, async ({ page
 
   await page.getByRole(`button`, { name: `Remove ${runnerName}` }).click();
   await expect(page.getByText(`${runnerName} has been removed from this loop.`)).toBeVisible();
+});
+
+test(`loop runner repositories page supports assigned toggle and save`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Runner repository mapping loop ${Date.now()}`);
+  const runnerName = `Repository mapped runner ${Date.now()}`;
+
+  await createRunnerViaUi(page, runnerName);
+  await assignRepositoryToLoopViaUi(page, loop.id, `Athena`);
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/runners`);
+  await page.getByRole(`button`, { name: `Assign runner` }).click();
+  await page.locator(`#assign-runner-select`).selectOption({ label: runnerName });
+  await page.getByRole(`dialog`).getByRole(`button`, { name: `Assign runner` }).click();
+  await expect(page.getByText(`Runner has been assigned to this loop.`)).toBeVisible();
+
+  const runnerRow = page.getByRole(`row`).filter({ hasText: runnerName });
+  await expect(runnerRow.getByRole(`link`, { name: `Manage` })).toBeVisible();
+  await runnerRow.getByRole(`link`, { name: `Manage` }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/runners/.+/repositories`));
+  await expect(page.getByRole(`heading`, { name: /Runner repositories/ })).toBeVisible();
+
+  const assignedCheckbox = page.getByRole(`checkbox`).first();
+  await expect(assignedCheckbox).toBeChecked();
+
+  await assignedCheckbox.uncheck();
+  await expect(page.getByRole(`button`, { name: `Save assignments` })).toBeEnabled();
+  await page.getByRole(`button`, { name: `Save assignments` }).click();
+  await expect(page.getByText(`Runner repository assignments have been updated.`)).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Refresh` }).click();
+  await expect(assignedCheckbox).not.toBeChecked();
+
+  await assignedCheckbox.check();
+  await page.getByRole(`button`, { name: `Save assignments` }).click();
+  await expect(page.getByText(`Runner repository assignments have been updated.`)).toBeVisible();
 });
 
 test(`runner detail page renders expected fields`, async ({ page }) => {
