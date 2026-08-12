@@ -39,6 +39,22 @@ const assignRepositoryToLoopViaUi = async (page: Page, loopId: string, repositor
   await expect(page.getByRole(`gridcell`, { name: repositoryName, exact: true }).first()).toBeVisible();
 };
 
+const createRepositoryViaUi = async (page: Page, displayName: string) => {
+  await page.goto(`http://athena.localhost/connection/repositories`);
+  await expect(page.getByRole(`button`, { name: `Create repository` })).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Create repository` }).first().click();
+  await page.getByLabel(`Display name`).fill(displayName);
+  await page.getByLabel(`API base URL`).fill(`https://api.github.com`);
+  await page.getByLabel(`Repository owner`).fill(`canonical`);
+  await page.getByLabel(`Repository name`).fill(`athena-test-${Date.now()}`);
+  await page.getByLabel(`GitHub token`).fill(`ghp_test_${Date.now()}`);
+  await page.locator(`form`).first().getByRole(`button`, { name: `Create repository` }).click();
+
+  await expect(page.getByText(`${displayName} is available in connections.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: displayName, exact: true }).first()).toBeVisible();
+};
+
 test(`runner list requires authentication`, async ({ page }) => {
   await page.context().clearCookies();
   await page.goto(`http://athena.localhost/runner/list`);
@@ -101,9 +117,11 @@ test(`loop runner repositories page supports assigned toggle and save`, async ({
 
   const loop = await createLoop(page, `Runner repository mapping loop ${Date.now()}`);
   const runnerName = `Repository mapped runner ${Date.now()}`;
+  const repositoryName = `Test repo ${Date.now()}`;
 
   await createRunnerViaUi(page, runnerName);
-  await assignRepositoryToLoopViaUi(page, loop.id, `Athena`);
+  await createRepositoryViaUi(page, repositoryName);
+  await assignRepositoryToLoopViaUi(page, loop.id, repositoryName);
 
   await page.goto(`http://athena.localhost/loop/${loop.id}/runners`);
   await page.getByRole(`button`, { name: `Assign runner` }).click();
