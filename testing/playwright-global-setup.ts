@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { v5 as uuidv5 } from "uuid";
@@ -122,15 +122,28 @@ const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
 const globalSetup = async (): Promise<void> => {
   await renderDexConfig();
 
-  execFileSync(`docker`, [`compose`, `down`, `-v`], {
-    cwd: workspaceRoot,
-    stdio: `inherit`,
-  });
+  const localSeedDir = join(workspaceRoot, `migrations`, `pg`, `seed.local`);
+  const localSeedDirHidden = `${localSeedDir}.bak`;
 
-  execFileSync(`docker`, [`compose`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `athena`], {
-    cwd: workspaceRoot,
-    stdio: `inherit`,
-  });
+  if (process.env.CI) {
+    await rename(localSeedDir, localSeedDirHidden).catch(() => undefined);
+  }
+
+  try {
+    execFileSync(`docker`, [`compose`, `down`, `-v`], {
+      cwd: workspaceRoot,
+      stdio: `inherit`,
+    });
+
+    execFileSync(`docker`, [`compose`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `athena`], {
+      cwd: workspaceRoot,
+      stdio: `inherit`,
+    });
+  } finally {
+    if (process.env.CI) {
+      await rename(localSeedDirHidden, localSeedDir).catch(() => undefined);
+    }
+  }
 
   await waitForUrl(statusUrl);
   await waitForUrl(dexDiscoveryUrl);
