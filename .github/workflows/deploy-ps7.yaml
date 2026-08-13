@@ -1,6 +1,6 @@
 name: Deploy to PS7
 
-run-name: Deploy ${{ inputs.version }} to ${{ inputs.environment || 'edge' }} (ps7)
+run-name: Deploy ${{ inputs.version || 'latest' }} to ${{ inputs.environment || 'edge' }} (ps7)
 
 permissions: {}
 
@@ -25,9 +25,9 @@ on:
         default: "athena"
 
 env:
-  DEPLOYMENT_ENV: ${{ github.event.inputs.environment || 'edge' }}
-  VERSION: ${{ github.event.inputs.version }}
-  APP_NAME: ${{ github.event.inputs.application_name }}
+  DEPLOYMENT_ENV: ${{ inputs.environment || 'edge' }}
+  VERSION: ${{ inputs.version || 'latest' }}
+  APP_NAME: ${{ inputs.application_name || 'athena' }}
 
 jobs:
   validate:
