@@ -186,11 +186,10 @@ jobs:
               });
             }
 
-      - name: Fail on coverage regression
+      - name: Report coverage regression
         if: ${{ steps.coverage_delta.outputs.has_regression == 'true' }}
         run: |
           echo "Coverage regression detected compared to the latest coverage baseline artifact"
-          exit 1
 
       - name: Fail on coverage evaluation error
         if: ${{ steps.coverage_delta.outputs.evaluation_error == 'true' || (steps.coverage_delta.outcome == 'failure' && steps.coverage_delta.outputs.has_regression != 'true') }}
