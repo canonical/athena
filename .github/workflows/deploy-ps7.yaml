@@ -157,6 +157,10 @@ jobs:
         run: |
           CHARM_FILE=$(ls ./*.charm | head -1)
           RESOURCE_NAME=app-image
+
+          umask 077
+          trap 'rm -f ./image_metadata.json' EXIT
+
           jq -n \
             --arg image "$IMAGE_URL" \
             --arg user "$GHCR_READ_USERNAME" \
