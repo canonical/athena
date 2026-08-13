@@ -30,7 +30,7 @@ jobs:
       files_updated: ${{ steps.stamp.outputs.files_updated }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -82,7 +82,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -109,15 +109,18 @@ jobs:
           if-no-files-found: error
 
       - name: Push rock to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-version.outputs.new_release_version }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
         run: |
-          VERSION="${{ needs.prepare-version.outputs.new_release_version }}"
-          OWNER="${{ github.repository_owner }}"
           ROCK_FILE="$(ls *.rock)"
           for TAG in "v${VERSION}" latest; do
             rockcraft.skopeo --insecure-policy copy \
               "oci-archive:${ROCK_FILE}" \
-              "docker://ghcr.io/${OWNER}/athena:${TAG}" \
-              --dest-creds "${OWNER}:${{ secrets.GITHUB_TOKEN }}"
+              "docker://ghcr.io/${REPO}:${TAG}" \
+              --dest-creds "${OWNER}:${GITHUB_TOKEN}"
           done
 
   # Job C: build the charm at the computed version (parallel with Job B).
@@ -130,7 +133,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -179,7 +182,7 @@ jobs:
           permission-pull-requests: read
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: true
@@ -214,6 +217,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.github-app-token.outputs.token }}
           GIT_APP_BOT_LOGIN: ${{ secrets.GIT_APP_BOT_LOGIN }}
           GIT_APP_BOT_ID: ${{ secrets.GIT_APP_BOT_ID }}
+          RELEASE_VERSION: ${{ needs.prepare-version.outputs.new_release_version }}
         run: |
           git config --global user.name "${GIT_APP_BOT_LOGIN}"
           git config --global user.email "${GIT_APP_BOT_ID}+${GIT_APP_BOT_LOGIN}@users.noreply.github.com"
@@ -223,5 +227,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore(release): ${{ needs.prepare-version.outputs.new_release_version }} [skip ci]"
+          git commit -m "chore(release): ${RELEASE_VERSION} [skip ci]"
           git push origin HEAD:main

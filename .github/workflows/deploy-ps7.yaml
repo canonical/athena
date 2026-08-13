@@ -1,0 +1,184 @@
+name: Deploy to PS7
+
+run-name: Deploy ${{ inputs.version }} to ${{ inputs.environment || 'edge' }} (ps7)
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: false
+        type: environment
+        default: "edge"
+      version:
+        description: "Release tag to deploy (e.g., v1.0.0 or latest)"
+        required: true
+        type: string
+        default: "latest"
+      application_name:
+        description: "Juju application name to deploy"
+        required: true
+        type: string
+        default: "athena"
+
+env:
+  DEPLOYMENT_ENV: ${{ github.event.inputs.environment || 'edge' }}
+  VERSION: ${{ github.event.inputs.version }}
+  APP_NAME: ${{ github.event.inputs.application_name }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      resolved_tag: ${{ steps.validate.outputs.resolved_tag }}
+      resolved_version: ${{ steps.validate.outputs.resolved_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Validate release
+        id: validate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${VERSION}"
+          RELEASE_TAG="${VERSION}"
+          echo "Validating release tag: $RELEASE_TAG"
+
+          # If version is "latest", resolve it to the repository's latest published release tag.
+          if [[ "$VERSION" == "latest" ]]; then
+            echo "Resolving 'latest' release tag"
+            LATEST_TAG=$(gh release view --json tagName --jq '.tagName')
+            
+            if [ -z "$LATEST_TAG" ]; then
+              echo "Error: No published releases found"
+              echo "Available releases:"
+              gh release list --limit 10
+              echo "## ❌ Release Validation Failed" >> $GITHUB_STEP_SUMMARY
+              echo "**Release Tag:** $RELEASE_TAG (no published releases found)" >> $GITHUB_STEP_SUMMARY
+              echo "**Available Releases:** Check the workflow logs for available tags" >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
+            
+            RELEASE_TAG=$LATEST_TAG
+            echo "Resolved to: $RELEASE_TAG"
+
+          elif ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            echo "Error: Release with tag '$RELEASE_TAG' does not exist."
+            echo "Available releases:"
+            gh release list --limit 10
+            echo "## ❌ Release Validation Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Release Tag:** $RELEASE_TAG (not found)" >> $GITHUB_STEP_SUMMARY
+            echo "**Available Releases:** Check the workflow logs for available tags" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          # Extract version from RELEASE_TAG
+          RESOLVED_VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
+
+          echo "✓ Release '$RELEASE_TAG' exists and is valid"
+          echo "resolved_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "resolved_version=$RESOLVED_VERSION" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Release Validation" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Tag:** $RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
+          echo "**Resolved Version:** $RESOLVED_VERSION" >> $GITHUB_STEP_SUMMARY
+
+  deploy:
+    needs: validate
+    if: ${{ needs.validate.result == 'success' }}
+    runs-on: [self-hosted-linux-amd64-noble-private-endpoint-medium]
+    permissions:
+      contents: read
+    environment:
+      name: ${{ inputs.environment || 'edge' }}
+      url: ${{ vars.WEBSITE_URL }}
+    env:
+      JUJU_CLIENT_ID: ${{ secrets.PS7_JUJU_CLIENT_ID }}
+      JUJU_CLIENT_SECRET: ${{ secrets.PS7_JUJU_CLIENT_SECRET }}
+      JUJU_CONTROLLER_NAME: ${{ vars.JUJU_CONTROLLER_NAME }}
+      JUJU_MODEL_NAME: ${{ vars.JUJU_MODEL_NAME }}
+      RESOLVED_RELEASE_TAG: ${{ needs.validate.outputs.resolved_tag }}
+      JUJU_VERSION: ${{ vars.JUJU_VERSION || '3/stable' }}
+    steps:
+      - name: Install Juju
+        run: sudo snap install juju --channel="$JUJU_VERSION"
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          RELEASE_TAG="$RESOLVED_RELEASE_TAG"
+          echo "Downloading release assets for tag: $RELEASE_TAG"
+
+          # Download the charm file from the release
+          gh release download "$RELEASE_TAG" --repo "$REPO" --pattern "*.charm" --dir ./
+
+          # Verify the files were downloaded
+          if ! ls ./*.charm 1>/dev/null 2>&1; then
+            echo "Error: Charm file not found in release $RELEASE_TAG"
+            echo "## ❌ Asset Download Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Issue:** Charm file not found in release $RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          CHARM_FILE=$(ls ./*.charm | head -1)
+          echo "Successfully downloaded charm: $CHARM_FILE"
+          echo "## 📦 Release Assets Downloaded" >> $GITHUB_STEP_SUMMARY
+          echo "**Charm:** $CHARM_FILE" >> $GITHUB_STEP_SUMMARY
+
+      - name: Authenticate with JAAS
+        env:
+          JUJU_CONTROLLER_ADDRESS: ${{ vars.JUJU_CONTROLLER_ADDRESS }}
+          JUJU_CONTROLLER_NAME: ${{ vars.JUJU_CONTROLLER_NAME }}
+        run: juju login "$JUJU_CONTROLLER_ADDRESS" -c "$JUJU_CONTROLLER_NAME"
+
+      - name: Switch to model
+        run: |
+          FULL_MODEL=$(juju models -c "$JUJU_CONTROLLER_NAME" --format json | \
+            jq -r --arg model "$JUJU_MODEL_NAME" '.models[] | select(.["short-name"] == $model) | .name')
+          juju switch "$JUJU_CONTROLLER_NAME:${FULL_MODEL}"
+
+      - name: Deploy charm
+        shell: bash
+        env:
+          IMAGE_URL: ghcr.io/${{ github.repository }}:${{ needs.validate.outputs.resolved_tag }}
+          WEBSITE_URL: ${{ vars.WEBSITE_URL }}
+          GHCR_READ_USERNAME: ${{ secrets.GHCR_READ_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          CHARM_FILE=$(ls ./*.charm | head -1)
+          RESOURCE_NAME=app-image
+          jq -n \
+            --arg image "$IMAGE_URL" \
+            --arg user "$GHCR_READ_USERNAME" \
+            --arg pass "$GHCR_READ_TOKEN" \
+            '{"ImageName": $image, "username": $user, "password": $pass}' > ./image_metadata.json
+
+          echo "## 🚀 Deployment Started" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** $DEPLOYMENT_ENV" >> $GITHUB_STEP_SUMMARY
+          echo "**Juju Model:** $JUJU_MODEL_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Tag:** $RESOLVED_RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** $IMAGE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "**Application:** $APP_NAME" >> $GITHUB_STEP_SUMMARY
+
+          if juju show-application "$APP_NAME" &>/dev/null; then
+            juju refresh --debug "$APP_NAME" \
+              --path="./$CHARM_FILE" \
+              --resource "$RESOURCE_NAME=./image_metadata.json"
+          else
+            juju deploy --debug "./$CHARM_FILE" "$APP_NAME" \
+              --resource "$RESOURCE_NAME=./image_metadata.json"
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "The application has been successfully deployed/refreshed in $DEPLOYMENT_ENV (ps7)." >> $GITHUB_STEP_SUMMARY
