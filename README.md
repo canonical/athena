@@ -4,6 +4,8 @@ Athena is a full-stack multi-agent orchestration service. This repository contai
 
 Athena is deterministic application code. Personas, providers, runners, repositories, and workgraphs are configured inside Athena loops; LLM behavior comes from configured external systems rather than from hidden logic in the Athena server itself.
 
+Start here: [quick-start.md](./docs/quick-start.md)
+
 ## Current status
 
 - Service name: Athena
