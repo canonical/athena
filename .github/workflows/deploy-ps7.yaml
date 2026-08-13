@@ -81,6 +81,13 @@ jobs:
             exit 1
           fi
 
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "Error: resolved release tag is empty."
+            echo "## ❌ Release Tag Missing" >> $GITHUB_STEP_SUMMARY
+            echo "Validation did not produce a deployable release tag." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
           # Extract version from RELEASE_TAG
           RESOLVED_VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
 
