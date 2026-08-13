@@ -109,8 +109,8 @@ jobs:
       name: ${{ inputs.environment || 'edge' }}
       url: ${{ vars.WEBSITE_URL }}
     env:
-      JUJU_CLIENT_ID: ${{ secrets.PS7_JUJU_CLIENT_ID }}
-      JUJU_CLIENT_SECRET: ${{ secrets.PS7_JUJU_CLIENT_SECRET }}
+      JUJU_CLIENT_ID: ${{ secrets.JUJU_CLIENT_ID }}
+      JUJU_CLIENT_SECRET: ${{ secrets.JUJU_CLIENT_SECRET }}
       JUJU_CONTROLLER_NAME: ${{ vars.JUJU_CONTROLLER_NAME }}
       JUJU_MODEL_NAME: ${{ vars.JUJU_MODEL_NAME }}
       RESOLVED_RELEASE_TAG: ${{ needs.validate.outputs.resolved_tag }}
