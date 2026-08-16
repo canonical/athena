@@ -17,7 +17,7 @@ oauth2:
 staticClients:
   - id: athena
     name: Athena
-    secret: super-secret-value
+    secret: __DEX_CLIENT_SECRET__
     redirectURIs:
       - http://athena.localhost/api/authentication/callback
       - https://athena.localhost/api/authentication/callback
