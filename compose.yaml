@@ -65,7 +65,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.dex.rule=Host(`dex.localhost`)
       - traefik.http.routers.dex.entrypoints=web
-      - traefik.http.routers.dex-athena.rule=(Host(`athena.localhost`) || HostRegexp(`{subdomain:[a-z0-9-]+}.lclhst.stream`)) && PathPrefix(`/dex`)
+      - traefik.http.routers.dex-athena.rule=(Host(`athena.localhost`) || Host(`${APP_ATHENA_PUBLIC_HOST:-athena.localhost}`)) && PathPrefix(`/dex`)
       - traefik.http.routers.dex-athena.entrypoints=web
       - traefik.http.routers.dex-athena.priority=200
       - traefik.http.services.dex.loadbalancer.server.port=5556
@@ -152,7 +152,7 @@ services:
       start_period: 10s
     labels:
       - traefik.enable=true
-      - traefik.http.routers.athena.rule=Host(`athena.localhost`) || HostRegexp(`{subdomain:[a-z0-9-]+}.lclhst.stream`)
+      - traefik.http.routers.athena.rule=Host(`athena.localhost`) || Host(`${APP_ATHENA_PUBLIC_HOST:-athena.localhost}`)
       - traefik.http.routers.athena.entrypoints=web
       - traefik.http.services.athena.loadbalancer.server.port=8000
 
