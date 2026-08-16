@@ -11,8 +11,7 @@ const statusUrl = `http://athena.localhost/_status/check`;
 const frontendUrl = `http://athena.localhost`;
 const dexDiscoveryUrl = `${frontendUrl}/dex/.well-known/openid-configuration`;
 const authUsersPath = join(workspaceRoot, `testing`, `auth-users.json`);
-const dexConfigTemplatePath = join(workspaceRoot, `scripts`, `dex-config.template.yaml`);
-const dexConfigPath = join(workspaceRoot, `scripts`, `dex-config.yaml`);
+const dexUsersPath = join(workspaceRoot, `scripts`, `dex-users.yaml`);
 const defaultPasswordHash = `$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W`;
 const dexUserNamespace = `dd7f8cc5-1cb4-4237-b29f-d44709f908ec`;
 
@@ -79,7 +78,7 @@ const resolveUsername = (user: AuthUser): string => {
 const resolveUserId = (user: AuthUser): string => user.userID ?? uuidv5(user.email, dexUserNamespace);
 
 const buildStaticPasswordsBlock = (users: AuthUser[]): string =>
-  users
+  `staticPasswords:\n${users
     .map((user) => {
       const hash = resolvePasswordHash(user);
       const username = resolveUsername(user);
@@ -87,18 +86,17 @@ const buildStaticPasswordsBlock = (users: AuthUser[]): string =>
 
       return `  - email: ${user.email}\n    hash: ${hash}\n    username: ${username}\n    userID: ${userID}`;
     })
-    .join(`\n`);
+    .join(`\n`)}`;
 
-const renderDexConfig = async (): Promise<void> => {
-  const [authUsersRaw, templateRaw] = await Promise.all([readFile(authUsersPath, `utf8`), readFile(dexConfigTemplatePath, `utf8`)]);
+const renderDexUsers = async (): Promise<void> => {
+  const authUsersRaw = await readFile(authUsersPath, `utf8`);
   const authUsers = parseAuthUsers(authUsersRaw);
 
   if (authUsers.length === 0) {
     throw new Error(`Auth users file is empty. Provide at least one test user.`);
   }
 
-  const rendered = templateRaw.replace(/^[ \t]*# __STATIC_PASSWORDS__[ \t]*$/m, buildStaticPasswordsBlock(authUsers));
-  await writeFile(dexConfigPath, rendered, `utf8`);
+  await writeFile(dexUsersPath, `${buildStaticPasswordsBlock(authUsers)}\n`, `utf8`);
 };
 
 const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
@@ -120,7 +118,7 @@ const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
 };
 
 const globalSetup = async (): Promise<void> => {
-  await renderDexConfig();
+  await renderDexUsers();
 
   const localSeedDir = join(workspaceRoot, `migrations`, `pg`, `seed.local`);
   const localSeedDirHidden = `${localSeedDir}.bak`;

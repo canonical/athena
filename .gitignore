@@ -13,6 +13,7 @@ testing/results/
 .env
 .env.*
 !.example.env
+scripts/dex-users.local.yaml
 
 # Local seed files with confidential data
 migrations/pg/seed.local/
