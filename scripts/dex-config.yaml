@@ -17,7 +17,7 @@ oauth2:
 staticClients:
   - id: athena
     name: Athena
-    secret: super-secret-value
+    secret: __DEX_CLIENT_SECRET__
     redirectURIs:
       - http://athena.localhost/api/authentication/callback
       - https://athena.localhost/api/authentication/callback
@@ -25,13 +25,3 @@ staticClients:
       # __DEX_EXTRA_REDIRECT_URIS__
 
 enablePasswordDB: true
-
-staticPasswords:
-  - email: dev.user@canonical.com
-    hash: $2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W
-    username: devuser
-    userID: 50f31e6f-26f2-4d93-9fd6-947f8f3f23a8
-  - email: loop.member@canonical.com
-    hash: $2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W
-    username: loopmember
-    userID: cac702a3-ac6d-52ce-a159-3076e3005cf1

@@ -28,6 +28,10 @@ This guide is the fastest way to get Athena running locally for evaluation.
    - Email: `dev.user@canonical.com`
    - Password: `password`
 
+To use a personal Dex user list without changing the shared defaults, copy
+`scripts/dex-users.yaml` to `scripts/dex-users.local.yaml` and edit the copy.
+Compose uses the local file whenever it exists.
+
 ## What starts
 
 - Athena: [http://athena.localhost](http://athena.localhost)

@@ -25,6 +25,11 @@ services:
         : "$${APP_ATHENA_OAUTH_CALLBACK_URL:=http://athena.localhost/api/authentication/callback}"
         : "$${APP_ATHENA_DEX_EXTRA_REDIRECT_URIS:=}"
 
+        dex_users_config=/etc/athena-scripts/dex-users.yaml
+        if [ -f /etc/athena-scripts/dex-users.local.yaml ]; then
+          dex_users_config=/etc/athena-scripts/dex-users.local.yaml
+        fi
+
         if [ -n "$${APP_ATHENA_DEX_EXTRA_REDIRECT_URIS}" ]; then
           printf '%s' "$${APP_ATHENA_DEX_EXTRA_REDIRECT_URIS}" \
             | tr ',' '\n' \
@@ -34,10 +39,12 @@ services:
           : > /tmp/dex-extra-redirect-uris.yaml
         fi
 
+          escaped_oidc_client_secret=$$(printf '%s' "$${APP_ATHENA_OIDC_CLIENT_SECRET}" | sed 's/[\\&|]/\\&/g')
         sed \
           -e "s|__DEX_ISSUER__|$${APP_ATHENA_DEX_ISSUER_URL}|g" \
           -e "s|__DEX_REDIRECT_URI__|$${APP_ATHENA_OAUTH_CALLBACK_URL}|g" \
-          /etc/dex/config.yaml > /tmp/dex-config.base.yaml
+           -e "s|__DEX_CLIENT_SECRET__|$${escaped_oidc_client_secret}|g" \
+          /etc/athena-scripts/dex-config.yaml > /tmp/dex-config.base.yaml
 
         awk '
           /# __DEX_EXTRA_REDIRECT_URIS__/ {
@@ -49,20 +56,22 @@ services:
           }
           { print }
         ' /tmp/dex-config.base.yaml > /tmp/dex-config.yaml
+        cat "$${dex_users_config}" >> /tmp/dex-config.yaml
         exec dex serve /tmp/dex-config.yaml
     environment:
       APP_ATHENA_DEX_ISSUER_URL: ${APP_ATHENA_DEX_ISSUER_URL:-http://dex.localhost/dex}
       APP_ATHENA_OAUTH_CALLBACK_URL: ${APP_ATHENA_OAUTH_CALLBACK_URL:-http://athena.localhost/api/authentication/callback}
       APP_ATHENA_DEX_EXTRA_REDIRECT_URIS: ${APP_ATHENA_DEX_EXTRA_REDIRECT_URIS:-}
+      APP_ATHENA_OIDC_CLIENT_SECRET: ${APP_ATHENA_OIDC_CLIENT_SECRET:?APP_ATHENA_OIDC_CLIENT_SECRET is required}
     volumes:
-      - ./scripts/dex-config.yaml:/etc/dex/config.yaml:ro
+      - ./scripts:/etc/athena-scripts:ro
     ports:
       - "5556:5556"
     labels:
       - traefik.enable=true
       - traefik.http.routers.dex.rule=Host(`dex.localhost`)
       - traefik.http.routers.dex.entrypoints=web
-      - traefik.http.routers.dex-athena.rule=(Host(`athena.localhost`) || HostRegexp(`{subdomain:[a-z0-9-]+}.lclhst.stream`)) && PathPrefix(`/dex`)
+      - traefik.http.routers.dex-athena.rule=(Host(`athena.localhost`) || Host(`${APP_ATHENA_PUBLIC_HOST:-athena.localhost}`)) && PathPrefix(`/dex`)
       - traefik.http.routers.dex-athena.entrypoints=web
       - traefik.http.routers.dex-athena.priority=200
       - traefik.http.services.dex.loadbalancer.server.port=5556
@@ -109,6 +118,8 @@ services:
     build:
       context: .
     depends_on:
+      traefik:
+        condition: service_started
       dex:
         condition: service_started
       postgres:
@@ -147,7 +158,7 @@ services:
       start_period: 10s
     labels:
       - traefik.enable=true
-      - traefik.http.routers.athena.rule=Host(`athena.localhost`) || HostRegexp(`{subdomain:[a-z0-9-]+}.lclhst.stream`)
+      - traefik.http.routers.athena.rule=Host(`athena.localhost`) || Host(`${APP_ATHENA_PUBLIC_HOST:-athena.localhost}`)
       - traefik.http.routers.athena.entrypoints=web
       - traefik.http.services.athena.loadbalancer.server.port=8000
 
