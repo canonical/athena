@@ -33,7 +33,7 @@ export const config = {
   },
   authentication: {
     oidc: {
-      oauthCallbackUrl: env.getEnv(`OAUTH_CALLBACK_URL`, `http://athena.localhost/api/authentication/callback`),
+      oauthCallbackUrl: requiredEnv.getEnv(`OAUTH_CALLBACK_URL`),
       discoveryUrl: env.getEnv(`OIDC_DISCOVERY_URL`, `http://dex.localhost/dex/.well-known/openid-configuration`),
       clientId: env.getEnv(`OIDC_CLIENT_ID`, `athena`),
       clientSecret: requiredEnv.getEnv(`OIDC_CLIENT_SECRET`),

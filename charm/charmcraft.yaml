@@ -76,7 +76,6 @@ config:
         Public base URL of the Athena frontend. Injected as APP_FRONTEND_BASE_URL.
     oauth-callback-url:
       type: string
-      default: "http://athena.localhost/api/authentication/callback"
       description: >
         OAuth callback URL. Injected as APP_OAUTH_CALLBACK_URL.
     session-max-age:
