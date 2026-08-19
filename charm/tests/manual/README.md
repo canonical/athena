@@ -126,6 +126,10 @@ login fails with a 500 (`relation "session" does not exist`). Apply
 database, **as the app's own DB role** so the tables are owned and granted
 correctly.
 
+For deployed environments (`edge`, `staging`, `production`) use the **DB Migrations** GitHub
+Actions workflow ([db-migrations.yaml](../../../.github/workflows/db-migrations.yaml))
+instead; the steps below are the manual equivalent for this local model.
+
 First read the connection details the charm injected into the workload:
 
 ```bash
