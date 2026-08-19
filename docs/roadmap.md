@@ -67,7 +67,7 @@
 | -                       | -                                  | - Access Revocation             | ⏳     |      |
 | -                       | -                                  | - Usage Audit                   | ⏳     |      |
 | Memory                  |                                    |                                 | ⏳     | [rag-index.md][rag-index] |
-| -                       | Embedding                          | pgvector                        | ⏳     | [rag-index.md][rag-index] |
+| -                       | Embedding                          | pgvector                        | 🚧     | [rag-index.md][rag-index] |
 | -                       | Graph Relationships                | Apache AGE                      | ⏳     |      |
 | Tool Calling            |                                    |                                 | ⏳     | [tool-usage.md][tool-usage] |
 | -                       | Hard-coded Tool Definitions        |                                 | ✅     | [tool-usage.md][tool-usage] |
