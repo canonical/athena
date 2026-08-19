@@ -9,7 +9,6 @@ import {
   passport,
   resolveExternalOrigin,
   resolveFrontendReturnTo,
-  resolveOidcCallbackUrl,
   storeAuthenticatedUser,
   storeReturnTo,
 } from "@components/authentication/authentication.controller.js";
@@ -82,7 +81,7 @@ route({
     storeReturnTo(getSession(request), returnTo);
 
     await ensureOidcStrategy();
-    const options = { callbackURL: resolveOidcCallbackUrl(request) } as unknown as AuthenticateOptions;
+    const options = { callbackURL: config.authentication.oidc.oauthCallbackUrl } as unknown as AuthenticateOptions;
 
     const originalSetHeader = response.setHeader.bind(response);
     response.setHeader = ((name: string, value: number | string | readonly string[]): typeof response => {
@@ -102,7 +101,7 @@ route({
   route: `/callback`,
   handler: async ({ request, response, next }) => {
     await ensureOidcStrategy();
-    const callbackURL = resolveOidcCallbackUrl(request);
+    const callbackURL = config.authentication.oidc.oauthCallbackUrl;
     const options = { callbackURL } as unknown as AuthenticateOptions;
 
     passport.authenticate(`oidc`, options, (error: unknown, user: Express.User | false) => {

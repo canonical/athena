@@ -95,13 +95,14 @@ Coverage-enabled runs collect frontend and backend coverage data; `npm run test:
 
 ## Default runtime configuration
 
-Athena reads backend runtime configuration from environment variables with the prefixes `APP_ATHENA`, `APP`, and `ATHENA`, in that order.
+Athena reads backend runtime configuration from environment variables with the prefixes `APP_ATHENA` and `APP`, in that order.
 
 ### Required backend variables
 
 - `APP_ATHENA_PORT`
 - `APP_ATHENA_ALLOWED_ORIGINS`
 - `APP_ATHENA_FRONTEND_BASE_URL`
+- `APP_ATHENA_OAUTH_CALLBACK_URL`
 - `APP_ATHENA_OIDC_CLIENT_SECRET`
 - `APP_ATHENA_SECRET_KEY`
 - `APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY`
@@ -114,7 +115,6 @@ Athena reads backend runtime configuration from environment variables with the p
 - `APP_ATHENA_LOG_SERVICE_NAME=athena-service`
 - `APP_ATHENA_LOG_LEVEL=info`
 - `APP_ATHENA_LOG_ENABLED=true`
-- `APP_ATHENA_OAUTH_CALLBACK_URL=http://athena.localhost/api/authentication/callback`
 - `APP_ATHENA_OIDC_DISCOVERY_URL=http://dex.localhost/dex/.well-known/openid-configuration`
 - `APP_ATHENA_OIDC_CLIENT_ID=athena`
 - `APP_ATHENA_SESSION_MAX_AGE=86400000`

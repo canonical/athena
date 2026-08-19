@@ -241,20 +241,6 @@ export const resolveFrontendReturnToForRequest = (request: Request, returnTo: st
   return resolveFrontendReturnTo(returnTo);
 };
 
-export const resolveOidcCallbackUrl = (request: Request): string => {
-  const origin = resolveExternalOrigin(request);
-
-  if (!origin) {
-    return config.authentication.oidc.oauthCallbackUrl;
-  }
-
-  try {
-    return new URL(`/api/authentication/callback`, origin).toString();
-  } catch {
-    return config.authentication.oidc.oauthCallbackUrl;
-  }
-};
-
 export const pruneSessionToCookieFields = (session: Session | null | undefined): void => {
   if (!session) {
     return;
