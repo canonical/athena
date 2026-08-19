@@ -51,7 +51,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "${DB_CONNECT_STRING:-}" ]; then
-            echo "DB_CONNECT_STRING must be set in the '${ENVIRONMENT}' GitHub Environment."
+            echo "DB_CONNECT_STRING must be set (as a GitHub Environment secret for '${ENVIRONMENT}', or passed via workflow_call secrets)."
             exit 1
           fi
 
@@ -61,6 +61,11 @@ jobs:
           echo "## DB Migrations" >> "$GITHUB_STEP_SUMMARY"
           echo "- Environment target: ${ENVIRONMENT}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Service: athena" >> "$GITHUB_STEP_SUMMARY"
+
+          cleanup() {
+            docker compose -f compose.ci.yaml --ansi never down --remove-orphans --volumes
+          }
+          trap cleanup EXIT
 
           docker compose -f compose.ci.yaml --ansi never up --quiet-pull --abort-on-container-exit --exit-code-from prepare-ci prepare-ci
 
