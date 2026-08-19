@@ -1,0 +1,76 @@
+name: DB Migrations
+
+run-name: Run DB migrations on ${{ inputs.environment || 'edge' }}
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: string
+        default: "edge"
+    secrets:
+      DB_CONNECT_STRING:
+        required: true
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        default: "edge"
+        options:
+          - edge
+          - staging
+          - production
+
+permissions: {}
+
+jobs:
+  migrate:
+    runs-on: [self-hosted-linux-amd64-noble-private-endpoint-medium]
+    permissions:
+      contents: read
+    environment:
+      name: ${{ inputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@4eb059ff7f16592f9c84d5ca339c53cb7c5064e2 # v2
+
+      - name: Run prepare-ci
+        env:
+          DB_CONNECT_STRING: ${{ secrets.DB_CONNECT_STRING }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${DB_CONNECT_STRING:-}" ]; then
+            echo "DB_CONNECT_STRING must be set (as a GitHub Environment secret for '${ENVIRONMENT}', or passed via workflow_call secrets)."
+            exit 1
+          fi
+
+          echo "::add-mask::$DB_CONNECT_STRING"
+          export DB_CONNECT_STRING="$DB_CONNECT_STRING"
+
+          echo "## DB Migrations" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment target: ${ENVIRONMENT}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Service: athena" >> "$GITHUB_STEP_SUMMARY"
+
+          cleanup() {
+            docker compose -f compose.ci.yaml --ansi never down --remove-orphans --volumes
+          }
+          trap cleanup EXIT
+
+          docker compose -f compose.ci.yaml --ansi never up --quiet-pull --abort-on-container-exit --exit-code-from prepare-ci prepare-ci
+
+      - if: ${{ failure() && runner.debug }}
+        name: Setup tmate session
+        uses: canonical/action-tmate@bda82e73586a62bf621881aab872a527c8a46e2d # main @ 2026.03.02
+        with:
+          limit-access-to-actor: true

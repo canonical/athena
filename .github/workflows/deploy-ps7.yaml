@@ -168,6 +168,10 @@ jobs:
           umask 077
           trap 'rm -f ./image_metadata.json' EXIT
 
+          echo "## 🖼️ Image Metadata" >> $GITHUB_STEP_SUMMARY
+          echo "Image: ${IMAGE_URL}" >> $GITHUB_STEP_SUMMARY
+          echo "User: ${GHCR_READ_USERNAME}" >> $GITHUB_STEP_SUMMARY
+
           jq -n \
             --arg image "$IMAGE_URL" \
             --arg user "$GHCR_READ_USERNAME" \
