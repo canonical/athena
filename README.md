@@ -1,45 +1,11 @@
 # Athena
 
-Athena is a full-stack multi-agent orchestration service. This repository contains the Express runtime, React SPA, PostgreSQL migrations, Playwright E2E tests, and deployment packaging for the current Athena application.
+Athena is a deterministic, collaborative coordination layer for AI-assisted work across domains. Multiple users can participate in the same loop and steer the same task through conversation, clarification, approvals, and decisions. Athena routes work through configured personas and execution systems while enforcing task state, handoffs, and policy.
 
-Athena is deterministic application code. Personas, providers, runners, repositories, and workgraphs are configured inside Athena loops; LLM behavior comes from configured external systems rather than from hidden logic in the Athena server itself.
-
-Start here: [quick-start.md](./docs/quick-start.md)
-
-## Current status
-
-- Service name: Athena
-- Version: `1.2.0`
-- Runtime: Node.js + TypeScript backend with a React 19 frontend
-- Persistence: PostgreSQL, with schema under [migrations/pg](./migrations/pg)
-- Authentication: OIDC-backed session auth with Passport and `cookie-session`
-- Current external integration types:
-  - Providers: `openrouter`
-  - Repositories: `github`
-  - Workgraphs: `jira`
-  - Runners: `github-copilot-cloud`, `juju-vm`
-- Packaging:
-  - Rockcraft in [rockcraft.yaml](./rockcraft.yaml)
-  - Juju charm in [charm](./charm)
-
-## Repository layout
-
-- [src](./src): application source.
-  - [src/server.ts](./src/server.ts): Express entrypoint.
-  - [src/components](./src/components): co-located frontend/backend feature modules.
-- [testing](./testing): Playwright setup, coverage helpers, and test data.
-- [migrations](./migrations): PostgreSQL migrations and seed files.
-- [docs](./docs): repository standards and product concepts.
-- [docs/specs/index.md](./docs/specs/index.md): local specification, implementation-plan, and persona index.
-- [scripts](./scripts): local/dev packaging helpers, Dex config templates, and release helpers.
-- [rockcraft.yaml](./rockcraft.yaml): rock definition.
-- [charm](./charm): Juju charm sources and charm tests.
-
-## Coding standards
-
-Athena uses a co-located, flat component structure in [src/components](./src/components): frontend, backend, schemas, queries, and service files for the same feature live side-by-side in the same folder.
-
-See [docs/coding-standards.md](./docs/coding-standards.md) for the canonical rules, including file move conventions.
+- [Quick Start](./docs/quick-start.md)
+- [Local Development](./docs/local-development.md)
+- [Coding Standards](./docs/coding-standards.md)
+- [Roadmap](./docs/roadmap.md)
 
 ## Task model
 
@@ -90,66 +56,6 @@ The current application serves an authenticated SPA plus a JSON API.
   - workgraph management under `/workgraph/...`
 - Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
 - The server also starts background processors for tasks and inbound webhook items.
-
-## Local development
-
-The application code lives at repository root.
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Run the frontend build watcher and backend watcher together:
-
-```bash
-npm run watch
-```
-
-- `watch:fe` builds the Vite frontend into `dist/public` in watch mode.
-- `watch:be` rebuilds the backend and starts `npm start` through Nodemon.
-
-Run static checks:
-
-```bash
-npm run check
-```
-
-Build the service:
-
-```bash
-npm run build
-```
-
-Start the built service:
-
-```bash
-npm run start
-```
-
-Run Athena with the local Compose stack:
-
-```bash
-docker compose up --build
-```
-
-The Compose stack includes:
-
-- `traefik` on `localhost:80`
-- `postgres` on `localhost:5432`
-- `prepare`, a one-shot migration runner
-- `dex` on `localhost:5556`, also reachable through `http://athena.localhost/dex`
-- `athena` on `http://athena.localhost`
-
-Optional public tunnel:
-
-```bash
-docker compose up -d cloudflared
-docker compose logs -f cloudflared
-```
-
-This requires `CLOUDFLARED_TUNNEL_TOKEN` in your local environment.
 
 ## E2E testing
 
@@ -256,3 +162,8 @@ The checked-in sample is [.example.env](./.example.env). It includes:
 - [docs/design-standards.md](./docs/design-standards.md): UI and UX standards
 - [docs/documentation-standards.md](./docs/documentation-standards.md): documentation conventions
 - [docs/specs/index.md](./docs/specs/index.md): specs, implementation plans, and personas
+
+
+## Security
+
+For security issues, follow [SECURITY.md](./SECURITY.md) and do not disclose publicly before coordinated remediation.
