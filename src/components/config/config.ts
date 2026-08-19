@@ -1,8 +1,8 @@
 import { createEnvAccessor } from "@components/config/env-accessor.js";
 import { ensurePG } from "@components/postgres/postgres.js";
 
-const env = createEnvAccessor({ prefixes: [`APP_ATHENA`, `APP`, `ATHENA`], allowEmpty: true });
-const requiredEnv = createEnvAccessor({ prefixes: [`APP_ATHENA`, `APP`, `ATHENA`], allowEmpty: false });
+const env = createEnvAccessor({ prefixes: [`APP_ATHENA`, `APP`], allowEmpty: true });
+const requiredEnv = createEnvAccessor({ prefixes: [`APP_ATHENA`, `APP`], allowEmpty: false });
 
 const port = requiredEnv.getNumber(`PORT`);
 const nodeEnv = env.getEnv(`NODE_ENV`, `development`);
