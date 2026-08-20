@@ -45,6 +45,13 @@ requires:
 
 config:
   options:
+    run-migrations-on-startup:
+      type: boolean
+      default: true
+      description: >
+        Run database migrations before starting the Athena application.
+        Disable this when migrations are managed externally, such as by GitHub
+        Actions.
     allowed-origins:
       type: string
       default: "http://athena.localhost"

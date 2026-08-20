@@ -23,6 +23,7 @@ ITEMS=(
   testing
   package.json
   package-lock.json
+  migrate.sh
   .npmrc
   tsconfig.json
   tsconfig.server.json
