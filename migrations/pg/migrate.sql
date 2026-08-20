@@ -2,6 +2,8 @@
 
 BEGIN;
 
+SELECT pg_advisory_xact_lock(hashtextextended('athena-schema-migrations', 0));
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 \echo >>> Running Athena function migrations

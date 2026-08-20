@@ -119,16 +119,19 @@ Wait for the relation to settle (`juju status --relations`).
 
 ### Apply the database schema
 
-The charm does **not** run migrations automatically — the workload image ships no
-migration hook — so the `athena-app` database starts empty. Without the schema,
-login fails with a 500 (`relation "session" does not exist`). Apply
-[migrate.sql](../../../migrations/pg/migrate.sql) manually against the app
-database, **as the app's own DB role** so the tables are owned and granted
-correctly.
+The charm runs the packaged `migrate.sh` automatically before starting the app
+(`run-migrations-on-startup` defaults to `true`). It uses the app's own DB role
+so the tables are owned and granted correctly. To delegate migrations to an
+external system, disable the option:
+
+```bash
+juju config athena-app run-migrations-on-startup=false
+```
 
 For deployed environments (`edge`, `staging`, `production`) use the **DB Migrations** GitHub
 Actions workflow ([db-migrations.yaml](../../../.github/workflows/db-migrations.yaml))
-instead; the steps below are the manual equivalent for this local model.
+when `run-migrations-on-startup` is disabled. The steps below are the manual
+recovery equivalent for this local model.
 
 First read the connection details the charm injected into the workload:
 
@@ -371,10 +374,10 @@ multipass delete athena && multipass purge
   CoreDNS `hosts` block (step 11) and confirm `NODE_IP` is the current node IP.
 - **App stuck blocked:** confirm PostgreSQL is integrated and both secrets are
   granted and configured (`juju status --relations`, `juju show-secret ...`).
-- **500 after login / `relation "session" does not exist`:** the database schema
-  was never created. The charm runs no migrations, so you must apply
-  [migrate.sql](../../../migrations/pg/migrate.sql) manually (step 6). Re-run that
-  step, ensuring `APP_ROLE_NAME` matches the app's `POSTGRESQL_DB_USERNAME`.
+- **500 after login / `relation "session" does not exist`:** confirm
+  `run-migrations-on-startup` is enabled and inspect the charm/Pebble logs. If
+  migrations are disabled, apply [migrate.sql](../../../migrations/pg/migrate.sql)
+  manually, ensuring `APP_ROLE_NAME` matches the app's `POSTGRESQL_DB_USERNAME`.
 - **`curl athena.localhost` hits `127.0.0.1` and fails / `/etc/hosts` is ignored:**
   this is expected — `*.localhost` always resolves to loopback (step 12). Start the
   loopback `socat` forwarder; do not try to map the name to the VM IP in
