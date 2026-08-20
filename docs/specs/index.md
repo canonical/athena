@@ -8,6 +8,7 @@ Entry point for Athena local specification, implementation-plan, and persona art
 
 - Workgraph concept and boundaries: [workgraph.md](../workgraph.md)
 - normative definitions: [definitions/index.md](./definitions/index.md)
+- inter-loop relationships: [definitions/inter-loop.relationships.md](./definitions/inter-loop.relationships.md)
 - implementation plans: [implementation-plans/index.md](./implementation-plans/index.md)
 - Workgraph implementation plan: [implementation-plans/workgraph-jira-poc.plan.md](./implementation-plans/workgraph-jira-poc.plan.md)
 - task iteration notes: [../task-iteration.md](../task-iteration.md)
