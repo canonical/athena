@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { dirname, extname, join, resolve, sep } from "node:path";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import express, { type NextFunction, type Request, type RequestHandler, type Response, Router } from "express";
 
@@ -11,21 +11,36 @@ const frontendIndexPath = join(frontendDistPath, `index.html`);
 const precompressedEncodings = [`br`, `gzip`] as const;
 
 const isApiRequest = (request: Request): boolean => request.path === apiRoot || request.path.startsWith(`${apiRoot}/`);
+const isWithinRoot = (rootPath: string, filePath: string): boolean => filePath === rootPath || filePath.startsWith(`${rootPath}${sep}`);
 
-const selectPrecompressedFile = (request: Request, filePath: string) => {
+const selectPrecompressedFile = (request: Request, rootPath: string, requestedPath: string) => {
+  if (!isWithinRoot(rootPath, resolve(rootPath, `.${requestedPath}`))) {
+    return undefined;
+  }
+
   const preferredEncoding = request.acceptsEncodings(...precompressedEncodings);
   if (preferredEncoding !== `br` && preferredEncoding !== `gzip`) {
     return undefined;
   }
 
   const encodings = [preferredEncoding, ...precompressedEncodings.filter((encoding) => encoding !== preferredEncoding)];
-  const encoding = encodings.find((candidate) => request.acceptsEncodings(candidate) && existsSync(`${filePath}.${candidate}`));
+  const selectedFile = encodings
+    .map((candidate) => ({
+      candidate,
+      filePath: resolve(rootPath, `.${requestedPath}.${candidate}`),
+    }))
+    .find(({ candidate, filePath }) => request.acceptsEncodings(candidate) && isWithinRoot(rootPath, filePath) && existsSync(filePath));
 
-  return encoding ? { encoding, filePath: `${filePath}.${encoding}` } : undefined;
+  return selectedFile
+    ? {
+        encoding: selectedFile.candidate,
+        relativePath: relative(rootPath, selectedFile.filePath),
+      }
+    : undefined;
 };
 
-const sendPrecompressedFile = (request: Request, response: Response, next: NextFunction, filePath: string, contentTypePath: string): boolean => {
-  const selectedFile = selectPrecompressedFile(request, filePath);
+const sendPrecompressedFile = (request: Request, response: Response, next: NextFunction, rootPath: string, requestedPath: string, contentTypePath: string): boolean => {
+  const selectedFile = selectPrecompressedFile(request, rootPath, requestedPath);
   if (!selectedFile) {
     return false;
   }
@@ -33,7 +48,7 @@ const sendPrecompressedFile = (request: Request, response: Response, next: NextF
   response.type(extname(contentTypePath));
   response.set(`Content-Encoding`, selectedFile.encoding);
   response.vary(`Accept-Encoding`);
-  response.sendFile(selectedFile.filePath, (error) => {
+  response.sendFile(selectedFile.relativePath, { root: rootPath }, (error) => {
     if (error) {
       next(error);
     }
@@ -48,17 +63,12 @@ export const precompressedStatic = (root: string): RequestHandler => {
 
   return (request, response, next) => {
     if (request.method === `GET` || request.method === `HEAD`) {
-      const requestedPath = resolve(rootPath, `.${request.path}`);
-      const isInsideRoot = requestedPath === rootPath || requestedPath.startsWith(`${rootPath}${sep}`);
+      const isDirectoryRequest = request.path.endsWith(`/`);
+      const requestedPath = isDirectoryRequest ? `${request.path}index.html` : request.path;
+      const contentTypePath = isDirectoryRequest ? `index.html` : request.path;
 
-      if (isInsideRoot) {
-        const isDirectoryRequest = request.path.endsWith(`/`);
-        const requestedFilePath = isDirectoryRequest ? join(requestedPath, `index.html`) : requestedPath;
-        const contentTypePath = isDirectoryRequest ? `index.html` : request.path;
-
-        if (sendPrecompressedFile(request, response, next, requestedFilePath, contentTypePath)) {
-          return;
-        }
+      if (isWithinRoot(rootPath, resolve(rootPath, `.${requestedPath}`)) && sendPrecompressedFile(request, response, next, rootPath, requestedPath, contentTypePath)) {
+        return;
       }
     }
 
@@ -90,7 +100,7 @@ staticRouter.use((request: Request, response: Response, next: NextFunction) => {
     return;
   }
 
-  if (!sendPrecompressedFile(request, response, next, frontendIndexPath, `index.html`)) {
+  if (!sendPrecompressedFile(request, response, next, frontendDistPath, `/index.html`, `index.html`)) {
     response.sendFile(frontendIndexPath);
   }
 });
