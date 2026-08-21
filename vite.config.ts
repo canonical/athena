@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig, loadEnv } from "vite";
 import { compression as viteCompression } from "vite-plugin-compression2";
@@ -34,6 +35,13 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "../dist/public",
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          entryFileNames: () => `${randomUUID()}.js`,
+          chunkFileNames: () => `${randomUUID()}.js`,
+          assetFileNames: ({ names }) => `${randomUUID()}${names[0] ? names[0].slice(names[0].lastIndexOf(`.`)) : ``}`,
+        },
+      },
     },
     css: {
       preprocessorOptions: {
