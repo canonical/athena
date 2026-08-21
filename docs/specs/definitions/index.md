@@ -6,7 +6,7 @@ Normative definition files for Athena orchestration rules and constraints.
 - [dod.md](./dod.md)
 - [task.md](./task.md)
 - [handoff.definition.md](./handoff.definition.md)
-- [inter-loop.relationships.md](./inter-loop.relationships.md)
+- [inter-loop.links.md](./inter-loop.links.md)
 - [interaction.protocol.md](./interaction.protocol.md)
 - [llm-harness.md](./llm-harness.md)
 - [rag-index.md](./rag-index.md)
