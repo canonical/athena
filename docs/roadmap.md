@@ -15,6 +15,7 @@
 | -                       | Deterministic Routing              |                                 | 🚧     | [theloop.md][theloop] |
 | -                       | Persona Handoffs                   |                                 | 🚧     | [handoff.definition.md][handoff] |
 | -                       | Approval-Gated Actions             |                                 | 🚧     | [approval.matrix.md][approval] |
+| -                       | Inter-loop Links                   |                                 | ⏳     | [inter-loop.links.md][inter-loop] |
 | -                       | Loop Readiness                     |                                 | ✅     |      |
 | -                       | Pause and Resume                   |                                 | ⏳     | [llm-harness.md][llm-harness] |
 | Persona                 |                                    |                                 | ✅     | [persona.md][persona] |
@@ -76,6 +77,7 @@
 
 [approval]: ./specs/definitions/approval.matrix.md
 [handoff]: ./specs/definitions/handoff.definition.md
+[inter-loop]: ./specs/definitions/inter-loop.links.md
 [llm-harness]: ./specs/definitions/llm-harness.md
 [openai-plan]: ./specs/implementation-plans/openai-api-connection.plan.md
 [persona]: ./specs/definitions/persona.md
