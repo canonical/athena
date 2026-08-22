@@ -9,21 +9,24 @@ Define owner-scoped runner definitions, loop assignments, and deterministic runn
 - Owner-scoped runner definition schema
 - Loop assignment lifecycle and permissions
 - Deterministic assignment ordering
-- MVP execution constraint (GitHub Copilot Cloud only)
+- Current execution constraint (GitHub Copilot Cloud only)
 - Multi-key selection algorithms
 - Fallback and unavailability behavior
 
 ## Runner catalog
 
-Runners are execution environments that host harnesses. See [runner-harness.md](../definitions/runner-harness.md) for normative definitions and the proprietary vs open runner distinction.
+Runners are execution environments that host harnesses. See [runner-harness.md](../definitions/runner-harness.md) for normative definitions and [workshop-runner.md](../definitions/workshop-runner.md) for the Ubuntu Workshop runner contract.
 
 | Runner | Type | Identifier | Status |
 |---|---|---|---|
-| GitHub Copilot Cloud | Proprietary | `github-copilot-cloud` | MVP — only executable runner |
-| Juju VM | Open (Athena-owned) | `juju-vm` | Post-MVP — Athena-owned implementation target |
-| Local Ubuntu binary | Open (user-managed) | `local-ubuntu` | Post-MVP — disposable VMs encouraged, local machines discouraged |
+| GitHub Copilot Cloud | Proprietary | `github-copilot-cloud` | Current executable runner |
+| Athena Workshop Runner | Open | `athena-workshop` | Portable runner; runs on any supported Ubuntu machine |
 
 The runner catalog is a system-managed registry. Authenticated users can read the catalog to discover available runner types; entries are not user-editable.
+
+The Juju Athena Machine Charm is a separate releasable deployment artifact for
+installing the `athena-workshop` runner on a Juju-provisioned VM. It is not a
+runner type in the catalog.
 
 ## Runner definition and assignment contract
 
@@ -51,9 +54,9 @@ When a runner-backed persona executes:
 3. On unavailability/failure, use deterministic fallback policy.
 4. Persist selected assignment ID and skip reasons in execution metadata.
 
-### MVP execution constraint
+### Current execution constraint
 
-1. In MVP, `github-copilot-cloud` is the only available runner type. No other runner type can be selected or configured.
+1. `github-copilot-cloud` is currently the only executable runner type. Other runner types can be selected only after implementation and validation.
 2. Execution-time selection skips any non-compliant entries with a recorded reason.
 
 ## Validation and safety gates
@@ -78,7 +81,7 @@ When a runner-backed persona executes:
 
 1. Owners can manage runner definitions independent of loops.
 2. Loop members can assign runner definitions; only admins can edit order/overrides.
-3. MVP constraint is enforced at execution-time.
+3. The current runner constraint is enforced at execution-time.
 4. Runner selection is deterministic.
 5. Secret material is never exposed via API responses or logs.
 
