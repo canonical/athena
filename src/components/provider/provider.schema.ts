@@ -1,4 +1,4 @@
-import { httpsUrl, isoDateTime, requiredString, uuid } from "@components/utilities/zod.utilities.js";
+import { isoDateTime, modelEndpointUrl, requiredString, uuid } from "@components/utilities/zod.utilities.js";
 import { z } from "zod";
 
 export const providerTypes = [`openrouter`] as const;
@@ -9,7 +9,7 @@ export const providerSchema = z.object({
   owner: uuid(),
   displayName: requiredString(`displayName is required.`),
   providerType: z.enum(providerTypes),
-  baseUrl: requiredString(`baseUrl is required.`).pipe(httpsUrl),
+  baseUrl: requiredString(`baseUrl is required.`).pipe(modelEndpointUrl),
   defaultModel: z.string().trim().min(1).nullable().default(null),
   enabledModels: z.array(z.string().trim().min(1)).nullable().default(null),
   lifecycleStatus: z.enum(providerLifecycleStatuses).default(`active`),

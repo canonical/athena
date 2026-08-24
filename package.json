@@ -12,7 +12,8 @@
     "check:deprecations": "node ./scripts/check-deprecations.mjs",
     "check:ts:be": "tsc --noEmit -p ./tsconfig.server.json",
     "check:ts:fe": "tsc --noEmit -p ./tsconfig.json",
-    "check:ts": "npm run check:ts:be && npm run check:ts:fe",
+    "check:ts:testing": "tsc --noEmit -p ./tsconfig.testing.json",
+    "check:ts": "npm run check:ts:be && npm run check:ts:fe && npm run check:ts:testing",
     "check": "npm run check:deprecations && npm run check:biome && npm run check:ts",
     "format": "biome format",
     "format:fix": "biome format --write",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
+    "@canonical/test-inference": "git+https://github.com/canonical/test_inference.git#v1.0.0",
     "@istanbuljs/esm-loader-hook": "0.3.0",
     "@playwright/test": "1.62.1",
     "@types/cookie-session": "2.0.49",
