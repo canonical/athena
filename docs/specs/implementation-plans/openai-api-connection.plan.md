@@ -4,6 +4,10 @@
 
 Define owner-scoped provider definitions and loop-level OpenRouter key selection that is deterministic, auditable, and secure.
 
+Provider definitions now act as shared connections for explicit chat and embedder
+capabilities. The capability refactor is planned separately in
+[provider-capabilities.plan.md](./provider-capabilities.plan.md).
+
 ## Scope
 
 - Owner-scoped provider definition schema
@@ -25,6 +29,9 @@ Provider definitions are independent records with:
 4. `baseUrl` (HTTPS in normal operation; HTTP permitted for deterministic test inference)
 5. encrypted credential envelope fields
 6. lifecycle status
+
+Chat and embedder model configuration belongs to capability-specific records; the shared
+definition above owns their common endpoint and credential.
 
 ### Loop assignment contract
 

@@ -286,6 +286,7 @@ export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopRead
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = $1
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
@@ -295,24 +296,26 @@ export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopRead
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = $1
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
             AND p."providerType" = 'openrouter'
-            AND COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NOT NULL
-            AND COALESCE(array_length(p."enabledModels", 1), 0) > 0
+            AND COALESCE(NULLIF(BTRIM(pc."defaultModel"), ''), NULL) IS NOT NULL
+            AND COALESCE(array_length(pc."enabledModels", 1), 0) > 0
         ) AS "activeProviderWithModelConfigCount",
         (
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = $1
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
             AND p."providerType" = 'openrouter'
             AND (
-              COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NULL
-              OR COALESCE(array_length(p."enabledModels", 1), 0) = 0
+              COALESCE(NULLIF(BTRIM(pc."defaultModel"), ''), NULL) IS NULL
+              OR COALESCE(array_length(pc."enabledModels", 1), 0) = 0
             )
         ) AS "activeProviderMissingModelConfigCount",
         (
@@ -388,6 +391,7 @@ export const queryLoopReadinessCountsAll = async (): Promise<LoopReadinessCounts
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = l."id"
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
@@ -397,24 +401,26 @@ export const queryLoopReadinessCountsAll = async (): Promise<LoopReadinessCounts
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = l."id"
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
             AND p."providerType" = 'openrouter'
-            AND COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NOT NULL
-            AND COALESCE(array_length(p."enabledModels", 1), 0) > 0
+            AND COALESCE(NULLIF(BTRIM(pc."defaultModel"), ''), NULL) IS NOT NULL
+            AND COALESCE(array_length(pc."enabledModels", 1), 0) > 0
         ) AS "activeProviderWithModelConfigCount",
         (
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = l."id"
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
             AND p."providerType" = 'openrouter'
             AND (
-              COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NULL
-              OR COALESCE(array_length(p."enabledModels", 1), 0) = 0
+              COALESCE(NULLIF(BTRIM(pc."defaultModel"), ''), NULL) IS NULL
+              OR COALESCE(array_length(pc."enabledModels", 1), 0) = 0
             )
         ) AS "activeProviderMissingModelConfigCount",
         (

@@ -1,12 +1,26 @@
 import { authenticatedJsonDelete, authenticatedJsonGet, authenticatedJsonPost, authenticatedJsonPut } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
-import type { LoopProvider, Provider, ProviderInsert, ProviderModel, ProviderModelPreviewRequest, ProviderModelValidateResponse, ProviderUpdate } from "./provider.schema.js";
+import type {
+  LoopProvider,
+  Provider,
+  ProviderChatUpdate,
+  ProviderEmbedderUpdate,
+  ProviderEmbeddingVerifyResponse,
+  ProviderInsert,
+  ProviderModel,
+  ProviderModelPreviewRequest,
+  ProviderModelValidateResponse,
+  ProviderUpdate,
+} from "./provider.schema.js";
 
 export const providerApiPaths = {
   list: getApiUrl(`/provider`),
   byId: (providerId: string) => getApiUrl(`/provider/${providerId}`),
-  modelsById: (providerId: string) => getApiUrl(`/provider/${providerId}/models`),
-  validateModelsById: (providerId: string) => getApiUrl(`/provider/${providerId}/models/validate`),
+  chatById: (providerId: string) => getApiUrl(`/provider/${providerId}/chat`),
+  modelsById: (providerId: string) => getApiUrl(`/provider/${providerId}/chat/models`),
+  validateModelsById: (providerId: string) => getApiUrl(`/provider/${providerId}/chat/models/validate`),
+  embedderById: (providerId: string) => getApiUrl(`/provider/${providerId}/embedder`),
+  verifyEmbedderById: (providerId: string) => getApiUrl(`/provider/${providerId}/embedder/verify`),
   modelsPreview: getApiUrl(`/provider/models/preview`),
   loopList: (loopId: string) => getApiUrl(`/provider/loop/${loopId}/list`),
   assign: getApiUrl(`/provider/assign`),
@@ -60,6 +74,34 @@ export const updateProvider = async (providerId: string, payload: ProviderUpdate
   }
 
   return response.json() as Promise<Provider>;
+};
+
+export const updateProviderChat = async (providerId: string, payload: ProviderChatUpdate): Promise<Provider> => {
+  const response = await authenticatedJsonPut(providerApiPaths.chatById(providerId), payload);
+  if (!response.ok) throw new Error(await readErrorMessage(response, `Provider chat update failed with status ${response.status}`));
+  return response.json() as Promise<Provider>;
+};
+
+export const deleteProviderChat = async (providerId: string): Promise<void> => {
+  const response = await authenticatedJsonDelete(providerApiPaths.chatById(providerId));
+  if (!response.ok) throw new Error(await readErrorMessage(response, `Provider chat removal failed with status ${response.status}`));
+};
+
+export const updateProviderEmbedder = async (providerId: string, payload: ProviderEmbedderUpdate): Promise<Provider> => {
+  const response = await authenticatedJsonPut(providerApiPaths.embedderById(providerId), payload);
+  if (!response.ok) throw new Error(await readErrorMessage(response, `Provider embedder update failed with status ${response.status}`));
+  return response.json() as Promise<Provider>;
+};
+
+export const deleteProviderEmbedder = async (providerId: string): Promise<void> => {
+  const response = await authenticatedJsonDelete(providerApiPaths.embedderById(providerId));
+  if (!response.ok) throw new Error(await readErrorMessage(response, `Provider embedder removal failed with status ${response.status}`));
+};
+
+export const verifyProviderEmbedder = async (providerId: string): Promise<ProviderEmbeddingVerifyResponse> => {
+  const response = await authenticatedJsonPost(providerApiPaths.verifyEmbedderById(providerId), {});
+  if (!response.ok) throw new Error(await readErrorMessage(response, `Provider embedder verification failed with status ${response.status}`));
+  return response.json() as Promise<ProviderEmbeddingVerifyResponse>;
 };
 
 export const fetchProviderModels = async (providerId: string): Promise<ProviderModel[]> => {

@@ -101,7 +101,7 @@ export function ProviderList({ editor, providerId }: ProviderListProps) {
         <MainTable
           className="u-table-layout--auto"
           emptyStateMsg="No providers yet."
-          headers={[{ content: `Display name` }, { content: `Type` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions`, className: `u-align--right` }]}
+          headers={[{ content: `Display name` }, { content: `Type` }, { content: `Capabilities` }, { content: `Status` }, { content: `Updated at` }, { content: `Actions`, className: `u-align--right` }]}
           rows={providers.map((provider: Provider) => ({
             key: provider.id,
             columns: [
@@ -113,6 +113,7 @@ export function ProviderList({ editor, providerId }: ProviderListProps) {
                 ),
               },
               { content: provider.providerType },
+              { content: [provider.chat ? `Chat` : null, provider.embedder ? `Embedder` : null].filter(Boolean).join(`, `) },
               { content: lifecycleLabel[provider.lifecycleStatus] ?? provider.lifecycleStatus },
               { content: formatTimestamp(provider.updatedAt) },
               {

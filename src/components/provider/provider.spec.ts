@@ -1,4 +1,4 @@
-import { authenticate, configureProviderModelsViaUi, createLoop, createProviderViaUi, expect, inferenceBaseUrl, type Page, scenario, test } from "../../../testing/playwright/index.js";
+import { assignProviderToLoopViaUi, authenticate, configureProviderModelsViaUi, createLoop, createProviderViaUi, expect, inferenceBaseUrl, type Page, scenario, test } from "../../../testing/playwright/index.js";
 
 const unusedProviderCredential = `unused-provider-credential`;
 
@@ -67,9 +67,109 @@ test(`provider editor accepts an HTTP base URL`, async ({ page }) => {
   await page.getByLabel(`API key`).fill(unusedProviderCredential);
   await page.locator(`form`).first().getByRole(`button`, { name: `Create provider` }).click();
 
-  await expect(page.getByText(`${displayName} is available for loop assignment.`)).toBeVisible();
+  await expect(page.getByText(`${displayName} has been created.`)).toBeVisible();
   await page.reload();
   await expect(page.getByRole(`gridcell`, { name: displayName, exact: true }).first()).toBeVisible();
+});
+
+test(`provider editor requires at least one capability`, async ({ page }) => {
+  await authenticate(page);
+  await openProviderList(page);
+
+  await page.getByRole(`button`, { name: `Create provider` }).first().click();
+  await page.getByLabel(`Display name`).fill(`Provider without capabilities`);
+  await page.getByLabel(`Base URL`).fill(inferenceBaseUrl);
+  await page.getByLabel(`API key`).fill(unusedProviderCredential);
+  await page.getByLabel(`Chat`, { exact: true }).uncheck();
+  await page.locator(`form`).first().getByRole(`button`, { name: `Create provider` }).click();
+
+  await expect(page.getByText(`At least one provider capability is required.`)).toBeVisible();
+});
+
+test(`embedder-only provider verifies and is excluded from loop chat assignment`, async ({ page }) => {
+  await authenticate(page);
+
+  const displayName = `Embedder provider ${Date.now()}`;
+  await createProviderViaUi(page, displayName, unusedProviderCredential, {
+    chat: false,
+    embedder: { model: `deterministic-embed-1536` },
+  });
+
+  const providerRow = page.getByRole(`row`).filter({ hasText: displayName });
+  await expect(providerRow.getByRole(`gridcell`, { name: `Embedder`, exact: true })).toBeVisible();
+  await page.getByRole(`link`, { name: displayName, exact: true }).first().click();
+  await page.getByRole(`link`, { name: `Settings` }).click();
+  await page.getByRole(`button`, { name: `Verify embedder` }).click();
+  await expect(page.getByText(`deterministic-embed-1536 returned 1536 dimensions.`)).toBeVisible({ timeout: 20_000 });
+
+  const loop = await createLoop(page, `Embedder exclusion loop ${Date.now()}`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/providers`);
+  await page.getByRole(`button`, { name: `Assign provider` }).click();
+  await expect(page.locator(`#assign-provider-select`).getByRole(`option`, { name: displayName })).toHaveCount(0);
+});
+
+test(`embedder verification rejects vectors above Athena's storage limit`, async ({ page }) => {
+  await authenticate(page);
+
+  const displayName = `Oversized embedder ${Date.now()}`;
+  await createProviderViaUi(page, displayName, unusedProviderCredential, {
+    chat: false,
+    embedder: { model: `deterministic-embed-3073` },
+  });
+
+  await page.getByRole(`link`, { name: displayName, exact: true }).first().click();
+  await page.getByRole(`link`, { name: `Settings` }).click();
+  await page.getByRole(`button`, { name: `Verify embedder` }).click();
+
+  await expect(page.getByText(`Embedding model returned 3073 dimensions; Athena supports at most 3072.`)).toBeVisible({ timeout: 20_000 });
+});
+
+test(`one provider supports chat and embeddings through its shared connection`, async ({ page }) => {
+  await authenticate(page);
+
+  const displayName = `Combined provider ${Date.now()}`;
+  const updatedName = `${displayName} updated`;
+  await createProviderViaUi(page, displayName, unusedProviderCredential, {
+    chat: true,
+    embedder: { model: `deterministic-embed-1536` },
+  });
+
+  const providerRow = page.getByRole(`row`).filter({ hasText: displayName });
+  await expect(providerRow.getByRole(`gridcell`, { name: `Chat, Embedder`, exact: true })).toBeVisible();
+  await page
+    .getByRole(`button`, { name: `Edit ${displayName}` })
+    .first()
+    .click();
+  await page.getByLabel(`Display name`).fill(updatedName);
+  await page.getByRole(`button`, { name: `Save provider` }).click();
+  await page.getByRole(`link`, { name: updatedName, exact: true }).first().click();
+  await page.getByRole(`link`, { name: `Settings` }).click();
+
+  await expect(page.getByRole(`heading`, { name: `Model settings` })).toBeVisible();
+  await expect(page.getByLabel(`Embedding model`)).toHaveValue(`deterministic-embed-1536`);
+  await page.getByRole(`button`, { name: `Fetch models` }).click();
+  await expect(page.locator(`#provider-enabled-model-deterministic-chat`)).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(`#provider-enabled-model-deterministic-embed-1536`)).toHaveCount(0);
+});
+
+test(`assigned chat capability cannot be removed`, async ({ page }) => {
+  await authenticate(page);
+
+  const displayName = `Assigned combined provider ${Date.now()}`;
+  const loop = await createLoop(page, `Capability guard loop ${Date.now()}`);
+  await createProviderViaUi(page, displayName, unusedProviderCredential, {
+    chat: true,
+    embedder: { model: `deterministic-embed-1536` },
+  });
+  await assignProviderToLoopViaUi(page, loop.id, displayName);
+
+  await page.goto(`http://athena.localhost/provider/list`);
+  await page.getByRole(`link`, { name: displayName, exact: true }).first().click();
+  await page.getByRole(`link`, { name: `Settings` }).click();
+  await page.getByRole(`button`, { name: `Remove chat` }).click();
+
+  await expect(page.getByText(`Chat capability cannot be removed while the provider is assigned to a loop.`)).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Model settings` })).toBeVisible();
 });
 
 test(`loop providers tab supports assign remove and algorithm save`, async ({ page }) => {

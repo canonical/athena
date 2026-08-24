@@ -396,8 +396,9 @@ export const queryTaskAssignCurrentModel = async (loopId: string, taskId: string
   const result = await query<{ currentModel: string }>(
     `
       WITH selected_model AS (
-        SELECT COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), p."enabledModels"[1]) AS "model"
+        SELECT COALESCE(NULLIF(BTRIM(pc."defaultModel"), ''), pc."enabledModels"[1]) AS "model"
         FROM "provider" p
+        JOIN "providerChat" pc ON pc."provider" = p."id"
         JOIN "loopProvider" lp ON lp."provider" = p."id"
         WHERE lp."loop" = $1
           AND lp."provider" = $4

@@ -31,7 +31,7 @@ orchestration code.
 
 ## Index model and sources
 
-An index owns its data source, embedding model, and chunking, ingestion, and rebuild
+An index owns its data source, embedding capability reference, and chunking, ingestion, and rebuild
 procedures. A source adapter turns one source type into ingestible documents that a
 chunking strategy then splits; adapters are pluggable, and a Markdown file collection is
 the only one in the MVP. Task and
@@ -133,9 +133,11 @@ attachment. Changes are audited (actor, timestamp, prior and new value), consist
   to ingest.
 - `chunking`: the chunking strategy and its parameters; the MVP strategy is a fixed-size
   overlapping window, parametrized by a window size and a neighbor overlap.
-- `embedding`: `providerRef`, `model`, and `modelVersion`. The MVP pins a concrete model
-  and dimension; see
-  [rag-index.plan.md](../implementation-plans/rag-index.plan.md).
+- `embedding`: a reference to a provider's embedder capability plus the `model` and
+  `modelVersion` used by the projection and its observed `dimensions`. The provider
+  capability configures the model; dimensions are not provider configuration. Different
+  indexes may use different dimensions, but one projection is dimensionally uniform.
+  Athena recommends 1,536 dimensions and rejects vectors above 3,072.
 
 Lifecycle: retrieval is opt-in — a loop has no index until an admin enables it, which
 creates the index over its source, attaches it, and rebuilds from the source. Disabling
@@ -150,8 +152,9 @@ exposes a rebuilding status; Athena never mixes vectors across model versions.
   proceeds without it.
 - Ingestion failure leaves the source intact — the files remain canonical — and the
   index is repaired by a later `rebuild`.
-- Embedding uses the loop provider contract and inherits its availability and failover
-  behavior in [llm-harness.md](./llm-harness.md).
+- Embedding uses the referenced provider's embedder capability. It does not participate in
+  the loop chat-provider selection or failover behavior in
+  [llm-harness.md](./llm-harness.md).
 
 ## The Markdown file collection as the first source
 
@@ -185,6 +188,6 @@ the chunking, overlap, and lineage that a record-oriented source would not.
 - Tool execution records and tool allow/deny policy: [tool-usage.md](./tool-usage.md)
 - Provider configuration, validation, and availability:
   [llm-harness.md](./llm-harness.md)
-- Embedding provider contract:
-  [openai-api-connection.plan.md](../implementation-plans/openai-api-connection.plan.md)
+- Provider capability contract:
+  [provider-capabilities.plan.md](../implementation-plans/provider-capabilities.plan.md)
 - Non-functional requirements: [nfr.md](./nfr.md)

@@ -36,7 +36,7 @@ export function LoopProviders({ loopId, onFeedback }: LoopProvidersProps) {
   const [isAssignDrawerOpen, setIsAssignDrawerOpen] = useState(false);
   const [isPolicyDrawerOpen, setIsPolicyDrawerOpen] = useState(false);
 
-  const availableProviders = providerListState.status === `success` ? providerListState.providers : [];
+  const availableProviders = providerListState.status === `success` ? providerListState.providers.filter((provider) => provider.chat !== null) : [];
   const assignedProviders = assignedProviderState.status === `success` ? assignedProviderState.providers : [];
 
   const assignedProviderIds = new Set(assignedProviders.map((provider) => provider.provider));

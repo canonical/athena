@@ -1,18 +1,37 @@
 import type { AppLogger } from "@components/logging/logging.schema.js";
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
-import { fetchOpenRouterModels, validateOpenRouterModel } from "@components/openrouter/openrouter.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
-import { ProviderForbiddenError, ProviderNotFoundError, ProviderValidationError } from "./provider.errors.js";
-import type { LoopProvider, LoopProviderAdminUpdate, LoopProviderInsert, Provider, ProviderInsert, ProviderModel, ProviderModelPreviewRequest, ProviderModelValidateResultItem, ProviderUpdate } from "./provider.schema.js";
+import { ProviderChat } from "./provider.chat.service.js";
+import { ProviderEmbedder } from "./provider.embedder.service.js";
+import { ProviderConflictError, ProviderForbiddenError, ProviderNotFoundError, ProviderValidationError } from "./provider.errors.js";
+import type {
+  LoopProvider,
+  LoopProviderAdminUpdate,
+  LoopProviderInsert,
+  Provider,
+  ProviderChatConfig,
+  ProviderChatUpdate,
+  ProviderEmbedderUpdate,
+  ProviderEmbeddingVerifyResponse,
+  ProviderInsert,
+  ProviderModel,
+  ProviderModelPreviewRequest,
+  ProviderModelValidateResultItem,
+  ProviderUpdate,
+} from "./provider.schema.js";
 import {
   queryLoopProviderAssign,
   queryLoopProviderDelete,
   queryLoopProviderList,
   queryLoopProviderUpdateByAdmin,
-  queryProviderApiConnectionByOwner,
   queryProviderByIdForOwner,
+  queryProviderCapabilityDelete,
+  queryProviderChatApiConnectionByOwner,
+  queryProviderChatUpsert,
   queryProviderCreate,
   queryProviderDelete,
+  queryProviderEmbedderApiConnectionByOwner,
+  queryProviderEmbedderUpsert,
   queryProviderListByOwner,
   queryProviderUpdate,
 } from "./provider.service.js";
@@ -38,13 +57,13 @@ const enforceOpenRouterOnly = (providerType: string): void => {
 const fetchProviderModelsByType = async (providerType: string, connection: { baseUrl: string; apiKey: string }, logger?: AppLogger): Promise<ProviderModel[]> => {
   switch (providerType) {
     case `openrouter`:
-      return fetchOpenRouterModels(connection, logger);
+      return new ProviderChat({ providerType, ...connection }).listModels(logger);
     default:
       throw new ProviderValidationError(`Unsupported providerType for model listing: ${providerType}.`);
   }
 };
 
-const normalizeProviderModelConfig = <T extends { defaultModel: string | null; enabledModels: string[] | null }>(input: T): T => {
+const normalizeProviderChatConfig = <T extends ProviderChatConfig>(input: T): T => {
   const enabledModels = input.enabledModels === null ? null : Array.from(new Set(input.enabledModels.map((value) => value.trim()).filter((value) => value.length > 0)));
   const defaultModel = input.defaultModel?.trim() ?? null;
 
@@ -75,15 +94,14 @@ export const providerGet = async (providerId: string, ownerId: string): Promise<
 
 export const providerCreate = async (input: ProviderInsert, ownerId: string): Promise<Provider> => {
   enforceOpenRouterOnly(input.providerType);
-
-  return queryProviderCreate(normalizeProviderModelConfig(input), ownerId);
+  return queryProviderCreate({ ...input, chat: input.chat ? normalizeProviderChatConfig(input.chat) : null }, ownerId);
 };
 
 export const providerUpdate = async (providerId: string, ownerId: string, input: ProviderUpdate): Promise<Provider> => {
   validateProviderId(providerId);
   enforceOpenRouterOnly(input.providerType);
 
-  const updated = await queryProviderUpdate(providerId, ownerId, normalizeProviderModelConfig(input));
+  const updated = await queryProviderUpdate(providerId, ownerId, input);
 
   if (!updated) {
     throw new ProviderNotFoundError(`Provider not found.`);
@@ -103,7 +121,7 @@ export const providerDelete = async (providerId: string, ownerId: string): Promi
 export const providerModels = async (providerId: string, ownerId: string, logger?: AppLogger): Promise<ProviderModel[]> => {
   validateProviderId(providerId);
 
-  const connection = await queryProviderApiConnectionByOwner(providerId, ownerId);
+  const connection = await queryProviderChatApiConnectionByOwner(providerId, ownerId);
 
   if (!connection) {
     throw new ProviderNotFoundError(`Provider not found.`);
@@ -126,7 +144,7 @@ export const providerModelPreview = async (input: ProviderModelPreviewRequest, l
 export const providerValidateModels = async (providerId: string, ownerId: string, models: string[], logger?: AppLogger): Promise<ProviderModelValidateResultItem[]> => {
   validateProviderId(providerId);
 
-  const connection = await queryProviderApiConnectionByOwner(providerId, ownerId);
+  const connection = await queryProviderChatApiConnectionByOwner(providerId, ownerId);
 
   if (!connection) {
     throw new ProviderNotFoundError(`Provider not found.`);
@@ -150,22 +168,15 @@ export const providerValidateModels = async (providerId: string, ownerId: string
     const batchValidations = await Promise.all(
       batchModels.map(async (model) => ({
         model,
-        validation: await validateOpenRouterModel(
-          {
-            baseUrl: connection.baseUrl,
-            apiKey: connection.apiKey,
-          },
-          {
+        validation: await new ProviderChat(connection).validateModel(model, {
+          operation: `provider-model-validate`,
+          timeoutMs: 20_000,
+          logger,
+          context: {
+            providerId,
             model,
-            operation: `provider-model-validate`,
-            timeoutMs: 20_000,
-            logger,
-            context: {
-              providerId,
-              model,
-            },
           },
-        ),
+        }),
       })),
     );
 
@@ -194,6 +205,44 @@ export const providerValidateModels = async (providerId: string, ownerId: string
   return results;
 };
 
+export const providerChatUpdate = async (providerId: string, ownerId: string, input: ProviderChatUpdate): Promise<Provider> => {
+  validateProviderId(providerId);
+  const updated = await queryProviderChatUpsert(providerId, ownerId, normalizeProviderChatConfig(input));
+  if (!updated) throw new ProviderNotFoundError(`Provider not found.`);
+  return updated;
+};
+
+export const providerChatDelete = async (providerId: string, ownerId: string): Promise<void> => {
+  validateProviderId(providerId);
+  const result = await queryProviderCapabilityDelete(providerId, ownerId, `chat`);
+  if (result === `provider-not-found`) throw new ProviderNotFoundError(`Provider not found.`);
+  if (result === `capability-not-found`) throw new ProviderNotFoundError(`Provider chat capability not found.`);
+  if (result === `last-capability`) throw new ProviderConflictError(`A provider must retain at least one capability.`);
+  if (result === `chat-assigned`) throw new ProviderConflictError(`Chat capability cannot be removed while the provider is assigned to a loop.`);
+};
+
+export const providerEmbedderUpdate = async (providerId: string, ownerId: string, input: ProviderEmbedderUpdate): Promise<Provider> => {
+  validateProviderId(providerId);
+  const updated = await queryProviderEmbedderUpsert(providerId, ownerId, input);
+  if (!updated) throw new ProviderNotFoundError(`Provider not found.`);
+  return updated;
+};
+
+export const providerEmbedderDelete = async (providerId: string, ownerId: string): Promise<void> => {
+  validateProviderId(providerId);
+  const result = await queryProviderCapabilityDelete(providerId, ownerId, `embedder`);
+  if (result === `provider-not-found`) throw new ProviderNotFoundError(`Provider not found.`);
+  if (result === `capability-not-found`) throw new ProviderNotFoundError(`Provider embedder capability not found.`);
+  if (result === `last-capability`) throw new ProviderConflictError(`A provider must retain at least one capability.`);
+};
+
+export const providerEmbedderVerify = async (providerId: string, ownerId: string): Promise<ProviderEmbeddingVerifyResponse> => {
+  validateProviderId(providerId);
+  const connection = await queryProviderEmbedderApiConnectionByOwner(providerId, ownerId);
+  if (!connection) throw new ProviderNotFoundError(`Provider embedder capability not found.`);
+  return new ProviderEmbedder(connection).verify();
+};
+
 export const loopProviderList = async (loopId: string, userId: string): Promise<LoopProvider[]> => {
   validateLoopId(loopId);
 
@@ -214,9 +263,7 @@ export const providerAssign = async (loopId: string, userId: string, input: Loop
 
   const provider = await queryProviderByIdForOwner(input.provider, userId);
 
-  if (!provider) {
-    throw new ProviderNotFoundError(`Provider not found.`);
-  }
+  if (!provider?.chat) throw new ProviderNotFoundError(`Chat-capable provider not found.`);
 
   await queryLoopProviderAssign(loopId, input.provider);
 };

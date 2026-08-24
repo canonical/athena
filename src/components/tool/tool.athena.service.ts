@@ -1,6 +1,7 @@
 import type { OpenRouterMessage } from "@components/openrouter/openrouter.schema.js";
-import { fetchOpenRouterChatCompletion, fetchOpenRouterModels, readOpenRouterAssistantText } from "@components/openrouter/openrouter.service.js";
+import { readOpenRouterAssistantText } from "@components/openrouter/openrouter.service.js";
 import { queryLoopPersonaById, queryLoopPersonaList } from "@components/persona/persona.service.js";
+import { ProviderChat } from "@components/provider/provider.chat.service.js";
 import { resolveTaskProviderContext } from "@components/task/task.iteratorUtilities.js";
 import type { TaskQueueItemInput } from "@components/task/task.schema.js";
 import { queryAppendQueueItem, queryTaskAssignWorkgraphItem, queryTaskCompactQueue, queryTaskDefineObjective, queryTaskDefineTitle, queryTaskGet, queryTaskMarkCompleted } from "@components/task/task.service.js";
@@ -148,10 +149,12 @@ export const executeAthenaListModels = async (context: ProviderToolExecutionCont
     return { models: [], defaultModel: null };
   }
 
-  const allModels = await fetchOpenRouterModels({
+  const providerChat = new ProviderChat({
+    providerType: providerContext.providerResolution.selected.definitionType,
     baseUrl: providerContext.baseUrl,
     apiKey: providerContext.providerResolution.selected.secret,
   });
+  const allModels = await providerChat.listModels();
 
   const enabledIds = new Set(providerContext.providerResolution.selected.enabledModels);
   const models = enabledIds.size > 0 ? allModels.filter((m) => enabledIds.has(m.id)) : allModels;
@@ -197,19 +200,17 @@ export const executeAthenaAskOtherPersona = async (context: ProviderToolExecutio
     { role: `user`, content: `Context summary:\n${summary}\n\n${prompt}` },
   ];
 
-  const payload = await fetchOpenRouterChatCompletion(
-    {
-      baseUrl: providerContext.baseUrl,
-      apiKey: providerContext.providerResolution.selected.secret,
-    },
-    {
-      model,
-      messages,
-      responseFormat: `text`,
-      operation: `athena-ask-other-persona`,
-      context: { taskId: context.taskId, loopId: context.loopId, personaId },
-    },
-  );
+  const payload = await new ProviderChat({
+    providerType: providerContext.providerResolution.selected.definitionType,
+    baseUrl: providerContext.baseUrl,
+    apiKey: providerContext.providerResolution.selected.secret,
+  }).complete({
+    model,
+    messages,
+    responseFormat: `text`,
+    operation: `athena-ask-other-persona`,
+    context: { taskId: context.taskId, loopId: context.loopId, personaId },
+  });
 
   const responseText = readOpenRouterAssistantText(payload.choices?.[0]?.message).trim();
 

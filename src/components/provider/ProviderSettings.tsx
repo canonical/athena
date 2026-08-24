@@ -1,7 +1,8 @@
 import { Button, useToastNotification } from "@canonical/react-components";
 import { useEffect, useMemo, useState } from "react";
-import { fetchProviderModels, updateProvider, validateProviderModels } from "./provider.client.js";
+import { deleteProviderChat, deleteProviderEmbedder, fetchProviderModels, updateProviderChat, updateProviderEmbedder, validateProviderModels, verifyProviderEmbedder } from "./provider.client.js";
 import type { Provider, ProviderModelValidateResultItem } from "./provider.schema.js";
+import { providerEmbedderUpdateSchema } from "./provider.schema.js";
 
 type ProviderSettingsProps = {
   provider: Provider;
@@ -9,8 +10,21 @@ type ProviderSettingsProps = {
 };
 
 export function ProviderSettings({ provider, reload }: ProviderSettingsProps) {
+  return (
+    <div className="p-grid">
+      <div className="p-grid__row">
+        <div className="p-grid__col-12">
+          <ProviderChatSettings provider={provider} reload={reload} />
+          <ProviderEmbedderSettings provider={provider} reload={reload} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProviderChatSettings({ provider, reload }: ProviderSettingsProps) {
   const toastNotify = useToastNotification();
-  const persistedEnabledModels = provider.enabledModels ?? [];
+  const persistedEnabledModels = provider.chat?.enabledModels ?? [];
   const [models, setModels] = useState<Array<{ id: string; displayName?: string }>>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -22,57 +36,55 @@ export function ProviderSettings({ provider, reload }: ProviderSettingsProps) {
 
   const modelOptions = useMemo(() => {
     const map = new Map<string, string>();
-
-    for (const model of models) {
-      if (model.id.trim().length > 0) {
-        map.set(model.id, model.displayName ?? model.id);
-      }
-    }
-
-    for (const modelId of persistedEnabledModels) {
-      if (!map.has(modelId)) {
-        map.set(modelId, modelId);
-      }
-    }
-
-    if (provider.defaultModel && !map.has(provider.defaultModel)) {
-      map.set(provider.defaultModel, provider.defaultModel);
-    }
-
+    for (const model of models) if (model.id.trim()) map.set(model.id, model.displayName ?? model.id);
+    for (const modelId of persistedEnabledModels) if (!map.has(modelId)) map.set(modelId, modelId);
+    if (provider.chat?.defaultModel && !map.has(provider.chat.defaultModel)) map.set(provider.chat.defaultModel, provider.chat.defaultModel);
     return Array.from(map.entries())
       .map(([id, label]) => ({ id, label }))
       .sort((left, right) => left.label.localeCompare(right.label));
-  }, [models, persistedEnabledModels, provider.defaultModel]);
+  }, [models, persistedEnabledModels, provider.chat?.defaultModel]);
 
   useEffect(() => {
     setEnabledModels(persistedEnabledModels);
-    setDefaultModel(provider.defaultModel ?? ``);
+    setDefaultModel(provider.chat?.defaultModel ?? ``);
     setUnavailableModelIds([]);
-  }, [provider.id, provider.updatedAt]);
+  }, [provider.id, provider.updatedAt, provider.chat?.updatedAt]);
 
   const filteredModelOptions = useMemo(() => {
     const query = modelSearch.trim().toLowerCase();
-
-    if (!query) {
-      return modelOptions;
-    }
-
-    return modelOptions.filter((model) => model.label.toLowerCase().includes(query) || model.id.toLowerCase().includes(query));
+    return query ? modelOptions.filter((model) => model.label.toLowerCase().includes(query) || model.id.toLowerCase().includes(query)) : modelOptions;
   }, [modelOptions, modelSearch]);
 
-  const isDirty = defaultModel !== (provider.defaultModel ?? ``) || enabledModels.length !== persistedEnabledModels.length || enabledModels.some((modelId) => !persistedEnabledModels.includes(modelId));
+  if (!provider.chat) {
+    return (
+      <div className="p-card p-strip is-shallow">
+        <h2 className="p-heading--4">Chat capability</h2>
+        <p>This provider is not available for chat or loop provider assignment.</p>
+        <Button
+          appearance="positive"
+          onClick={() => {
+            void updateProviderChat(provider.id, { defaultModel: null, enabledModels: null })
+              .then(() => {
+                toastNotify.info(`Chat capability has been enabled.`, `Saved`);
+                reload();
+              })
+              .catch((error: unknown) => toastNotify.failure(`Unable to enable chat capability`, error instanceof Error ? error : new Error(String(error))));
+          }}
+          type="button"
+        >
+          Enable chat
+        </Button>
+      </div>
+    );
+  }
 
   const loadModels = async () => {
     setIsLoadingModels(true);
     setModelsError(null);
-
     try {
       const fetchedModels = await fetchProviderModels(provider.id);
       setModels(fetchedModels);
-
-      if (enabledModels.length === 0 && persistedEnabledModels.length === 0) {
-        setEnabledModels(fetchedModels.map((model) => model.id));
-      }
+      if (enabledModels.length === 0 && persistedEnabledModels.length === 0) setEnabledModels(fetchedModels.map((model) => model.id));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setModelsError(message);
@@ -84,132 +96,53 @@ export function ProviderSettings({ provider, reload }: ProviderSettingsProps) {
 
   const toggleModel = (modelId: string, checked: boolean) => {
     setEnabledModels((current) => {
-      if (checked) {
-        if (current.includes(modelId)) {
-          return current;
-        }
-
-        return [...current, modelId];
-      }
-
+      if (checked) return current.includes(modelId) ? current : [...current, modelId];
       const next = current.filter((value) => value !== modelId);
-
-      if (defaultModel === modelId) {
-        setDefaultModel(next[0] ?? ``);
-      }
-
+      if (defaultModel === modelId) setDefaultModel(next[0] ?? ``);
       return next;
     });
   };
 
-  const selectAllModels = () => {
-    setEnabledModels(modelOptions.map((model) => model.id));
-
-    if (!defaultModel && modelOptions.length > 0) {
-      setDefaultModel(modelOptions[0]?.id ?? ``);
+  const validateSelectedModels = async (modelIds: string[]): Promise<ProviderModelValidateResultItem[]> => {
+    const uniqueModels = Array.from(new Set(modelIds.map((value) => value.trim()).filter(Boolean)));
+    const results: ProviderModelValidateResultItem[] = [];
+    for (const model of uniqueModels) {
+      const validation = await validateProviderModels(provider.id, [model]);
+      const result = validation.results[0] ?? { model, available: false, reason: `Validation returned no result.` };
+      results.push(result);
+      toastNotify.info(`${results.length}/${uniqueModels.length} validated: ${model}${result.available ? ` (available)` : ` (unavailable)`}`, `Model validation progress`);
     }
-  };
-
-  const clearAllModels = () => {
-    setEnabledModels([]);
-    setDefaultModel(``);
-  };
-
-  const validateSelectedModelsWithProgress = async (modelIds: string[]): Promise<ProviderModelValidateResultItem[]> => {
-    const uniqueModels = Array.from(new Set(modelIds.map((value) => value.trim()).filter((value) => value.length > 0)));
-
-    if (uniqueModels.length === 0) {
-      return [];
-    }
-
-    const concurrency = Math.min(6, uniqueModels.length);
-    const results: ProviderModelValidateResultItem[] = new Array(uniqueModels.length);
-    let nextIndex = 0;
-    let completed = 0;
-
-    const worker = async () => {
-      while (true) {
-        const currentIndex = nextIndex;
-        nextIndex += 1;
-
-        if (currentIndex >= uniqueModels.length) {
-          return;
-        }
-
-        const model = uniqueModels[currentIndex] as string;
-        const validation = await validateProviderModels(provider.id, [model]);
-        const result = validation.results[0] ?? { model, available: false, reason: `Validation returned no result.` };
-        results[currentIndex] = result;
-
-        completed += 1;
-        toastNotify.info(`${completed}/${uniqueModels.length} validated: ${model}${result.available ? ` (available)` : ` (unavailable)`}`, `Model validation progress`);
-      }
-    };
-
-    await Promise.all(Array.from({ length: concurrency }, () => worker()));
     return results;
   };
 
   const saveModelSettings = async () => {
-    if (defaultModel && !enabledModels.includes(defaultModel)) {
-      toastNotify.failure(`Unable to save model settings`, new Error(`Default model must be included in enabled models.`));
-      return;
-    }
-
-    if (enabledModels.length === 0) {
-      toastNotify.failure(`Unable to save model settings`, new Error(`Enable at least one model before saving.`));
-      return;
-    }
-
-    const shouldValidate = window.confirm(`Before saving, Athena will send one tiny validation request per selected model to verify availability for this API key. Continue?`);
-
-    if (!shouldValidate) {
-      return;
-    }
+    if (defaultModel && !enabledModels.includes(defaultModel)) return toastNotify.failure(`Unable to save model settings`, new Error(`Default model must be included in enabled models.`));
+    if (enabledModels.length === 0) return toastNotify.failure(`Unable to save model settings`, new Error(`Enable at least one model before saving.`));
+    if (!window.confirm(`Before saving, Athena will send one tiny validation request per selected model to verify availability for this API key. Continue?`)) return;
 
     setIsSaving(true);
-
     try {
-      toastNotify.info(`Starting validation for ${enabledModels.length} selected models.`, `Model validation progress`);
-      const validationResults = await validateSelectedModelsWithProgress(enabledModels);
+      const validationResults = await validateSelectedModels(enabledModels);
       const unavailable = validationResults.filter((result) => !result.available).map((result) => result.model);
-
+      const sanitizedEnabledModels = enabledModels.filter((modelId) => !unavailable.includes(modelId));
       if (unavailable.length > 0) {
-        const nextEnabledModels = enabledModels.filter((modelId) => !unavailable.includes(modelId));
-
         setUnavailableModelIds(unavailable);
-        setEnabledModels(nextEnabledModels);
-
-        if (defaultModel && unavailable.includes(defaultModel)) {
-          setDefaultModel(nextEnabledModels[0] ?? ``);
-        }
-
+        setEnabledModels(sanitizedEnabledModels);
+        if (defaultModel && unavailable.includes(defaultModel)) setDefaultModel(sanitizedEnabledModels[0] ?? ``);
         toastNotify.failure(`Some models are unavailable`, new Error(`Unavailable models were unchecked: ${unavailable.join(`, `)}.`));
-
-        if (nextEnabledModels.length === 0) {
-          return;
-        }
+        if (sanitizedEnabledModels.length === 0) return;
       } else {
         setUnavailableModelIds([]);
-        toastNotify.info(`All ${validationResults.length} selected models are available.`, `Model validation completed`);
       }
 
-      const sanitizedEnabledModels = enabledModels.filter((modelId) => !unavailable.includes(modelId));
-
-      await updateProvider(provider.id, {
-        displayName: provider.displayName,
-        providerType: provider.providerType,
-        baseUrl: provider.baseUrl,
-        lifecycleStatus: provider.lifecycleStatus,
+      await updateProviderChat(provider.id, {
         defaultModel: defaultModel && !unavailable.includes(defaultModel) ? defaultModel : (sanitizedEnabledModels[0] ?? null),
         enabledModels: sanitizedEnabledModels.length > 0 ? sanitizedEnabledModels : null,
       });
-
       toastNotify.info(`Provider model settings have been updated.`, `Saved`);
       reload();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toastNotify.failure(`Unable to save model settings`, error instanceof Error ? error : new Error(message));
+      toastNotify.failure(`Unable to save model settings`, error instanceof Error ? error : new Error(String(error)));
     } finally {
       setIsSaving(false);
     }
@@ -218,14 +151,23 @@ export function ProviderSettings({ provider, reload }: ProviderSettingsProps) {
   return (
     <div className="p-card p-strip is-shallow">
       <h2 className="p-heading--4">Model settings</h2>
+      <p className="p-text--small">Chat capability</p>
       <div>
         <Button appearance="base" disabled={isLoadingModels || isSaving} onClick={() => void loadModels()} type="button">
           {isLoadingModels ? `Loading models...` : `Fetch models`}
         </Button>
-        <Button appearance="base" disabled={modelOptions.length === 0 || isSaving} onClick={selectAllModels} type="button">
+        <Button appearance="base" disabled={modelOptions.length === 0 || isSaving} onClick={() => setEnabledModels(modelOptions.map((model) => model.id))} type="button">
           Enable all
         </Button>
-        <Button appearance="base" disabled={enabledModels.length === 0 || isSaving} onClick={clearAllModels} type="button">
+        <Button
+          appearance="base"
+          disabled={enabledModels.length === 0 || isSaving}
+          onClick={() => {
+            setEnabledModels([]);
+            setDefaultModel(``);
+          }}
+          type="button"
+        >
           Clear all
         </Button>
       </div>
@@ -234,25 +176,18 @@ export function ProviderSettings({ provider, reload }: ProviderSettingsProps) {
       <select
         id="provider-default-model"
         onChange={(event) => {
-          const nextDefault = event.target.value;
-          setDefaultModel(nextDefault);
-
-          if (nextDefault && !enabledModels.includes(nextDefault)) {
-            setEnabledModels((current) => [...current, nextDefault]);
-          }
+          const next = event.target.value;
+          setDefaultModel(next);
+          if (next && !enabledModels.includes(next)) setEnabledModels((current) => [...current, next]);
         }}
         value={defaultModel}
       >
         <option value="">Select a default model</option>
-        {enabledModels.map((modelId) => {
-          const option = modelOptions.find((model) => model.id === modelId);
-
-          return (
-            <option key={modelId} value={modelId}>
-              {option?.label ?? modelId}
-            </option>
-          );
-        })}
+        {enabledModels.map((modelId) => (
+          <option key={modelId} value={modelId}>
+            {modelOptions.find((model) => model.id === modelId)?.label ?? modelId}
+          </option>
+        ))}
       </select>
       <p className="p-text--small">Enabled models: {enabledModels.length}</p>
       {modelOptions.length > 0 ? (
@@ -260,26 +195,101 @@ export function ProviderSettings({ provider, reload }: ProviderSettingsProps) {
           <legend>Enabled models</legend>
           <label htmlFor="provider-model-search">Search models</label>
           <input id="provider-model-search" onChange={(event) => setModelSearch(event.target.value)} placeholder="Search by model name or id" type="search" value={modelSearch} />
-          {filteredModelOptions.length > 0 ? (
-            filteredModelOptions.map((model) => (
-              <div key={model.id}>
-                <label htmlFor={`provider-enabled-model-${model.id}`}>
-                  <input checked={enabledModels.includes(model.id)} id={`provider-enabled-model-${model.id}`} onChange={(event) => toggleModel(model.id, event.target.checked)} type="checkbox" />
-                  {model.label}
-                  {unavailableModelIds.includes(model.id) ? <span className="p-chip is-inline u-no-margin--left">Unavailable</span> : null}
-                </label>
-              </div>
-            ))
-          ) : (
-            <p className="p-text--small">No models match your search.</p>
-          )}
+          {filteredModelOptions.map((model) => (
+            <label className="p-checkbox" htmlFor={`provider-enabled-model-${model.id}`} key={model.id}>
+              <input checked={enabledModels.includes(model.id)} id={`provider-enabled-model-${model.id}`} onChange={(event) => toggleModel(model.id, event.target.checked)} type="checkbox" />
+              <span className="p-checkbox__label">{model.label}</span>
+              {unavailableModelIds.includes(model.id) ? <span className="p-form-validation is-error">Unavailable</span> : null}
+            </label>
+          ))}
         </fieldset>
-      ) : (
-        <p className="p-text--small">Fetch models to configure the enabled model list with checkboxes.</p>
-      )}
+      ) : null}
       <div className="u-align--right">
-        <Button appearance="positive" disabled={!isDirty || isSaving} onClick={() => void saveModelSettings()} type="button">
+        {provider.embedder ? (
+          <Button
+            appearance="negative"
+            disabled={isSaving}
+            onClick={() =>
+              void deleteProviderChat(provider.id)
+                .then(reload)
+                .catch((error: unknown) => toastNotify.failure(`Unable to remove chat capability`, error instanceof Error ? error : new Error(String(error))))
+            }
+            type="button"
+          >
+            Remove chat
+          </Button>
+        ) : null}
+        <Button appearance="positive" disabled={isSaving} onClick={() => void saveModelSettings()} type="button">
           {isSaving ? `Saving model settings...` : `Save model settings`}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ProviderEmbedderSettings({ provider, reload }: ProviderSettingsProps) {
+  const toastNotify = useToastNotification();
+  const [model, setModel] = useState(provider.embedder?.model ?? ``);
+  const [isBusy, setIsBusy] = useState(false);
+
+  useEffect(() => {
+    setModel(provider.embedder?.model ?? ``);
+  }, [provider.embedder?.updatedAt]);
+
+  const save = async () => {
+    const parsed = providerEmbedderUpdateSchema.safeParse({ model });
+    if (!parsed.success) return toastNotify.failure(`Unable to save embedder`, new Error(parsed.error.issues[0]?.message ?? `Invalid embedder configuration.`));
+    setIsBusy(true);
+    try {
+      await updateProviderEmbedder(provider.id, parsed.data);
+      toastNotify.info(`Embedder capability has been saved.`, `Saved`);
+      reload();
+    } catch (error) {
+      toastNotify.failure(`Unable to save embedder`, error instanceof Error ? error : new Error(String(error)));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const verify = async () => {
+    setIsBusy(true);
+    try {
+      const result = await verifyProviderEmbedder(provider.id);
+      toastNotify.info(`${result.model} returned ${result.dimensions} dimensions.`, `Embedder verified`);
+    } catch (error) {
+      toastNotify.failure(`Unable to verify embedder`, error instanceof Error ? error : new Error(String(error)));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  return (
+    <div className="p-card p-strip is-shallow">
+      <h2 className="p-heading--4">Embedder settings</h2>
+      <label htmlFor="provider-embedder-model">Embedding model</label>
+      <input id="provider-embedder-model" onChange={(event) => setModel(event.target.value)} type="text" value={model} />
+      <div className="u-align--right">
+        {provider.embedder ? (
+          <Button
+            appearance="negative"
+            disabled={isBusy || !provider.chat}
+            onClick={() =>
+              void deleteProviderEmbedder(provider.id)
+                .then(reload)
+                .catch((error: unknown) => toastNotify.failure(`Unable to remove embedder capability`, error instanceof Error ? error : new Error(String(error))))
+            }
+            type="button"
+          >
+            Remove embedder
+          </Button>
+        ) : null}
+        {provider.embedder ? (
+          <Button appearance="base" disabled={isBusy} onClick={() => void verify()} type="button">
+            Verify embedder
+          </Button>
+        ) : null}
+        <Button appearance="positive" disabled={isBusy} onClick={() => void save()} type="button">
+          {provider.embedder ? `Save embedder` : `Enable embedder`}
         </Button>
       </div>
     </div>

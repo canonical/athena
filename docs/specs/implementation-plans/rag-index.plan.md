@@ -9,8 +9,8 @@ that index-enabled personas query through a lookup tool to bring relevant refere
 knowledge into their decisions.
 
 MVP scope: a Markdown file collection, overlapping chunking with file-and-offset lineage,
-pull retrieval through a lookup tool, pure semantic ranking, a single fixed embedding
-model, Postgres with pgvector, strictly per-loop.
+pull retrieval through a lookup tool, pure semantic ranking, one configured embedding
+model per index projection, Postgres with pgvector, strictly per-loop.
 
 The Markdown index is implemented as the example instance of a general retrieval-index
 abstraction: an index is a first-class, standalone entity that owns its data source,
@@ -30,7 +30,7 @@ In scope:
   implementation.
 - A chunking-strategy contract, with a fixed-size overlapping window (`fixedOverlap`) as
   the only implementation, producing file-path-and-character-offset lineage.
-- Embedding via an extension to the loop OpenAI API-compatible provider contract.
+- Embedding through the referenced provider's explicit embedder capability.
 - `rebuild`-based ingestion: walk the corpus, chunk, embed, idempotently upsert.
 - A per-index lookup tool, governed by the per-loop tool allow/deny list.
 - Config CRUD, rebuild, and audit.
@@ -72,29 +72,31 @@ Out of scope (deferred):
   sized in tokens against the embedding input limit); backtrack offsets are stored in
   characters. New strategies (structural, semantic, recursive) register against the same
   contract without touching sources or retrieval.
-- Embeddings extend the loop OpenAI-compatible provider contract (a profile with an
-  `embeddingModel`, called at `/v1/embeddings`), so
-  [openai-api-connection.plan.md](./openai-api-connection.plan.md) grows an embeddings
-  capability. The provider is per-loop config, not a fixed vendor.
-- The MVP pins `text-embedding-3-small` (1536 dimensions), reachable over `/v1/embeddings`
-  via GitHub Models/Foundry or OpenRouter. The choice is reversible: each entry stores its
-  source `text` and the index is rebuildable, so switching models is a re-embed via
-  `rebuild` — a same-dimension swap is pure re-embed, a different dimension also needs a
-  column migration.
-- Build order: implement the provider contract with its embeddings extension first; stub
-  embeddings only in tests, not as a shipped shortcut.
+- A provider is one shared connection with explicit chat and embedder capabilities, as
+  defined in [provider-capabilities.plan.md](./provider-capabilities.plan.md). The
+  embedder capability calls `/v1/embeddings` with the provider's shared base URL and
+  credential. An index references this capability directly; it does not use the loop chat
+  provider pool.
+- The embedder capability configures the model; Athena does not hardcode one. Each entry
+  stores its source `text` and the index is rebuildable, so switching models is a re-embed
+  via `rebuild`. Dimensions are observed projection metadata, never provider
+  configuration: 1,536 is the recommended storage target, 3,072 is the hard limit, and
+  every non-null vector in one projection has the same dimensions.
+- Build order: implement the provider capability split first. Tests use the published
+  deterministic inference service through the ordinary provider HTTP contract; neither
+  production nor test code injects an in-process embedding stub.
 
 ## Dependencies and assumptions
 
-1. Embeddings extend the provider contract in
-   [openai-api-connection.plan.md](./openai-api-connection.plan.md). OpenAI exposes
-   embeddings via a separate `POST /v1/embeddings` endpoint, distinct from chat
-   completions. Not every OpenAI API-compatible provider implements it, so embeddings are
-   an optional provider capability.
-2. A single embedding model is pinned for the MVP, fixing the schema's vector dimension.
-   The specific model and the reversibility of that choice are in
-   [Decisions](#decisions); automated migration tooling for model changes is out of
-   scope, and a dimension change is a `rebuild` plus a column migration.
+1. Provider capability separation is delivered first through
+   [provider-capabilities.plan.md](./provider-capabilities.plan.md). OpenAI-compatible
+   APIs expose embeddings through `POST /v1/embeddings`, distinct from chat completions,
+   so embeddings are an optional capability on the shared provider connection.
+2. Each index projection uses the model configured by its referenced embedder capability.
+   Model changes require `rebuild`. Indexes may have different observed dimensions, but
+   one projection never mixes dimensions. A future optional per-index
+   `requestedDimensions` may ask a supporting model for a smaller projection; it is not
+   provider configuration and is outside the MVP.
 3. The Markdown corpus is a snapshot ingested and refreshed by `rebuild`; it is not
    watched for live edits in the MVP.
 4. The MVP uses exact vector search, so live retrieval is deterministic for a fixed index
@@ -133,8 +135,10 @@ Out of scope (deferred):
 - `sourceType` (TEXT): the adapter type; MVP is `mdCollection`.
 - `source` (JSONB): source-specific configuration; for `mdCollection`, the file
   collection to ingest.
-- Embedding config: `embeddingProviderRef`, `embeddingModel`, `embeddingModelVersion`
-  (the index owns its model).
+- Embedding config: a foreign key to `providerEmbedder`, plus the
+  `embeddingModel`, `embeddingModelVersion`, and nullable `embeddingDimensions` observed
+  for the current projection. The first successful embedding establishes dimensions;
+  1,536 is recommended and 3,072 is the maximum.
 - Chunking config: `chunkingStrategy` (TEXT), the strategy discriminator (MVP
   `fixedOverlap`), and `chunking` (JSONB), its parameters — for `fixedOverlap`, the window
   `size` and `overlap` — mirroring the `sourceType`/`source` split.
@@ -168,8 +172,9 @@ Out of scope (deferred):
 - `contentHash` (TEXT): hash of the source document, so `rebuild` skips unchanged
   documents.
 - `text` (TEXT): the chunk text that was embedded.
-- `embedding` (`vector(1536)`, nullable): the MVP model's dimension
-  (`text-embedding-3-small`). Chunk rows are written before embedding; a row is retrievable
+- `embedding` (`vector`, nullable): variable-width storage preserves the space benefit of
+  smaller models. Every non-null embedding must match its index's
+  `embeddingDimensions`; chunk rows are written before embedding and become retrievable
   only once embedded, so retrieval filters `embedding IS NOT NULL`.
 - Postgres indexes: btree `index` for isolation; no global ANN index (see
   [Storage](#storage-postgres-and-pgvector)).
@@ -185,17 +190,16 @@ timestamp, prior value, and new value.
 Conventions: new numbered DDL under `migrations/pg/ddls/`, entity-name FKs, types and Zod
 only in the component `schema.ts`, component at `src/components/rag/`.
 
-## Embedding integration (provider extension)
+## Embedding integration (provider capability)
 
-- Add `embeddingModel` (optional) to the provider profile; a profile that declares it can
-  serve embeddings.
-- Embeddings call the profile `baseUrl` at the `/embeddings` path with
-  `{ input, model: embeddingModel }`.
-- Selection uses deterministic provider priority per
-  [llm-harness.md](../definitions/llm-harness.md), considering only embedding-capable
-  profiles.
-- If no embedding-capable provider is available, `rebuild` defers and retrieval proceeds
-  with no context.
+- Reuse the shared provider base URL and encrypted credential through its required
+  `providerEmbedder` capability.
+- Embeddings call the shared `baseUrl` at the `/embeddings` path with
+  `{ input, model }` through the `ProviderEmbedder` class.
+- The index holds a direct capability reference. No loop-provider priority or failover
+  selection occurs for embedding.
+- If the referenced provider or embedder capability is inactive or unavailable, `rebuild`
+  defers and retrieval proceeds with no context.
 
 ## Chunking
 
@@ -238,9 +242,9 @@ handling. It runs in two phases so chunking and embedding are decoupled:
 - Idempotency: the `(index, sourceRef, chunkIndex)` unique key prevents double-insert under
   retry and concurrent runs, and phase 2 is naturally resumable — it only ever targets
   `embedding IS NULL`.
-- Graceful degradation: if no embedding-capable provider is available, phase 1 still
-  persists the chunks and phase 2 fills them in on a later run; retrieval meanwhile returns
-  only already-embedded rows.
+- Graceful degradation: if the referenced embedder capability is unavailable, phase 1
+  still persists the chunks and phase 2 fills them in on a later run; retrieval meanwhile
+  returns only already-embedded rows.
 - The corpus is a snapshot; live watching and incremental supersession are future. The MVP
   runs both phases inline in `rebuild`; see [Decisions](#decisions) for the queue scale
   path.
@@ -281,7 +285,8 @@ handling. It runs in two phases so chunking and embedding are decoupled:
 - Redact secrets at ingestion per [tool-usage.md](../definitions/tool-usage.md).
 - Index content is re-injected into prompts and is therefore a prompt-injection vector;
   treat indexed content as untrusted.
-- Embedding credentials resolve via `credentialRef` only and are never logged.
+- Embedding credentials resolve from the shared provider credential envelope and are never
+  logged.
 
 ## Configuration and lifecycle
 
@@ -291,8 +296,9 @@ handling. It runs in two phases so chunking and embedding are decoupled:
 - Retrieval is opt-in: an admin enables a loop by creating its index over the Markdown
   collection, attaching it, and granting the lookup tool. Enabling triggers a `rebuild`;
   disabling detaches and removes the index and its entries.
-- The MVP fixes the embedding model, so no model-change re-index path is required beyond
-  `rebuild`; a rebuilding status applies to `rebuild`.
+- The current projection records its model and observed dimensions. Changing the model
+  invalidates all existing vectors before `rebuild`, and a rebuilding status applies
+  throughout; Athena never serves a mixture of models or dimensions.
 - All config changes are audited.
 
 ## Audit
@@ -315,7 +321,8 @@ Per [testing-standards.md](../../testing-standards.md):
 
 ## Implementation steps
 
-1. Extend the provider profile with `embeddingModel` and an embeddings call path.
+1. Deliver the shared provider chat/embedder capability split in
+   [provider-capabilities.plan.md](./provider-capabilities.plan.md).
 2. Add the pgvector extension and `ragIndex` / `ragEntry` / `loopRagAttachment` migrations
    (shared entry table, btree `index`, no global ANN index); update the database image and
    compose.
@@ -351,4 +358,5 @@ Per [testing-standards.md](../../testing-standards.md):
 - [tool-usage.md](../definitions/tool-usage.md)
 - [llm-harness.md](../definitions/llm-harness.md)
 - [openai-api-connection.plan.md](./openai-api-connection.plan.md)
+- [provider-capabilities.plan.md](./provider-capabilities.plan.md)
 - [nfr.md](../definitions/nfr.md)

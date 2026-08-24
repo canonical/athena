@@ -4,16 +4,37 @@ import { z } from "zod";
 export const providerTypes = [`openrouter`] as const;
 export const providerLifecycleStatuses = [`active`, `deprecated`, `archived`] as const;
 
+export const providerChatConfigSchema = z.object({
+  defaultModel: z.string().trim().min(1).nullable().default(null),
+  enabledModels: z.array(z.string().trim().min(1)).nullable().default(null),
+});
+
+export const providerEmbedderConfigSchema = z.object({
+  model: requiredString(`model is required.`),
+});
+
+export const providerChatSchema = providerChatConfigSchema.extend({
+  provider: uuid(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+});
+
+export const providerEmbedderSchema = providerEmbedderConfigSchema.extend({
+  provider: uuid(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+});
+
 export const providerSchema = z.object({
   id: uuid(),
   owner: uuid(),
   displayName: requiredString(`displayName is required.`),
   providerType: z.enum(providerTypes),
   baseUrl: requiredString(`baseUrl is required.`).pipe(modelEndpointUrl),
-  defaultModel: z.string().trim().min(1).nullable().default(null),
-  enabledModels: z.array(z.string().trim().min(1)).nullable().default(null),
   lifecycleStatus: z.enum(providerLifecycleStatuses).default(`active`),
   hasCredential: z.boolean(),
+  chat: providerChatSchema.nullable(),
+  embedder: providerEmbedderSchema.nullable(),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
 });
@@ -22,17 +43,40 @@ const providerMutableSchema = providerSchema.pick({
   displayName: true,
   providerType: true,
   baseUrl: true,
-  defaultModel: true,
-  enabledModels: true,
   lifecycleStatus: true,
 });
 
-export const providerInsertSchema = providerMutableSchema.extend({
-  apiKey: requiredString(`apiKey is required.`),
+const atLeastOneCapability = (value: { chat: unknown | null; embedder: unknown | null }): boolean => value.chat !== null || value.embedder !== null;
+
+export const providerInsertSchema = providerMutableSchema
+  .extend({
+    apiKey: requiredString(`apiKey is required.`),
+    chat: providerChatConfigSchema.nullable(),
+    embedder: providerEmbedderConfigSchema.nullable(),
+  })
+  .refine(atLeastOneCapability, { message: `At least one provider capability is required.`, path: [`chat`] });
+
+export const providerUpdateSchema = providerMutableSchema.extend({
+  apiKey: requiredString(`apiKey is required.`).optional(),
 });
 
-export const providerUpdateSchema = providerInsertSchema.pick({ displayName: true, providerType: true, baseUrl: true, defaultModel: true, enabledModels: true, lifecycleStatus: true }).extend({
-  apiKey: requiredString(`apiKey is required.`).optional(),
+export const providerChatUpdateSchema = providerChatConfigSchema;
+export const providerEmbedderUpdateSchema = providerEmbedderConfigSchema;
+
+export const providerEmbeddingVerifyResponseSchema = z.object({
+  ok: z.literal(true),
+  model: z.string(),
+  dimensions: z.int().positive(),
+});
+
+export const providerEmbeddingPayloadSchema = z.object({
+  data: z.array(
+    z.object({
+      index: z.int().min(0),
+      embedding: z.array(z.number().refine(Number.isFinite, `embedding values must be finite.`)),
+    }),
+  ),
+  model: z.string().optional(),
 });
 
 export const loopProviderInsertSchema = z.object({
@@ -77,7 +121,8 @@ export const providerModelListSchema = z.object({
 });
 
 export const providerModelPreviewRequestSchema = z.object({
-  ...providerInsertSchema.pick({ providerType: true, baseUrl: true }).shape,
+  providerType: z.enum(providerTypes),
+  baseUrl: requiredString(`baseUrl is required.`).pipe(modelEndpointUrl),
   apiKey: requiredString(`apiKey is required.`),
 });
 
@@ -119,6 +164,14 @@ export const loopProviderSchema = providerSchema.pick({ displayName: true, provi
 
 export type ProviderInsert = z.infer<typeof providerInsertSchema>;
 export type ProviderUpdate = z.infer<typeof providerUpdateSchema>;
+export type ProviderChat = z.infer<typeof providerChatSchema>;
+export type ProviderChatConfig = z.infer<typeof providerChatConfigSchema>;
+export type ProviderChatUpdate = z.infer<typeof providerChatUpdateSchema>;
+export type ProviderEmbedder = z.infer<typeof providerEmbedderSchema>;
+export type ProviderEmbedderConfig = z.infer<typeof providerEmbedderConfigSchema>;
+export type ProviderEmbedderUpdate = z.infer<typeof providerEmbedderUpdateSchema>;
+export type ProviderEmbeddingVerifyResponse = z.infer<typeof providerEmbeddingVerifyResponseSchema>;
+export type ProviderEmbeddingPayload = z.infer<typeof providerEmbeddingPayloadSchema>;
 export type LoopProviderInsert = z.infer<typeof loopProviderInsertSchema>;
 export type LoopProviderAdminUpdate = z.infer<typeof loopProviderAdminUpdateSchema>;
 export type Provider = z.infer<typeof providerSchema>;

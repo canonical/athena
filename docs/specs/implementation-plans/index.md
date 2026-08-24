@@ -11,6 +11,7 @@ This index is the entry point for implementation planning artifacts.
 ### Loop-Based Definitions First (Blocking)
 
 - [x] Define owner-scoped OpenRouter connection contract (definition schema, HTTPS endpoint, encrypted credential envelope, assignment, timeout/retry, and deterministic key fallback). Detailed plan: [openai-api-connection.plan.md](./openai-api-connection.plan.md)
+- [x] Split the shared provider connection into explicit chat and embedder capabilities without duplicating endpoint or credential configuration. Detailed plan: [provider-capabilities.plan.md](./provider-capabilities.plan.md)
 - [x] Define owner-scoped runner contract (catalog, assignment, allow/deny, and deterministic execution profile/key selection). Detailed plan: [runner-connection.plan.md](./runner-connection.plan.md)
   - [ ] Define GitHub Copilot Cloud Agent harness profile as MVP executable option.
   - [ ] Define OpenAI Codex harness profile as post-MVP candidate.
@@ -34,9 +35,9 @@ Implementation order:
 5. System task
 6. Manual override task
 
-### RAG Index (depends on provider/embeddings contract)
+### RAG Index (depends on provider capabilities)
 
-- [ ] Deliver [rag-index.plan.md](./rag-index.plan.md): a general retrieval-index abstraction with a Markdown-file-collection adapter as the example source — overlapping chunking with file-and-offset lineage, pull retrieval through a per-index lookup tool gated by the tool allow/deny list, pure semantic ranking, single fixed embedding model, Postgres with pgvector, strictly per-loop. Embeds via the OpenAI-compatible provider contract (`text-embedding-3-small`, 1536).
+- [ ] Deliver [rag-index.plan.md](./rag-index.plan.md): a general retrieval-index abstraction with a Markdown-file-collection adapter as the example source — overlapping chunking with file-and-offset lineage, pull retrieval through a per-index lookup tool gated by the tool allow/deny list, pure semantic ranking, one configured embedding model per index projection, Postgres with pgvector, strictly per-loop. Embeds through the provider's explicit embedder capability; dimensions are observed per projection, with 1,536 recommended and 3,072 as the hard limit.
 
 ### Phase 0: Foundations
 

@@ -1,16 +1,47 @@
-import { query } from "@components/postgres/postgres.js";
+import { getPool, query } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
-import type { LoopProvider, LoopProviderAdminUpdate, Provider, ProviderInsert, ProviderUpdate } from "./provider.schema.js";
+import type { LoopProvider, LoopProviderAdminUpdate, Provider, ProviderChatUpdate, ProviderEmbedderUpdate, ProviderInsert, ProviderUpdate } from "./provider.schema.js";
 
-const providerColumns = `"id", "owner", "displayName", "providerType", "baseUrl", "defaultModel", "enabledModels", "lifecycleStatus", "createdAt", "updatedAt"`;
+const providerSelect = `
+  p."id",
+  p."owner",
+  p."displayName",
+  p."providerType",
+  p."baseUrl",
+  p."lifecycleStatus",
+  TRUE AS "hasCredential",
+  CASE
+    WHEN pc."provider" IS NULL THEN NULL
+    ELSE jsonb_build_object(
+      'provider', pc."provider",
+      'defaultModel', pc."defaultModel",
+      'enabledModels', pc."enabledModels",
+      'createdAt', pc."createdAt",
+      'updatedAt', pc."updatedAt"
+    )
+  END AS "chat",
+  CASE
+    WHEN pe."provider" IS NULL THEN NULL
+    ELSE jsonb_build_object(
+      'provider', pe."provider",
+      'model', pe."model",
+      'createdAt', pe."createdAt",
+      'updatedAt', pe."updatedAt"
+    )
+  END AS "embedder",
+  p."createdAt",
+  p."updatedAt"
+`;
 
 export const queryProviderListByOwner = async (ownerId: string): Promise<Provider[]> => {
   const result = await query<Provider>(
     `
-      SELECT ${providerColumns}, TRUE AS "hasCredential"
-      FROM "provider"
-      WHERE "owner" = $1
-      ORDER BY "createdAt" ASC, "id" ASC
+      SELECT ${providerSelect}
+      FROM "provider" p
+      LEFT JOIN "providerChat" pc ON pc."provider" = p."id"
+      LEFT JOIN "providerEmbedder" pe ON pe."provider" = p."id"
+      WHERE p."owner" = $1
+      ORDER BY p."createdAt" ASC, p."id" ASC
     `,
     [ownerId],
   );
@@ -21,10 +52,12 @@ export const queryProviderListByOwner = async (ownerId: string): Promise<Provide
 export const queryProviderByIdForOwner = async (providerId: string, ownerId: string): Promise<Provider | undefined> => {
   const result = await query<Provider>(
     `
-      SELECT ${providerColumns}, TRUE AS "hasCredential"
-      FROM "provider"
-      WHERE "id" = $1
-        AND "owner" = $2
+      SELECT ${providerSelect}
+      FROM "provider" p
+      LEFT JOIN "providerChat" pc ON pc."provider" = p."id"
+      LEFT JOIN "providerEmbedder" pe ON pe."provider" = p."id"
+      WHERE p."id" = $1
+        AND p."owner" = $2
     `,
     [providerId, ownerId],
   );
@@ -34,82 +67,260 @@ export const queryProviderByIdForOwner = async (providerId: string, ownerId: str
 
 export const queryProviderCreate = async (input: ProviderInsert, ownerId: string): Promise<Provider> => {
   const envelope = encryptSecret(input.apiKey);
+  const client = await getPool().connect();
 
-  const result = await query<Provider>(
-    `
-      INSERT INTO "provider" (
-        "owner",
-        "displayName",
-        "providerType",
-        "baseUrl",
-        "defaultModel",
-        "enabledModels",
-        "credentialCiphertext",
-        "credentialIv",
-        "credentialAuthTag",
-        "credentialKeyVersion",
-        "lifecycleStatus"
-      )
-      VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10, $11)
-      RETURNING ${providerColumns}, TRUE AS "hasCredential"
-    `,
-    [ownerId, input.displayName, input.providerType, input.baseUrl, input.defaultModel, input.enabledModels, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, input.lifecycleStatus],
-  );
+  try {
+    await client.query(`BEGIN`);
+    const result = await client.query<{ id: string }>(
+      `
+        INSERT INTO "provider" (
+          "owner",
+          "displayName",
+          "providerType",
+          "baseUrl",
+          "defaultModel",
+          "enabledModels",
+          "credentialCiphertext",
+          "credentialIv",
+          "credentialAuthTag",
+          "credentialKeyVersion",
+          "lifecycleStatus"
+        )
+        VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10, $11)
+        RETURNING "id"
+      `,
+      [ownerId, input.displayName, input.providerType, input.baseUrl, input.chat?.defaultModel ?? null, input.chat?.enabledModels ?? null, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, input.lifecycleStatus],
+    );
+    const providerId = result.rows[0]?.id;
 
-  const provider = result.rows[0];
+    if (!providerId) {
+      throw new Error(`Provider was not created.`);
+    }
 
-  if (!provider) {
-    throw new Error(`Provider was not created.`);
+    if (input.chat) {
+      await client.query(
+        `
+          INSERT INTO "providerChat" ("provider", "defaultModel", "enabledModels")
+          VALUES ($1, $2, $3::text[])
+        `,
+        [providerId, input.chat.defaultModel, input.chat.enabledModels],
+      );
+    }
+
+    if (input.embedder) {
+      await client.query(
+        `
+          INSERT INTO "providerEmbedder" ("provider", "model")
+          VALUES ($1, $2)
+        `,
+        [providerId, input.embedder.model],
+      );
+    }
+
+    await client.query(`COMMIT`);
+    const provider = await queryProviderByIdForOwner(providerId, ownerId);
+
+    if (!provider) {
+      throw new Error(`Provider was not created.`);
+    }
+
+    return provider;
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return provider;
 };
 
 export const queryProviderUpdate = async (providerId: string, ownerId: string, input: ProviderUpdate): Promise<Provider | undefined> => {
   if (input.apiKey) {
     const envelope = encryptSecret(input.apiKey);
-    const result = await query<Provider>(
+    const result = await query(
       `
         UPDATE "provider"
         SET
           "displayName" = $1,
           "providerType" = $2,
           "baseUrl" = $3,
-          "defaultModel" = $4,
-          "enabledModels" = $5::text[],
-          "lifecycleStatus" = $6,
-          "credentialCiphertext" = $7,
-          "credentialIv" = $8,
-          "credentialAuthTag" = $9,
-          "credentialKeyVersion" = $10
-        WHERE "id" = $11
-          AND "owner" = $12
-        RETURNING ${providerColumns}, TRUE AS "hasCredential"
+          "lifecycleStatus" = $4,
+          "credentialCiphertext" = $5,
+          "credentialIv" = $6,
+          "credentialAuthTag" = $7,
+          "credentialKeyVersion" = $8
+        WHERE "id" = $9
+          AND "owner" = $10
       `,
-      [input.displayName, input.providerType, input.baseUrl, input.defaultModel, input.enabledModels, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, providerId, ownerId],
+      [input.displayName, input.providerType, input.baseUrl, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, providerId, ownerId],
     );
 
-    return result.rows[0];
+    if (!result.rowCount) {
+      return undefined;
+    }
+
+    return queryProviderByIdForOwner(providerId, ownerId);
   }
 
-  const result = await query<Provider>(
+  const result = await query(
     `
       UPDATE "provider"
       SET
         "displayName" = $1,
         "providerType" = $2,
         "baseUrl" = $3,
-        "defaultModel" = $4,
-        "enabledModels" = $5::text[],
-        "lifecycleStatus" = $6
-      WHERE "id" = $7
-        AND "owner" = $8
-      RETURNING ${providerColumns}, TRUE AS "hasCredential"
+        "lifecycleStatus" = $4
+      WHERE "id" = $5
+        AND "owner" = $6
     `,
-    [input.displayName, input.providerType, input.baseUrl, input.defaultModel, input.enabledModels, input.lifecycleStatus, providerId, ownerId],
+    [input.displayName, input.providerType, input.baseUrl, input.lifecycleStatus, providerId, ownerId],
   );
 
-  return result.rows[0];
+  if (!result.rowCount) {
+    return undefined;
+  }
+
+  return queryProviderByIdForOwner(providerId, ownerId);
+};
+
+export const queryProviderChatUpsert = async (providerId: string, ownerId: string, input: ProviderChatUpdate): Promise<Provider | undefined> => {
+  const result = await query(
+    `
+      WITH provider_update AS (
+        UPDATE "provider"
+        SET
+          "defaultModel" = $1,
+          "enabledModels" = $2::text[]
+        WHERE "id" = $3
+          AND "owner" = $4
+        RETURNING "id"
+      )
+      INSERT INTO "providerChat" ("provider", "defaultModel", "enabledModels")
+      SELECT "id", $1, $2::text[]
+      FROM provider_update
+      ON CONFLICT ("provider") DO UPDATE
+      SET
+        "defaultModel" = EXCLUDED."defaultModel",
+        "enabledModels" = EXCLUDED."enabledModels"
+      RETURNING "provider"
+    `,
+    [input.defaultModel, input.enabledModels, providerId, ownerId],
+  );
+
+  if (!result.rowCount) {
+    return undefined;
+  }
+
+  return queryProviderByIdForOwner(providerId, ownerId);
+};
+
+export const queryProviderEmbedderUpsert = async (providerId: string, ownerId: string, input: ProviderEmbedderUpdate): Promise<Provider | undefined> => {
+  const result = await query(
+    `
+      INSERT INTO "providerEmbedder" ("provider", "model")
+      SELECT p."id", $1
+      FROM "provider" p
+      WHERE p."id" = $2
+        AND p."owner" = $3
+      ON CONFLICT ("provider") DO UPDATE
+      SET "model" = EXCLUDED."model"
+      RETURNING "provider"
+    `,
+    [input.model, providerId, ownerId],
+  );
+
+  if (!result.rowCount) {
+    return undefined;
+  }
+
+  return queryProviderByIdForOwner(providerId, ownerId);
+};
+
+export type ProviderCapabilityDeleteResult = `deleted` | `provider-not-found` | `capability-not-found` | `last-capability` | `chat-assigned`;
+
+export const queryProviderCapabilityDelete = async (providerId: string, ownerId: string, capability: `chat` | `embedder`): Promise<ProviderCapabilityDeleteResult> => {
+  const client = await getPool().connect();
+
+  try {
+    await client.query(`BEGIN`);
+    const result = await client.query<{ hasChat: boolean; hasEmbedder: boolean }>(
+      `
+        SELECT
+          EXISTS (
+            SELECT 1
+            FROM "providerChat" pc
+            WHERE pc."provider" = p."id"
+          ) AS "hasChat",
+          EXISTS (
+            SELECT 1
+            FROM "providerEmbedder" pe
+            WHERE pe."provider" = p."id"
+          ) AS "hasEmbedder"
+        FROM "provider" p
+        WHERE p."id" = $1
+          AND p."owner" = $2
+        FOR UPDATE
+      `,
+      [providerId, ownerId],
+    );
+    const provider = result.rows[0];
+
+    if (!provider) {
+      await client.query(`ROLLBACK`);
+      return `provider-not-found`;
+    }
+
+    const hasCapability = capability === `chat` ? provider.hasChat : provider.hasEmbedder;
+    const hasOtherCapability = capability === `chat` ? provider.hasEmbedder : provider.hasChat;
+
+    if (!hasCapability) {
+      await client.query(`ROLLBACK`);
+      return `capability-not-found`;
+    }
+
+    if (!hasOtherCapability) {
+      await client.query(`ROLLBACK`);
+      return `last-capability`;
+    }
+
+    if (capability === `chat`) {
+      const assignments = await client.query(
+        `
+          SELECT 1
+          FROM "loopProvider"
+          WHERE "provider" = $1
+          LIMIT 1
+        `,
+        [providerId],
+      );
+
+      if (assignments.rowCount) {
+        await client.query(`ROLLBACK`);
+        return `chat-assigned`;
+      }
+
+      await client.query(
+        `
+          UPDATE "provider"
+          SET
+            "defaultModel" = NULL,
+            "enabledModels" = NULL
+          WHERE "id" = $1
+        `,
+        [providerId],
+      );
+      await client.query(`DELETE FROM "providerChat" WHERE "provider" = $1`, [providerId]);
+    } else {
+      await client.query(`DELETE FROM "providerEmbedder" WHERE "provider" = $1`, [providerId]);
+    }
+
+    await client.query(`COMMIT`);
+    return `deleted`;
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export const queryProviderDelete = async (providerId: string, ownerId: string): Promise<boolean> => {
@@ -146,6 +357,7 @@ export const queryLoopProviderList = async (loopId: string): Promise<LoopProvide
         p."baseUrl"
       FROM "loopProvider" lp
       JOIN "provider" p ON p."id" = lp."provider"
+      JOIN "providerChat" pc ON pc."provider" = p."id"
       WHERE lp."loop" = $1
       ORDER BY COALESCE(lp."priorityOverride", lp."priority") ASC, lp."createdAt" ASC, lp."provider" ASC
     `,
@@ -251,6 +463,7 @@ export type LoopProviderCandidateRow = {
   credentialKeyVersion: string;
   providerType: string;
   defaultModel: string | null;
+  enabledModels: string[];
   displayName: string;
   baseUrl: string;
 };
@@ -280,12 +493,13 @@ export const queryLoopProviderCandidates = async (loopId: string): Promise<LoopP
         p."credentialAuthTag",
         p."credentialKeyVersion",
         p."providerType",
-        p."defaultModel",
-        COALESCE(p."enabledModels", ARRAY[]::text[]) AS "enabledModels",
+        pc."defaultModel",
+        COALESCE(pc."enabledModels", ARRAY[]::text[]) AS "enabledModels",
         p."displayName",
         p."baseUrl"
       FROM "loopProvider" lp
       JOIN "provider" p ON p."id" = lp."provider"
+      JOIN "providerChat" pc ON pc."provider" = p."id"
       WHERE lp."loop" = $1
         AND p."lifecycleStatus" = 'active'
         AND p."providerType" = 'openrouter'
@@ -296,21 +510,34 @@ export const queryLoopProviderCandidates = async (loopId: string): Promise<LoopP
   return result.rows;
 };
 
-type ProviderApiConnection = {
+export type ProviderApiConnection = {
   providerType: string;
   baseUrl: string;
   apiKey: string;
 };
 
-export const queryProviderApiConnectionByOwner = async (providerId: string, ownerId: string): Promise<ProviderApiConnection | undefined> => {
-  const result = await query<{
-    providerType: string;
-    baseUrl: string;
-    credentialCiphertext: string;
-    credentialIv: string;
-    credentialAuthTag: string;
-    credentialKeyVersion: string;
-  }>(
+type ProviderConnectionRow = {
+  providerType: string;
+  baseUrl: string;
+  credentialCiphertext: string;
+  credentialIv: string;
+  credentialAuthTag: string;
+  credentialKeyVersion: string;
+};
+
+const connectionFromRow = (row: ProviderConnectionRow): ProviderApiConnection => ({
+  providerType: row.providerType,
+  baseUrl: row.baseUrl,
+  apiKey: decryptSecret({
+    ciphertext: row.credentialCiphertext,
+    iv: row.credentialIv,
+    authTag: row.credentialAuthTag,
+    keyVersion: row.credentialKeyVersion,
+  }),
+});
+
+export const queryProviderChatApiConnectionByOwner = async (providerId: string, ownerId: string): Promise<ProviderApiConnection | undefined> => {
+  const result = await query<ProviderConnectionRow>(
     `
       SELECT
         p."providerType",
@@ -320,6 +547,33 @@ export const queryProviderApiConnectionByOwner = async (providerId: string, owne
         p."credentialAuthTag",
         p."credentialKeyVersion"
       FROM "provider" p
+      JOIN "providerChat" pc ON pc."provider" = p."id"
+      WHERE p."id" = $1
+        AND p."owner" = $2
+    `,
+    [providerId, ownerId],
+  );
+
+  const row = result.rows[0];
+
+  return row ? connectionFromRow(row) : undefined;
+};
+
+export type ProviderEmbedderApiConnection = ProviderApiConnection & ProviderEmbedderUpdate;
+
+export const queryProviderEmbedderApiConnectionByOwner = async (providerId: string, ownerId: string): Promise<ProviderEmbedderApiConnection | undefined> => {
+  const result = await query<ProviderConnectionRow & ProviderEmbedderUpdate>(
+    `
+      SELECT
+        p."providerType",
+        p."baseUrl",
+        p."credentialCiphertext",
+        p."credentialIv",
+        p."credentialAuthTag",
+        p."credentialKeyVersion",
+        pe."model"
+      FROM "provider" p
+      JOIN "providerEmbedder" pe ON pe."provider" = p."id"
       WHERE p."id" = $1
         AND p."owner" = $2
     `,
@@ -333,21 +587,19 @@ export const queryProviderApiConnectionByOwner = async (providerId: string, owne
   }
 
   return {
-    providerType: row.providerType,
-    baseUrl: row.baseUrl,
-    apiKey: decryptSecret({
-      ciphertext: row.credentialCiphertext,
-      iv: row.credentialIv,
-      authTag: row.credentialAuthTag,
-      keyVersion: row.credentialKeyVersion,
-    }),
+    ...connectionFromRow(row),
+    model: row.model,
   };
 };
 
 export const queryProviderCredential = async (providerId: string, requesterId: string, loopId?: string): Promise<string | undefined> => {
   const result = await query<{ credentialCiphertext: string; credentialIv: string; credentialAuthTag: string; credentialKeyVersion: string }>(
     `
-      SELECT p."credentialCiphertext", p."credentialIv", p."credentialAuthTag", p."credentialKeyVersion"
+      SELECT
+        p."credentialCiphertext",
+        p."credentialIv",
+        p."credentialAuthTag",
+        p."credentialKeyVersion"
       FROM "provider" p
       WHERE p."id" = $1
         AND (

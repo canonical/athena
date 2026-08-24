@@ -14,7 +14,14 @@ const assignToLoop = async (page: Page, loopId: string, options: { tab: string; 
   await expect(page.getByText(options.toast)).toBeVisible({ timeout: 20_000 });
 };
 
-export const createProviderViaUi = async (page: Page, displayName: string, apiKey: string) => {
+type ProviderCapabilities = {
+  chat?: boolean;
+  embedder?: {
+    model: string;
+  };
+};
+
+export const createProviderViaUi = async (page: Page, displayName: string, apiKey: string, capabilities: ProviderCapabilities = { chat: true }) => {
   await page.goto(`http://athena.localhost/provider/list`);
   await expect(page.getByRole(`button`, { name: `Create provider` })).toBeVisible();
 
@@ -22,9 +29,16 @@ export const createProviderViaUi = async (page: Page, displayName: string, apiKe
   await page.getByLabel(`Display name`).fill(displayName);
   await page.getByLabel(`Base URL`).fill(inferenceBaseUrl);
   await page.getByLabel(`API key`).fill(apiKey);
+  await page.getByLabel(`Chat`, { exact: true }).setChecked(capabilities.chat ?? false);
+  await page.getByLabel(`Embedder`, { exact: true }).setChecked(Boolean(capabilities.embedder));
+
+  if (capabilities.embedder) {
+    await page.getByLabel(`Embedding model`).fill(capabilities.embedder.model);
+  }
+
   await page.locator(`form`).first().getByRole(`button`, { name: `Create provider` }).click();
 
-  await expect(page.getByText(`${displayName} is available for loop assignment.`)).toBeVisible();
+  await expect(page.getByText(`${displayName} has been created.`)).toBeVisible();
   await expect(page.getByRole(`gridcell`, { name: displayName, exact: true }).first()).toBeVisible();
 };
 
