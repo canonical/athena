@@ -38,8 +38,8 @@
 | -                       | -                                  | - Generic OpenAI API Provider   | 🚧     | [openai-api-connection.plan.md][openai-plan] |
 | -                       | -                                  | Runner                          | 🚧     | [runner-harness.md][runner-harness] |
 | -                       | -                                  | - GitHub Copilot Cloud          | ✅     | [runner-harness.md][runner-harness] |
-| -                       | -                                  | - Machine Runner                | ⏳     | [runner-harness.md][runner-harness] |
-| -                       | -                                  | - Juju Machine Charm Runner     | ⏳     | [runner-harness.md][runner-harness] |
+| -                       | -                                  | - Athena Workshop Runner       | 🚧     | [workshop-runner.md][workshop-runner] |
+| -                       | -                                  | - Juju Athena Machine Charm    | ⏳     | [juju-athena-machine-charm.md][juju-athena-machine-charm] |
 | -                       | -                                  | - Other Proprietary Runners     | ⏳     | [runner-harness.md][runner-harness] |
 | -                       | -                                  | MCP Connections                 | ⏳     |      |
 | -                       | -                                  | - Gatekeeping                   | ⏳     |      |
@@ -78,7 +78,9 @@
 [approval]: ./specs/definitions/approval.matrix.md
 [handoff]: ./specs/definitions/handoff.definition.md
 [inter-loop]: ./specs/definitions/inter-loop.links.md
+[juju-athena-machine-charm]: ./specs/definitions/juju-athena-machine-charm.md
 [llm-harness]: ./specs/definitions/llm-harness.md
+[workshop-runner]: ./specs/definitions/workshop-runner.md
 [openai-plan]: ./specs/implementation-plans/openai-api-connection.plan.md
 [persona]: ./specs/definitions/persona.md
 [phase2]: ./specs/implementation-plans/task-source.phase2.plan.md

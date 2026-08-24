@@ -41,21 +41,23 @@ A **runner** is the execution environment that hosts a harness; a **harness** is
 
 Athena should maintain a registered runner type catalog with per-entry lifecycle state. A harness definition record stores `runnerType` to identify which execution environment it connects to.
 
-MVP catalog policy:
+Current catalog policy:
 
 - The loop admin must explicitly configure a harness profile priority list.
-- The only runner that is allowed for execution in MVP is GitHub Copilot Cloud (`github-copilot-cloud`).
-- If a harness definition targets a different runner type in MVP, Athena must reject activation and return a clear unsupported-in-MVP validation error.
+- The only runner currently allowed for execution is GitHub Copilot Cloud (`github-copilot-cloud`).
+- If a harness definition targets a different runner type, Athena must reject activation and return a clear unsupported-runner validation error until that runner is implemented and validated.
 
 ### Runner catalog
 
 | Runner | Type | Identifier | Status |
 |---|---|---|---|
-| GitHub Copilot Cloud | Proprietary | `github-copilot-cloud` | MVP — only executable runner |
-| Juju VM | Open (Athena-owned) | `juju-vm` | Post-MVP (MVP+1) — Athena-owned implementation target |
-| Local Ubuntu binary | Open (user-managed) | `local-ubuntu` | Post-MVP — discouraged for production use |
+| GitHub Copilot Cloud | Proprietary | `github-copilot-cloud` | Current executable runner |
+| Athena Workshop Runner | Open | `athena-workshop` | Portable runner; runs on any supported Ubuntu machine |
 
-Juju VM is a runner; it hosts harness processes. It is not itself a harness.
+The `juju-athena-machine-charm.md` deployment provisions a host for the
+`athena-workshop` runner. The runner can also run on any supported Ubuntu
+machine. The `athena-runner` Workshop SDK supplies the in-Workshop harness
+environment; neither the VM, Workshop, nor SDK is itself a harness.
 
 ### Harness catalog
 
@@ -63,10 +65,10 @@ The harness (agent tool) running within a runner:
 
 | Harness | Compatible runners | Status |
 |---|---|---|
-| GitHub Copilot | `github-copilot-cloud` (bundled) | MVP |
-| OpenCode | `juju-vm`, `local-ubuntu` | Post-MVP candidate |
-| Claude Code | `juju-vm`, `local-ubuntu` | Post-MVP candidate |
-| Additional open harnesses | `juju-vm`, `local-ubuntu` | Post-MVP — subject to open runner contract |
+| GitHub Copilot | `github-copilot-cloud` (bundled) | Available |
+| OpenCode | `athena-workshop` | Candidate |
+| Claude Code | `athena-workshop` | Candidate |
+| Additional open harnesses | `athena-workshop` | Candidate — subject to open runner contract |
 
 Additional runners and harnesses may be added to the catalog after capability and security validation.
 
