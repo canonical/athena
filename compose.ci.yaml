@@ -1,0 +1,30 @@
+# Migration runner for GitHub Actions; kept separate from compose.yaml so the local
+# stack's required variables are not needed in CI.
+services:
+  prepare-ci:
+    image: postgres:16
+    environment:
+      - GITHUB_ACTIONS
+      - DB_CONNECT_STRING
+    volumes:
+      - ./migrations:/migrations:ro
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        if [ "$${GITHUB_ACTIONS:-}" != "true" ]; then
+          echo "prepare-ci only runs in GitHub Actions"
+          exit 0
+        fi
+        if [ -z "$${DB_CONNECT_STRING:-}" ]; then
+          echo "DB_CONNECT_STRING must be set"
+          exit 1
+        fi
+        # The connecting role owns the schema, so it is also the role the DDL grants to.
+        app_role=$$(psql "$$DB_CONNECT_STRING" -tAX -c 'SELECT current_user')
+        echo ">>> Running Athena migrations as role: $$app_role"
+        psql "$$DB_CONNECT_STRING" \
+          -v ON_ERROR_STOP=1 \
+          -v APP_ROLE_NAME="$$app_role" \
+          -f /migrations/pg/migrate.sql

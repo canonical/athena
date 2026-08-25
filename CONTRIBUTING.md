@@ -22,7 +22,3 @@ Thanks for your interest in contributing to Athena.
 - Keep changes scoped and reviewable.
 - Update docs when behavior changes.
 - Include tests or rationale when tests are not updated.
-
-## Security
-
-For security issues, follow [SECURITY.md](./SECURITY.md) and do not disclose publicly before coordinated remediation.

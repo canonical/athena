@@ -22,7 +22,7 @@ services:
       - |
         set -eu
         : "$${APP_ATHENA_DEX_ISSUER_URL:=http://dex.localhost/dex}"
-        : "$${APP_ATHENA_OAUTH_CALLBACK_URL:=http://athena.localhost/api/authentication/callback}"
+        : "$${APP_ATHENA_OAUTH_CALLBACK_URL:?APP_ATHENA_OAUTH_CALLBACK_URL is required}"
         : "$${APP_ATHENA_DEX_EXTRA_REDIRECT_URIS:=}"
 
         dex_users_config=/etc/athena-scripts/dex-users.yaml
@@ -60,7 +60,7 @@ services:
         exec dex serve /tmp/dex-config.yaml
     environment:
       APP_ATHENA_DEX_ISSUER_URL: ${APP_ATHENA_DEX_ISSUER_URL:-http://dex.localhost/dex}
-      APP_ATHENA_OAUTH_CALLBACK_URL: ${APP_ATHENA_OAUTH_CALLBACK_URL:-http://athena.localhost/api/authentication/callback}
+      APP_ATHENA_OAUTH_CALLBACK_URL: ${APP_ATHENA_OAUTH_CALLBACK_URL:?APP_ATHENA_OAUTH_CALLBACK_URL is required}
       APP_ATHENA_DEX_EXTRA_REDIRECT_URIS: ${APP_ATHENA_DEX_EXTRA_REDIRECT_URIS:-}
       APP_ATHENA_OIDC_CLIENT_SECRET: ${APP_ATHENA_OIDC_CLIENT_SECRET:?APP_ATHENA_OIDC_CLIENT_SECRET is required}
     volumes:
@@ -163,7 +163,7 @@ services:
       APP_ATHENA_ALLOWED_ORIGINS: ${APP_ATHENA_ALLOWED_ORIGINS:-http://athena.localhost}
       APP_ATHENA_FRONTEND_BASE_URL: ${APP_ATHENA_FRONTEND_BASE_URL:-http://athena.localhost}
       APP_ATHENA_DEV_MODE: ${APP_ATHENA_DEV_MODE:-false}
-      APP_ATHENA_OAUTH_CALLBACK_URL: ${APP_ATHENA_OAUTH_CALLBACK_URL:-http://athena.localhost/api/authentication/callback}
+      APP_ATHENA_OAUTH_CALLBACK_URL: ${APP_ATHENA_OAUTH_CALLBACK_URL:?APP_ATHENA_OAUTH_CALLBACK_URL is required}
       APP_ATHENA_OIDC_DISCOVERY_URL: ${APP_ATHENA_OIDC_DISCOVERY_URL:-http://dex.localhost/dex/.well-known/openid-configuration}
       APP_ATHENA_OIDC_CLIENT_ID: ${APP_ATHENA_OIDC_CLIENT_ID:-athena}
       APP_ATHENA_OIDC_CLIENT_SECRET: ${APP_ATHENA_OIDC_CLIENT_SECRET:?APP_ATHENA_OIDC_CLIENT_SECRET is required}

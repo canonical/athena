@@ -2,7 +2,8 @@ import { ApplicationLayout, Select, SideNavigation } from "@canonical/react-comp
 import { fetchAuthenticationProfile } from "@components/authentication/authentication.client.js";
 import { useLoopList } from "@components/loop/loop.query.js";
 import { loopTabs } from "@components/loop/loop.schema.js";
-import { createRootRoute, createRoute, createRouter, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
+import type { LinkProps } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, Link, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { type ComponentPropsWithoutRef, lazy, Suspense } from "react";
 
 import athenaLogo from "./athena-logo.svg";
@@ -211,10 +212,10 @@ function LoopSidebarLink({ href, className, ...props }: ComponentPropsWithoutRef
   const normalizedTarget = href.endsWith(`/`) ? href.slice(0, -1) : href;
   const isActive = activePrefix ? normalizedCurrent.startsWith(activePrefix) : normalizedCurrent === normalizedTarget || normalizedCurrent.startsWith(`${normalizedTarget}/`);
 
-  // strip internal prop before spreading onto <a>
+  // strip internal prop before spreading onto the router link
   const { activePrefix: _activePrefix, ...anchorProps } = props as ComponentPropsWithoutRef<"a"> & { activePrefix?: string };
 
-  return <a aria-current={isActive ? `page` : undefined} className={isActive ? `${className ?? ``} is-active`.trim() : className} href={href} {...anchorProps} />;
+  return <Link aria-current={isActive ? `page` : undefined} className={isActive ? `${className ?? ``} is-active`.trim() : className} to={href as LinkProps["to"]} {...anchorProps} />;
 }
 
 function buildLoopSideNavigationItems(loopId: string) {

@@ -2,7 +2,7 @@ name: athena
 # see https://documentation.ubuntu.com/rockcraft/en/latest/explanation/bases/
 # for more information about bases and using 'bare' bases for chiselled rocks
 base: ubuntu@24.04
-version: "1.0.0"
+version: "1.1.2"
 summary: Multi-agent orchestration service.
 
 description: |
@@ -52,9 +52,10 @@ parts:
 
       # The package is scoped (@canonical/athena), so `craftctl default` stages
       # package.json under lib/node_modules/@canonical/athena. The runtime dir
-      # linked to /app is the unscoped path, so copy package.json there too;
+      # linked to /app is the unscoped path, so copy package.json and migrate.sh there too;
       # `npm start` (the service command) reads it from /app.
       cp package.json ${CRAFT_PART_INSTALL}/lib/node_modules/athena/package.json
+      cp migrate.sh ${CRAFT_PART_INSTALL}/lib/node_modules/athena/migrate.sh
 
       npm config set script-shell=bash --location project
       cp ${CRAFT_PART_BUILD}/.npmrc ${CRAFT_PART_INSTALL}/lib/node_modules/athena/.npmrc

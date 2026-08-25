@@ -45,6 +45,13 @@ requires:
 
 config:
   options:
+    run-migrations-on-startup:
+      type: boolean
+      default: true
+      description: >
+        Run database migrations before starting the Athena application.
+        Disable this when migrations are managed externally, such as by GitHub
+        Actions.
     allowed-origins:
       type: string
       default: "http://athena.localhost"
@@ -76,7 +83,6 @@ config:
         Public base URL of the Athena frontend. Injected as APP_FRONTEND_BASE_URL.
     oauth-callback-url:
       type: string
-      default: "http://athena.localhost/api/authentication/callback"
       description: >
         OAuth callback URL. Injected as APP_OAUTH_CALLBACK_URL.
     session-max-age:

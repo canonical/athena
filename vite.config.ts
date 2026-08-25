@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig, loadEnv } from "vite";
+import { compression as viteCompression } from "vite-plugin-compression2";
 import istanbul from "vite-plugin-istanbul";
 
 export default defineConfig(({ mode }) => {
@@ -17,7 +19,14 @@ export default defineConfig(({ mode }) => {
         "@components": fileURLToPath(new URL("./src/components", import.meta.url)),
       },
     },
-    plugins: [...(process.env.COVERAGE ? [istanbul({ include: "src/**/*.{ts,tsx}", exclude: ["node_modules", "testing/**", "src/**/*.spec.ts"] })] : [])],
+    plugins: [
+      ...(process.env.COVERAGE ? [istanbul({ include: "src/**/*.{ts,tsx}", exclude: ["node_modules", "testing/**", "src/**/*.spec.ts"] })] : []),
+      viteCompression({
+        algorithms: [`brotliCompress`, `gzip`],
+        include: /\.(html|css|js|mjs|json|svg)$/u,
+        threshold: 1024,
+      }),
+    ],
     server: {
       host: "0.0.0.0",
       port: 5173,
@@ -28,29 +37,9 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       rollupOptions: {
         output: {
-          manualChunks(id) {
-            if (!id.includes(`node_modules`)) {
-              return undefined;
-            }
-
-            if (id.includes(`/node_modules/react/`) || id.includes(`/node_modules/react-dom/`) || id.includes(`/node_modules/scheduler/`)) {
-              return `vendor-react`;
-            }
-
-            if (id.includes(`/node_modules/@tanstack/react-router/`) || id.includes(`/node_modules/@tanstack/react-query/`)) {
-              return `vendor-tanstack`;
-            }
-
-            if (id.includes(`/node_modules/@canonical/react-components/`) || id.includes(`/node_modules/vanilla-framework/`)) {
-              return `vendor-canonical-ui`;
-            }
-
-            if (id.includes(`/node_modules/formik/`) || id.includes(`/node_modules/zod/`)) {
-              return `vendor-forms-validation`;
-            }
-
-            return `vendor-misc`;
-          },
+          entryFileNames: () => `${randomUUID()}.js`,
+          chunkFileNames: () => `${randomUUID()}.js`,
+          assetFileNames: ({ names }) => `${randomUUID()}${names[0] ? names[0].slice(names[0].lastIndexOf(`.`)) : ``}`,
         },
       },
     },

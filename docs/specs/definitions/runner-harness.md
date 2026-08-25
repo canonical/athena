@@ -4,6 +4,9 @@
 
 This definition establishes the normative meaning of **runner** and **harness** as distinct concepts in Athena's agentic execution model.
 
+The detailed open runner contract for Ubuntu Workshop-backed execution is
+defined in [workshop-runner.md](./workshop-runner.md).
+
 ## Core concepts
 
 ### Runner
@@ -16,12 +19,11 @@ Runners fall into two categories:
 
 **Proprietary runners** are managed by a third-party vendor and expose a closed, vendor-specific interface. Athena must implement a dedicated adapter for each proprietary runner. The vendor controls availability, API surface, and upgrade cadence.
 
-- **GitHub Copilot Cloud** — a cloud-managed runner operated by GitHub; exposes a proprietary API. Athena integrates via a GitHub-specific adapter. **MVP — only executable runner.**
+- **GitHub Copilot Cloud** — a cloud-managed runner operated by GitHub; exposes a proprietary API. Athena integrates via a GitHub-specific adapter. **Current executable runner.**
 
-**Open runners** expose a standard interface defined and implemented in the Athena codebase. Any harness that conforms to the Athena open runner contract can be deployed on an open runner without a bespoke adapter per harness.
+**Open runners** expose a standard interface defined and implemented in the Athena codebase. Any harness that conforms to the Athena open runner contract can be deployed on an open runner without a bespoke adapter per harness. The Ubuntu Workshop-backed contract is defined in [workshop-runner.md](./workshop-runner.md).
 
-- **Juju VM** — an Athena-owned virtual machine provisioned via a Juju machine charm. The charm is implemented in the Athena codebase and defines the open runner standard that eligible harnesses must satisfy. **Post-MVP — Athena-owned implementation target.**
-- **Local Ubuntu binary** — a binary that can run on any Ubuntu machine and implements the Athena open runner interface. Running on a disposable virtual machine with internet access is the recommended approach. Running on a personal local machine is discouraged due to security exposure, unpredictable availability, and lack of isolation from the developer's environment. **Post-MVP.**
+- **Athena Workshop Runner** — a portable runner that can run on any supported Ubuntu machine with Workshop installed. It uses the `athena-runner` Workshop SDK inside each isolated Workshop. See [workshop-runner.md](./workshop-runner.md). **Portable runner target.**
 
 ### Harness
 
@@ -31,13 +33,20 @@ Harnesses are not infrastructure. They do not provision compute or manage connec
 
 Harnesses supported per runner:
 
-**GitHub Copilot Cloud (proprietary, MVP):**
-- **GitHub Copilot** — the built-in harness bundled with the GitHub Copilot Cloud runner. **MVP.**
+**GitHub Copilot Cloud (proprietary):**
+- **GitHub Copilot** — the built-in harness bundled with the GitHub Copilot Cloud runner. **Available.**
 
-**Juju VM / Local Ubuntu binary (open runner, post-MVP):**
-- **OpenCode** — an open-source AI coding harness. **Post-MVP candidate.**
-- **Claude Code** — Anthropic's AI coding harness. **Post-MVP candidate.**
-- Additional harnesses that conform to the Athena open runner harness contract. **Post-MVP.**
+**Athena Workshop Runner (open runner):**
+
+The runner is the same [workshop-runner.md](./workshop-runner.md) contract on
+any supported Ubuntu machine. It installs the `athena-runner` SDK into each
+Workshop and provides the isolated execution environment in which each harness
+runs.
+
+- **OpenCode** — an open-source AI coding harness. **Candidate.**
+- **Claude Code** — Anthropic's AI coding harness. **Candidate.**
+- Additional harnesses that conform to the [workshop-runner.md](./workshop-runner.md)
+  harness-facing contract. **Candidate.**
 
 ## Harness definition and runner binding
 
@@ -47,7 +56,7 @@ A **harness definition** is an owner-scoped connection profile that Athena uses 
 - Credentials and connectivity settings required to reach the runner.
 - Lifecycle status and runtime tuning fields.
 
-For proprietary runners that bundle a single harness (e.g., GitHub Copilot Cloud), the harness type is implicit and determined by the runner. For open runners that can host multiple harness types (e.g., Juju VM), the harness type is tracked as an additional field on the definition.
+For proprietary runners that bundle a single harness (e.g., GitHub Copilot Cloud), the harness type is implicit and determined by the runner. For the Ubuntu Workshop runner, which can host multiple harness types, the harness type is tracked as an additional field on the definition.
 
 ## Runner and harness catalog
 
@@ -55,22 +64,27 @@ For proprietary runners that bundle a single harness (e.g., GitHub Copilot Cloud
 
 | Runner | Type | Identifier | Status |
 |---|---|---|---|
-| GitHub Copilot Cloud | Proprietary | `github-copilot-cloud` | MVP — only executable runner |
-| Juju VM | Open (Athena-owned) | `juju-vm` | Post-MVP — Athena-owned implementation target |
-| Local Ubuntu binary | Open (user-managed) | `local-ubuntu` | Post-MVP — disposable VMs recommended, local machines discouraged |
+| GitHub Copilot Cloud | Proprietary | `github-copilot-cloud` | Current executable runner |
+| Athena Workshop Runner | Open | `athena-workshop` | Portable runner target |
 
 ### Harnesses
 
 | Harness | Compatible runners | Status |
 |---|---|---|
-| GitHub Copilot | `github-copilot-cloud` (bundled) | MVP |
-| OpenCode | `juju-vm`, `local-ubuntu` | Post-MVP candidate |
-| Claude Code | `juju-vm`, `local-ubuntu` | Post-MVP candidate |
-| Additional open harnesses | `juju-vm`, `local-ubuntu` | Post-MVP — subject to open runner contract |
+| GitHub Copilot | `github-copilot-cloud` (bundled) | Available |
+| OpenCode | `athena-workshop` | Candidate |
+| Claude Code | `athena-workshop` | Candidate |
+| Additional open harnesses | `athena-workshop` | Candidate — subject to open runner contract |
 
-## MVP constraint
+## Current execution constraint
 
-In MVP, GitHub Copilot Cloud (`github-copilot-cloud`) is the only available runner type. No other runner type can be selected or configured during the MVP phase. Post-MVP runner types will be added to the available options as they are implemented and validated.
+GitHub Copilot Cloud (`github-copilot-cloud`) is currently the only executable runner type. Other runner types become selectable as they are implemented and validated against the open runner contract.
+
+## Juju VM Charm deployment
+
+[juju-athena-machine-charm.md](./juju-athena-machine-charm.md) defines the releasable
+Juju VM host deployment for the `athena-workshop` runner. The charm is a
+deployment artifact, not a separate runner catalog entry or runner type.
 
 ## Cross references
 
