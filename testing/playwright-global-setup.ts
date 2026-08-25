@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { v5 as uuidv5 } from "uuid";
@@ -139,6 +139,10 @@ const waitForComposeService = async (service: string, attempts = 25): Promise<vo
 const globalSetup = async (): Promise<void> => {
   await renderDexUsers();
 
+  if (process.env.COVERAGE) {
+    await mkdir(join(workspaceRoot, `testing`, `results`, `.nyc_worker`), { recursive: true });
+  }
+
   const localSeedDir = join(workspaceRoot, `migrations`, `pg`, `seed.local`);
   const localSeedDirHidden = `${localSeedDir}.bak`;
 
@@ -152,7 +156,7 @@ const globalSetup = async (): Promise<void> => {
       stdio: `inherit`,
     });
 
-    execFileSync(`docker`, [`compose`, `--profile`, `test`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `pg-boss-prepare`, `dex`, `test-inference`, `athena`, `athena-worker`], {
+    execFileSync(`docker`, [`compose`, `--profile`, `test`, `up`, `-d`, `--build`, `--scale`, `athena-worker=3`, `traefik`, `postgres`, `prepare`, `pg-boss-prepare`, `dex`, `test-inference`, `athena`, `athena-worker`], {
       cwd: workspaceRoot,
       stdio: `inherit`,
     });

@@ -213,9 +213,11 @@ services:
       APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS: ${APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS:-30000}
       APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT: ${APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT:-3}
       APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS: ${APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS:-5}
+      COVERAGE: ${COVERAGE:-}
     volumes:
       - ./src:/app/src
       - ./tsconfig.server.json:/app/tsconfig.server.json:ro
+      - ./testing/results/.nyc_worker:/app/testing/results/.nyc_worker
     restart: unless-stopped
 
   cloudflared:

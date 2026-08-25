@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import coverageLib, { type CoverageMapData } from "istanbul-lib-coverage";
@@ -12,6 +13,7 @@ type CoverageEntry = {
 
 const backendCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_backend`);
 const frontendCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_frontend`);
+const workerCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_worker`);
 const mergedCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_merged`);
 
 const remapPath = (filePath: string): string => filePath.replace(/^\/app\//, `${process.cwd()}/`);
@@ -109,7 +111,7 @@ const maybeFetchBackendCoverage = async () => {
 };
 
 const collectCoverageFiles = async (): Promise<string[]> => {
-  const directories = [frontendCoverageDirectory, backendCoverageDirectory];
+  const directories = [frontendCoverageDirectory, backendCoverageDirectory, workerCoverageDirectory];
 
   const files = await Promise.all(
     directories.map(async (directoryPath) => {
@@ -135,6 +137,11 @@ export default async () => {
   }
 
   await maybeFetchBackendCoverage();
+
+  execFileSync(`docker`, [`compose`, `stop`, `--timeout`, `40`, `athena-worker`], {
+    cwd: process.cwd(),
+    stdio: `inherit`,
+  });
 
   const coverageFiles = await collectCoverageFiles();
   if (coverageFiles.length === 0) {

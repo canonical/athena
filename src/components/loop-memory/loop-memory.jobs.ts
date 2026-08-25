@@ -7,12 +7,14 @@ export const loopMemoryBackfillJob: BackgroundJobDefinition<LoopMemoryBackfillPa
   name: `loop-memory.backfill`,
   version: 1,
   payloadSchema: loopMemoryBackfillPayloadSchema,
-  handler: async ({ payload }) => indexLoopMemoryBackfill(payload.loop, payload.generation),
+  queue: { policy: `singleton`, expireInSeconds: 21_600, heartbeatSeconds: 60 },
+  handler: async ({ job, payload }) => indexLoopMemoryBackfill(payload.loop, payload.generation, job.signal),
 };
 
 export const loopMemoryIngestJob: BackgroundJobDefinition<LoopMemoryIngestPayload> = {
   name: `loop-memory.ingest`,
   version: 1,
   payloadSchema: loopMemoryIngestPayloadSchema,
-  handler: async ({ payload }) => indexLoopMemoryItem(payload.loop, payload.task, payload.queueItem),
+  queue: { policy: `singleton` },
+  handler: async ({ job, payload }) => indexLoopMemoryItem(payload.loop, payload.task, payload.queueItem, job.signal),
 };

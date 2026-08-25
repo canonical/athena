@@ -103,6 +103,10 @@ export const providerUpdate = async (providerId: string, ownerId: string, input:
 
   const updated = await queryProviderUpdate(providerId, ownerId, input);
 
+  if (updated === `embedder-in-use`) {
+    throw new ProviderConflictError(`Provider endpoint or lifecycle cannot be changed while its embedder provides history memory to an enabled loop. Disable dependent history memory first.`);
+  }
+
   if (!updated) {
     throw new ProviderNotFoundError(`Provider not found.`);
   }
@@ -113,9 +117,9 @@ export const providerUpdate = async (providerId: string, ownerId: string, input:
 export const providerDelete = async (providerId: string, ownerId: string): Promise<void> => {
   validateProviderId(providerId);
 
-  if (!(await queryProviderDelete(providerId, ownerId))) {
-    throw new ProviderNotFoundError(`Provider not found.`);
-  }
+  const result = await queryProviderDelete(providerId, ownerId);
+  if (result === `provider-not-found`) throw new ProviderNotFoundError(`Provider not found.`);
+  if (result === `embedder-in-use`) throw new ProviderConflictError(`Provider cannot be deleted while its embedder provides history memory to an enabled loop. Disable dependent history memory first.`);
 };
 
 export const providerModels = async (providerId: string, ownerId: string, logger?: AppLogger): Promise<ProviderModel[]> => {
@@ -224,6 +228,7 @@ export const providerChatDelete = async (providerId: string, ownerId: string): P
 export const providerEmbedderUpdate = async (providerId: string, ownerId: string, input: ProviderEmbedderUpdate): Promise<Provider> => {
   validateProviderId(providerId);
   const updated = await queryProviderEmbedderUpsert(providerId, ownerId, input);
+  if (updated === `embedder-in-use`) throw new ProviderConflictError(`Embedding model cannot be changed while it provides history memory to an enabled loop. Disable dependent history memory first.`);
   if (!updated) throw new ProviderNotFoundError(`Provider not found.`);
   return updated;
 };
@@ -234,6 +239,7 @@ export const providerEmbedderDelete = async (providerId: string, ownerId: string
   if (result === `provider-not-found`) throw new ProviderNotFoundError(`Provider not found.`);
   if (result === `capability-not-found`) throw new ProviderNotFoundError(`Provider embedder capability not found.`);
   if (result === `last-capability`) throw new ProviderConflictError(`A provider must retain at least one capability.`);
+  if (result === `embedder-in-use`) throw new ProviderConflictError(`Embedder capability cannot be removed while it provides history memory to an enabled loop. Disable dependent history memory first.`);
 };
 
 export const providerEmbedderVerify = async (providerId: string, ownerId: string): Promise<ProviderEmbeddingVerifyResponse> => {

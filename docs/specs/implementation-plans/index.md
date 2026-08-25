@@ -39,6 +39,7 @@ Implementation order:
 
 - [x] Deliver [background-processing.plan.md](./background-processing.plan.md): PostgreSQL-backed jobs with transaction-scoped enqueueing, separate Athena and `pg-boss` schema preparation, and a dedicated Compose worker. Rock and charm integration remains deferred.
 - [x] Deliver private loop-history memory: an admin-selected embedder, asynchronous backfill, atomic incremental ingestion, and the derived loop-scoped `own-memory-lookup` tool.
+- [ ] Complete [loop-history-rag-hardening.plan.md](./loop-history-rag-hardening.plan.md): dependency guards, generation fencing, and keyed multi-worker execution are implemented; the production rollout and operational verification gate remains pending.
 - [ ] Deliver [rag-index.plan.md](./rag-index.plan.md): a general retrieval-index abstraction with a Markdown-file-collection adapter as the example source — overlapping chunking with file-and-offset lineage, pull retrieval through a per-index lookup tool gated by the tool allow/deny list, pure semantic ranking, one configured embedding model per index projection, Postgres with pgvector, strictly per-loop. Embeds through the provider's explicit embedder capability; dimensions are observed per projection, with 1,536 recommended and 3,072 as the hard limit.
 
 ### Phase 0: Foundations

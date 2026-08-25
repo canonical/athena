@@ -15,8 +15,8 @@ export const sendTaskMessage = async (page: Page, message: string) => {
 };
 
 export const openToolCallApproval = async (page: Page, toolLabel: string) => {
-  await expect(page.getByText(toolLabel)).toBeVisible({ timeout: turnTimeout });
-  await page.getByRole(`button`, { name: `Review & approve` }).click();
+  await expect(page.getByText(toolLabel).last()).toBeVisible({ timeout: turnTimeout });
+  await page.getByRole(`button`, { name: `Review & approve` }).last().click();
 
   await expect(page.getByRole(`button`, { name: `Approve`, exact: true })).toBeVisible();
 };

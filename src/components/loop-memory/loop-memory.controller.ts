@@ -18,20 +18,20 @@ export const loopMemoryUpdate = async (loopId: string, userId: string, input: Lo
     throw new LoopForbiddenError(`Only loop admins may configure loop history memory.`);
   }
 
-  if (!input.hasHistoryRag) {
-    await queryLoopMemoryDisable(loopId, userId);
-  } else {
-    const provider = input.provider;
-    if (!provider) throw new LoopValidationError(`An embedding provider is required when loop history memory is enabled.`);
+  await withTransaction(async (transaction) => {
+    if (!input.hasHistoryRag) {
+      await queryLoopMemoryDisable(transaction, loopId, userId);
+    } else {
+      const provider = input.provider;
+      if (!provider) throw new LoopValidationError(`An embedding provider is required when loop history memory is enabled.`);
 
-    await withTransaction(async (transaction) => {
       const result = await queryLoopMemoryEnable(transaction, loopId, provider, userId);
       if (result.outcome === `invalid`) {
         throw new LoopValidationError(`Select an active embedding provider that you own.`);
       }
       if (result.outcome === `rebuild`) await backgroundJobEnqueue(transaction, loopMemoryBackfillJob, { loop: loopId, generation: result.generation }, { singletonKey: loopId });
-    });
-  }
+    }
+  });
 
   return loopMemoryGet(loopId, userId);
 };

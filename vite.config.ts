@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
-      ...(process.env.COVERAGE ? [istanbul({ include: "src/**/*.{ts,tsx}", exclude: ["node_modules", "testing/**", "src/**/*.spec.ts"] })] : []),
+      ...(process.env.COVERAGE ? [istanbul({ include: "src/**/*.{ts,tsx}", exclude: ["node_modules", "testing/**", "src/**/*.spec.ts"], forceBuildInstrument: true })] : []),
       viteCompression({
         algorithms: [`brotliCompress`, `gzip`],
         include: /\.(html|css|js|mjs|json|svg)$/u,

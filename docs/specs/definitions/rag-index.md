@@ -151,8 +151,9 @@ exposes a rebuilding status; Athena never mixes vectors across model versions.
 A loop may enable `hasHistoryRag` and select an active provider embedder. The implemented
 storage uses a private `loopHistoryRag` configuration and loop-scoped
 `loopHistoryRagEntry` rows rather than the future general `ragIndex` attachment model.
-Enabling queues a backfill. The UI
-warns that existing history may take several minutes to become dependable and exposes
+Enabling queues a backfill. Re-enabling memory or selecting a different embedder rotates
+the loop-history generation, removes the previous entries, and atomically queues a fresh
+backfill. The UI warns that existing history may take several minutes to become dependable and exposes
 missing, indexing, ready, and failed lifecycle state. Disabled retained indexes use
 `missing` because they are unavailable to the loop runtime.
 
@@ -166,8 +167,19 @@ role, persona, and tool metadata where present.
 New history persistence and its ingestion job share one PostgreSQL transaction. Backfill
 embeds batches of 50; incremental ingestion handles one appended item or refreshes a task
 after mutations to existing or multiple items. Both are idempotent on loop, task, and
-queue-item identity. Disabling prevents new ingestion and removes the tool from use but
-retains the derived entries for efficient re-enablement.
+queue-item identity. Disabling prevents new ingestion and removes the tool from use.
+Re-enablement removes retained entries and rebuilds from canonical history.
+
+While history memory is enabled, Athena rejects changes to its embedding model, provider
+endpoint or active lifecycle, and rejects embedder or provider removal. Administrators
+must disable dependent memory first and explicitly re-enable it afterward. Credential
+rotation remains allowed because it does not change embedding semantics.
+
+Across the shared worker pool, one loop's backfills and one task's incremental ingestions
+execute serially while unrelated work may run concurrently. Generation fencing ensures
+that only the current enabled projection is written or queried. The detailed transaction,
+locking, and stale-work contracts are defined in
+[loop-history-rag-hardening.plan.md](../implementation-plans/loop-history-rag-hardening.plan.md).
 
 The `own-memory-lookup` tool searches only the executing persona's current loop-history
 index. It cannot select another loop or a general attached index. Its availability is

@@ -172,6 +172,140 @@ test(`assigned chat capability cannot be removed`, async ({ page }) => {
   await expect(page.getByRole(`heading`, { name: `Model settings` })).toBeVisible();
 });
 
+test(`history memory guards its embedder until the loop disables it`, async ({ page }) => {
+  await authenticate(page);
+
+  const displayName = `History dependency provider ${Date.now()}`;
+  const loop = await createLoop(page, `History dependency loop ${Date.now()}`);
+  await createProviderViaUi(page, displayName, unusedProviderCredential, {
+    chat: true,
+    embedder: { model: `deterministic-embed-8` },
+  });
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await page.getByLabel(`Embedding provider`).selectOption({ label: `${displayName} (deterministic-embed-8)` });
+  page.once(`dialog`, (dialog) => void dialog.accept());
+  await page.getByRole(`button`, { name: `Save history memory` }).click();
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: 60_000 });
+
+  await page.goto(`http://athena.localhost/provider/list`);
+  await page
+    .getByRole(`button`, { name: `Edit ${displayName}` })
+    .first()
+    .click();
+  await page.getByLabel(`API key (optional for rotation)`).fill(`rotated-provider-credential`);
+  await page.getByRole(`button`, { name: `Save provider` }).click();
+  await expect(page.getByText(`${displayName} has been updated.`)).toBeVisible();
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible();
+
+  await page.goto(`http://athena.localhost/provider/list`);
+  await page.getByRole(`link`, { name: displayName, exact: true }).first().click();
+  await page.getByRole(`link`, { name: `Settings` }).click();
+  await page.getByLabel(`Embedding model`).fill(`deterministic-embed-16`);
+  await page.getByRole(`button`, { name: `Save embedder` }).click();
+  await expect(page.getByText(`Embedding model cannot be changed while it provides history memory to an enabled loop. Disable dependent history memory first.`)).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Remove embedder` }).click();
+  await expect(page.getByText(`Embedder capability cannot be removed while it provides history memory to an enabled loop. Disable dependent history memory first.`)).toBeVisible();
+
+  await page.goto(`http://athena.localhost/provider/list`);
+  await page
+    .getByRole(`button`, { name: `Edit ${displayName}` })
+    .first()
+    .click();
+  await page.getByLabel(`Base URL`).fill(`${inferenceBaseUrl}/replacement`);
+  await page.getByRole(`button`, { name: `Save provider` }).click();
+  await expect(page.getByText(`Provider endpoint or lifecycle cannot be changed while its embedder provides history memory to an enabled loop. Disable dependent history memory first.`)).toBeVisible();
+
+  await page.getByLabel(`Base URL`).fill(inferenceBaseUrl);
+  await page.getByLabel(`Lifecycle status`).selectOption(`deprecated`);
+  await page.getByRole(`button`, { name: `Save provider` }).click();
+  await expect(page.getByText(`Provider endpoint or lifecycle cannot be changed while its embedder provides history memory to an enabled loop. Disable dependent history memory first.`)).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Delete provider`, exact: true }).click();
+  await expect(page.getByText(`Provider cannot be deleted while its embedder provides history memory to an enabled loop. Disable dependent history memory first.`)).toBeVisible();
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
+  await expect(page.getByLabel(`Create a searchable RAG index from this loop's history`)).toBeChecked();
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible();
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await page.getByRole(`button`, { name: `Save history memory` }).click();
+  await expect(page.getByText(`The loop history memory settings were saved.`)).toBeVisible();
+
+  await page.goto(`http://athena.localhost/provider/list`);
+  await page.getByRole(`link`, { name: displayName, exact: true }).first().click();
+  await page.getByRole(`link`, { name: `Settings` }).click();
+  await page.getByLabel(`Embedding model`).fill(`deterministic-embed-16`);
+  await page.getByRole(`button`, { name: `Save embedder` }).click();
+  await expect(page.getByText(`Embedder capability has been saved.`)).toBeVisible();
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await page.getByLabel(`Embedding provider`).selectOption({ label: `${displayName} (deterministic-embed-16)` });
+  page.once(`dialog`, (dialog) => void dialog.accept());
+  await page.getByRole(`button`, { name: `Save history memory` }).click();
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: 60_000 });
+});
+
+test(`disabled history memory allows embedder and provider removal`, async ({ page }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Disabled history cleanup loop ${Date.now()}`);
+  const removableEmbedder = `Removable embedder ${Date.now()}`;
+  await createProviderViaUi(page, removableEmbedder, unusedProviderCredential, {
+    chat: true,
+    embedder: { model: `deterministic-embed-8` },
+  });
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await page.getByLabel(`Embedding provider`).selectOption({ label: `${removableEmbedder} (deterministic-embed-8)` });
+  page.once(`dialog`, (dialog) => void dialog.accept());
+  await page.getByRole(`button`, { name: `Save history memory` }).click();
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: 60_000 });
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await page.getByRole(`button`, { name: `Save history memory` }).click();
+
+  await page.goto(`http://athena.localhost/provider/list`);
+  await page.getByRole(`link`, { name: removableEmbedder, exact: true }).first().click();
+  await page.getByRole(`link`, { name: `Settings` }).click();
+  await page.getByRole(`button`, { name: `Remove embedder` }).click();
+  await expect(page.getByRole(`button`, { name: `Enable embedder` })).toBeVisible();
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
+  await expect(page.getByLabel(`Create a searchable RAG index from this loop's history`)).not.toBeChecked();
+  await expect(page.getByLabel(`Embedding provider`)).toHaveValue(``);
+
+  const removableProvider = `Removable provider ${Date.now()}`;
+  await createProviderViaUi(page, removableProvider, unusedProviderCredential, {
+    chat: true,
+    embedder: { model: `deterministic-embed-16` },
+  });
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await page.getByLabel(`Embedding provider`).selectOption({ label: `${removableProvider} (deterministic-embed-16)` });
+  page.once(`dialog`, (dialog) => void dialog.accept());
+  await page.getByRole(`button`, { name: `Save history memory` }).click();
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: 60_000 });
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await page.getByRole(`button`, { name: `Save history memory` }).click();
+
+  await page.goto(`http://athena.localhost/provider/list`);
+  await page
+    .getByRole(`button`, { name: `Edit ${removableProvider}` })
+    .first()
+    .click();
+  await page.getByRole(`button`, { name: `Delete provider`, exact: true }).click();
+  await expect(page.getByText(`${removableProvider} has been deleted.`)).toBeVisible();
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
+  await expect(page.getByLabel(`Create a searchable RAG index from this loop's history`)).not.toBeChecked();
+  await expect(page.getByLabel(`Embedding provider`)).toHaveValue(``);
+});
+
 test(`loop providers tab supports assign remove and algorithm save`, async ({ page }) => {
   await authenticate(page);
 

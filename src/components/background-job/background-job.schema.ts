@@ -1,4 +1,4 @@
-import type { Job, QueueOptions, WorkOptions } from "pg-boss";
+import type { Job, QueueOptions, QueuePolicy, WorkOptions } from "pg-boss";
 import { z } from "zod";
 
 export const backgroundJobPayloadEnvelopeSchema = z.object({
@@ -17,7 +17,7 @@ export type BackgroundJobDefinition<TPayload extends Record<string, unknown> = R
   name: string;
   version: number;
   payloadSchema: z.ZodType<TPayload>;
-  queue?: QueueOptions;
+  queue?: QueueOptions & { policy?: QueuePolicy };
   worker?: WorkOptions;
   handler(context: BackgroundJobHandlerContext<TPayload>): Promise<void>;
 };

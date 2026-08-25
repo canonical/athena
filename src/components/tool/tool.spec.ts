@@ -1,11 +1,13 @@
 import type { Page } from "@playwright/test";
 import {
   approveToolCall,
+  authenticate,
   callsTool,
   createProviderViaUi,
   createTaskViaUi,
   expect,
   openToolCallApproval,
+  prepareRunnableLoop,
   rejectionNoteInHistory,
   rejectToolCall,
   replies,
@@ -107,6 +109,78 @@ test(`a tool disabled for the loop is never offered, so the model cannot call it
   await expect(page.getByText(`Title: New Task`)).toBeVisible();
 });
 
+test(`history memory refreshes after approval rejection and compaction`, async ({ page, runnableLoop, inference }) => {
+  const memoryTool = `own-memory-lookup`;
+  const compactTool = `athena_compact_queue`;
+  const approvedTitle = `Approved memory title`;
+  const rejectedTitle = `Rejected memory title`;
+  const rejectionNote = `Keep the approved title`;
+  const compactSummary = `Compaction preserves the approved title and rejected rename decision.`;
+  const embedderName = `Mutation memory embedder ${Date.now()}`;
+
+  await createProviderViaUi(page, embedderName, inference.scope, { embedder: { model: `deterministic-embed-16` } });
+  await page.goto(`http://athena.localhost/loop/${runnableLoop.loop.id}/details`);
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await page.getByLabel(`Embedding provider`).selectOption({ label: `${embedderName} (deterministic-embed-16)` });
+  page.once(`dialog`, (dialog) => void dialog.accept());
+  await page.getByRole(`button`, { name: `Save history memory` }).click();
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: turnTimeout });
+
+  await inference.mock(
+    scenario()
+      .whenToolOffered(titleTool, callsTool(titleTool, { title: approvedTitle }))
+      .onceHistoryShows(approvedTitle, replies(`The approved title is set.`))
+      .otherwise(replies(`Nothing to do.`)),
+  );
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, taskInstruction);
+  await openToolCallApproval(page, titleToolLabel);
+  await approveToolCall(page);
+  await expect(page.getByText(`Title: ${approvedTitle}`)).toBeVisible({ timeout: turnTimeout });
+
+  await inference.mock(
+    scenario()
+      .whenToolOffered(titleTool, callsTool(titleTool, { title: rejectedTitle }))
+      .onceHistoryShows(rejectionNoteInHistory(rejectionNote), replies(`The rejected title was not applied.`))
+      .otherwise(replies(`Nothing to do.`)),
+  );
+  await sendTaskMessage(page, `Replace the approved title.`);
+  await openToolCallApproval(page, titleToolLabel);
+  await rejectToolCall(page, rejectionNote);
+  await expect(page.getByText(`The rejected title was not applied.`)).toBeVisible({ timeout: turnTimeout });
+  await expect(page.getByText(`Title: ${approvedTitle}`)).toBeVisible();
+
+  await inference.mock(
+    scenario()
+      .whenToolOffered(compactTool, callsTool(compactTool, { summary: compactSummary }))
+      .onceHistoryShows(compactSummary, replies(`Compaction completed.`))
+      .otherwise(replies(`Nothing to do.`)),
+  );
+  await page.getByRole(`button`, { name: `Compact` }).click();
+  await page.getByRole(`button`, { name: `Request Compact` }).click();
+  await openToolCallApproval(page, `Compact Task Queue`);
+  await approveToolCall(page);
+  await expect(page.getByText(`Compaction completed.`)).toBeVisible({ timeout: turnTimeout });
+
+  await inference.mock(
+    scenario()
+      .whenToolOffered(memoryTool, callsTool(memoryTool, { query: compactSummary, limit: 20 }))
+      .onceHistoryShows(`"provenance"`, replies(`Retrieved compacted history.`))
+      .otherwise(replies(`Compacted history was unavailable.`)),
+  );
+  let refreshedHistoryFound = false;
+  for (let attempt = 0; attempt < 5 && !refreshedHistoryFound; attempt += 1) {
+    await createTaskViaUi(page, runnableLoop.loop.id);
+    await sendTaskMessage(page, `Recall the compacted decision history.`);
+    await expect(page.getByText(`Retrieved compacted history.`)).toBeVisible({ timeout: turnTimeout });
+    await page.getByRole(`button`, { name: `Show tool response details` }).last().click();
+    const resultText = await page.getByRole(`dialog`).innerText();
+    refreshedHistoryFound = resultText.includes(compactSummary) && resultText.includes(rejectionNote);
+    await page.keyboard.press(`Escape`);
+  }
+  expect(refreshedHistoryFound).toBe(true);
+});
+
 test(`own memory lookup recalls history indexed before it was enabled`, async ({ page, runnableLoop, inference }) => {
   const memoryTool = `own-memory-lookup`;
   const rememberedFact = `The release codename is Silver Kestrel.`;
@@ -156,5 +230,118 @@ test(`own memory lookup recalls history indexed before it was enabled`, async ({
 
   await page.getByRole(`button`, { name: `Show tool response details` }).click();
   await expect(page.getByRole(`heading`, { name: `Tool response details` })).toBeVisible();
+  await expect(page.getByRole(`dialog`)).toContainText(rememberedFact);
   await captureRagScreenshot(page, `07-memory-lookup-result.png`);
+  await page.keyboard.press(`Escape`);
+
+  const replacementEmbedderName = `Replacement loop memory embedder ${Date.now()}`;
+  await createProviderViaUi(page, replacementEmbedderName, inference.scope, { embedder: { model: `deterministic-embed-16` } });
+  await page.goto(`http://athena.localhost/loop/${runnableLoop.loop.id}/details`);
+  await page.getByLabel(`Embedding provider`).selectOption({ label: `${replacementEmbedderName} (deterministic-embed-16)` });
+  page.once(`dialog`, (dialog) => void dialog.accept());
+  await page.getByRole(`button`, { name: `Save history memory` }).click();
+  await expect(page.getByText(`The loop history memory settings were saved.`)).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel(`Embedding provider`).locator(`option:checked`)).toHaveText(`${replacementEmbedderName} (deterministic-embed-16)`);
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: turnTimeout });
+
+  const replacementAnswer = `The rebuilt memory still recalls Silver Kestrel.`;
+  await inference.mock(
+    scenario()
+      .whenToolOffered(memoryTool, callsTool(memoryTool, { query: rememberedFact, limit: 20 }))
+      .onceHistoryShows(`"provenance"`, replies(replacementAnswer))
+      .otherwise(replies(`The rebuilt memory did not contain the codename.`)),
+  );
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, `Recall the release codename after rebuilding memory.`);
+  await expect(page.getByText(replacementAnswer)).toBeVisible({ timeout: turnTimeout });
+  await page.getByRole(`button`, { name: `Show tool response details` }).last().click();
+  await expect(page.getByRole(`dialog`)).toContainText(rememberedFact);
+  await page.keyboard.press(`Escape`);
+
+  const incrementalFact = `The launch window starts at 07:45 UTC.`;
+  await inference.mock(scenario().whenConversationMentions(incrementalFact, replies(`I recorded the launch window.`)).otherwise(replies(`Nothing else to add.`)));
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, incrementalFact);
+  await expect(page.getByText(`I recorded the launch window.`)).toBeVisible({ timeout: turnTimeout });
+
+  const incrementalAnswer = `The launch window starts at 07:45 UTC.`;
+  await inference.mock(
+    scenario()
+      .whenToolOffered(memoryTool, callsTool(memoryTool, { query: incrementalFact, limit: 20 }))
+      .onceHistoryShows(`"provenance"`, replies(incrementalAnswer))
+      .otherwise(replies(`The launch window was not indexed.`)),
+  );
+  let incrementalFactIndexed = false;
+  for (let attempt = 0; attempt < 5 && !incrementalFactIndexed; attempt += 1) {
+    await createTaskViaUi(page, runnableLoop.loop.id);
+    await sendTaskMessage(page, `When does the launch window start?`);
+    await expect(page.getByText(incrementalAnswer)).toBeVisible({ timeout: turnTimeout });
+    await page.getByRole(`button`, { name: `Show tool response details` }).last().click();
+    incrementalFactIndexed = (await page.getByRole(`dialog`).innerText()).includes(incrementalFact);
+    await page.keyboard.press(`Escape`);
+  }
+  expect(incrementalFactIndexed).toBe(true);
+});
+
+test(`two loops backfill and retrieve only their own history`, async ({ page, context, testInference }) => {
+  await authenticate(page);
+  const firstLoop = await prepareRunnableLoop(page, testInference);
+  const secondPage = await context.newPage();
+  const secondLoop = await prepareRunnableLoop(secondPage, testInference);
+  const firstFact = `Loop one deployment marker is Alpine Quartz.`;
+  const secondFact = `Loop two deployment marker is Harbor Lantern.`;
+
+  await firstLoop.inference.mock(scenario().whenConversationMentions(firstFact, replies(`Recorded the first marker.`)).otherwise(replies(`Nothing else to add.`)));
+  await secondLoop.inference.mock(scenario().whenConversationMentions(secondFact, replies(`Recorded the second marker.`)).otherwise(replies(`Nothing else to add.`)));
+  await createTaskViaUi(page, firstLoop.loop.id);
+  await sendTaskMessage(page, firstFact);
+  await expect(page.getByText(`Recorded the first marker.`)).toBeVisible({ timeout: turnTimeout });
+  await createTaskViaUi(secondPage, secondLoop.loop.id);
+  await sendTaskMessage(secondPage, secondFact);
+  await expect(secondPage.getByText(`Recorded the second marker.`)).toBeVisible({ timeout: turnTimeout });
+
+  const embedderName = `Shared isolation embedder ${Date.now()}`;
+  await createProviderViaUi(page, embedderName, firstLoop.inference.scope, { embedder: { model: `deterministic-embed-16` } });
+
+  const prepareMemoryForm = async (targetPage: Page, loopId: string) => {
+    await targetPage.goto(`http://athena.localhost/loop/${loopId}/details`);
+    await targetPage.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+    await targetPage.getByLabel(`Embedding provider`).selectOption({ label: `${embedderName} (deterministic-embed-16)` });
+    targetPage.once(`dialog`, (dialog) => void dialog.accept());
+  };
+
+  await Promise.all([prepareMemoryForm(page, firstLoop.loop.id), prepareMemoryForm(secondPage, secondLoop.loop.id)]);
+  await Promise.all([page.getByRole(`button`, { name: `Save history memory` }).click(), secondPage.getByRole(`button`, { name: `Save history memory` }).click()]);
+  await Promise.all([
+    expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: turnTimeout }),
+    expect(secondPage.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: turnTimeout }),
+  ]);
+
+  const memoryTool = `own-memory-lookup`;
+  await firstLoop.inference.mock(
+    scenario()
+      .whenToolOffered(memoryTool, callsTool(memoryTool, { query: firstFact, limit: 20 }))
+      .onceHistoryShows(`"provenance"`, replies(`Retrieved the first marker.`))
+      .otherwise(replies(`The first marker was unavailable.`)),
+  );
+  await secondLoop.inference.mock(
+    scenario()
+      .whenToolOffered(memoryTool, callsTool(memoryTool, { query: secondFact, limit: 20 }))
+      .onceHistoryShows(`"provenance"`, replies(`Retrieved the second marker.`))
+      .otherwise(replies(`The second marker was unavailable.`)),
+  );
+
+  await Promise.all([createTaskViaUi(page, firstLoop.loop.id), createTaskViaUi(secondPage, secondLoop.loop.id)]);
+  await Promise.all([sendTaskMessage(page, `Recall this loop's deployment marker.`), sendTaskMessage(secondPage, `Recall this loop's deployment marker.`)]);
+  await Promise.all([expect(page.getByText(`Retrieved the first marker.`)).toBeVisible({ timeout: turnTimeout }), expect(secondPage.getByText(`Retrieved the second marker.`)).toBeVisible({ timeout: turnTimeout })]);
+
+  await page.getByRole(`button`, { name: `Show tool response details` }).last().click();
+  await expect(page.getByRole(`dialog`)).toContainText(firstFact);
+  await expect(page.getByRole(`dialog`)).not.toContainText(secondFact);
+  await page.keyboard.press(`Escape`);
+  await secondPage.getByRole(`button`, { name: `Show tool response details` }).last().click();
+  await expect(secondPage.getByRole(`dialog`)).toContainText(secondFact);
+  await expect(secondPage.getByRole(`dialog`)).not.toContainText(firstFact);
+  await secondPage.close();
 });

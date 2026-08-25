@@ -3,7 +3,7 @@ import { log } from "@components/logging/logging.service.js";
 import { type QueryExecutor, query } from "@components/postgres/postgres.js";
 import { type Db, events, PgBoss } from "pg-boss";
 import { z } from "zod";
-import { BackgroundJobEnqueueError, BackgroundJobPermanentError } from "./background-job.errors.js";
+import { BackgroundJobConfigurationError, BackgroundJobEnqueueError, BackgroundJobPermanentError } from "./background-job.errors.js";
 import { backgroundJobDefinitions, backgroundJobValidateRegistry } from "./background-job.registry.js";
 import { type BackgroundJobDefinition, type BackgroundJobEnqueueOptions, type BackgroundJobPayloadEnvelope, backgroundJobPayloadEnvelopeSchema } from "./background-job.schema.js";
 
@@ -43,6 +43,15 @@ const ensureQueues = async (boss: PgBoss): Promise<void> => {
       retryBackoff: true,
       ...definition.queue,
     });
+  }
+
+  const queues = new Map((await boss.getQueues(backgroundJobDefinitions().map(({ name }) => name))).map((queue) => [queue.name, queue]));
+  for (const definition of backgroundJobDefinitions()) {
+    const expectedPolicy = definition.queue?.policy ?? `standard`;
+    const actualPolicy = queues.get(definition.name)?.policy;
+    if (actualPolicy !== expectedPolicy) {
+      throw new BackgroundJobConfigurationError(`Background queue \`${definition.name}\` uses policy \`${actualPolicy ?? `missing`}\`; expected \`${expectedPolicy}\`.`);
+    }
   }
 };
 

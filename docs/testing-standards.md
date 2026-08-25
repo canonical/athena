@@ -29,7 +29,8 @@ This document is the source of truth for test strategy and test scope.
 
 1. Coverage collection must include both frontend and backend runtime coverage from E2E execution.
 2. Frontend coverage source is Istanbul payload captured from browser context for each E2E scenario.
-3. Backend coverage source is Istanbul/NYC runtime payload captured from the Athena service process after E2E execution.
+3. Backend coverage sources are Istanbul/NYC runtime payloads captured from the Athena HTTP
+   process and every background-worker replica after E2E execution.
 4. Coverage path remapping from container/runtime paths to workspace paths is mandatory before merging and report generation.
 5. Coverage collection scripts must be deterministic and safe to run in CI and local containerized environments.
 
@@ -66,7 +67,8 @@ This document is the source of truth for test strategy and test scope.
 ## Execution modes
 
 1. Local functional run: use the standard Playwright command for fast E2E feedback.
-2. Coverage run: use a dedicated coverage-enabled E2E command that captures, normalizes, merges, and reports frontend plus backend coverage.
+2. Coverage run: use a dedicated coverage-enabled E2E command that captures, normalizes,
+   merges, and reports frontend, HTTP-process, and worker-process coverage.
 3. CI coverage run must use the dedicated coverage-enabled command.
 
 ## Execution baseline

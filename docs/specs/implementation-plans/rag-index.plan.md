@@ -3,8 +3,12 @@
 ## Status
 
 The provider embedder capability, durable background-job foundation, pgvector setup, and
-private loop-history memory are implemented. The standalone `ragIndex`, Markdown source,
-shared `ragEntry`, and `loopRagAttachment` work described below remain planned.
+private loop-history memory are implemented. Dependency and concurrency hardening for
+private history is implemented and verified through the existing UI-driven E2E stack;
+its production rollout gate remains pending in
+[loop-history-rag-hardening.plan.md](./loop-history-rag-hardening.plan.md). The standalone
+`ragIndex`, Markdown source, shared `ragEntry`, and `loopRagAttachment` work described
+below also remain planned.
 
 ## Objective
 
@@ -366,6 +370,9 @@ Per [testing-standards.md](../../testing-standards.md):
     lifecycle state, and the loop-scoped `own-memory-lookup` tool.
 11. Add tests for isolation, lineage, idempotent rebuild, history backfill and incremental
     recall, snapshot replay, and failure paths.
+12. Deliver the provider dependency guards, shared-worker backfill serialization, and
+  focused race coverage in
+  [loop-history-rag-hardening.plan.md](./loop-history-rag-hardening.plan.md).
 
 ## Acceptance criteria
 
@@ -391,4 +398,5 @@ Per [testing-standards.md](../../testing-standards.md):
 - [openai-api-connection.plan.md](./openai-api-connection.plan.md)
 - [provider-capabilities.plan.md](./provider-capabilities.plan.md)
 - [background-processing.plan.md](./background-processing.plan.md)
+- [loop-history-rag-hardening.plan.md](./loop-history-rag-hardening.plan.md)
 - [nfr.md](../definitions/nfr.md)

@@ -58,12 +58,21 @@ export const queryLoopMemoryConfig = async (loopId: string, userId: string): Pro
   return result.rows[0];
 };
 
-export const queryLoopMemoryDisable = async (loopId: string, userId: string): Promise<boolean> => {
-  const result = await query(
-    `UPDATE "loopHistoryRag" lhr SET "enabled" = FALSE, "status" = 'missing', "failureMessage" = NULL
-     FROM "loopUser" lu
-     WHERE lhr."loop" = $1 AND lu."loop" = lhr."loop" AND lu."user" = $2 AND lu."isAdmin" = TRUE`,
+export const queryLoopMemoryDisable = async (executor: QueryExecutor, loopId: string, userId: string): Promise<boolean> => {
+  const loopResult = await executor.query(
+    `SELECT l."id"
+     FROM "loop" l
+     JOIN "loopUser" lu ON lu."loop" = l."id" AND lu."user" = $2 AND lu."isAdmin" = TRUE
+     WHERE l."id" = $1
+     FOR UPDATE OF l`,
     [loopId, userId],
+  );
+  if (!loopResult.rowCount) return false;
+
+  const result = await executor.query(
+    `UPDATE "loopHistoryRag" lhr SET "enabled" = FALSE, "status" = 'missing', "failureMessage" = NULL
+     WHERE lhr."loop" = $1`,
+    [loopId],
   );
   return (result.rowCount ?? 0) > 0;
 };
@@ -71,30 +80,45 @@ export const queryLoopMemoryDisable = async (loopId: string, userId: string): Pr
 export type LoopMemoryEnableResult = { outcome: `invalid` | `unchanged` } | { outcome: `rebuild`; generation: string };
 
 export const queryLoopMemoryEnable = async (executor: QueryExecutor, loopId: string, providerId: string, userId: string): Promise<LoopMemoryEnableResult> => {
-  const result = await executor.query<{ valid: boolean; generation: string | null }>(
-    `WITH eligible AS (
-       SELECT l."id" AS "loop", pe."provider"
-       FROM "loop" l
-       JOIN "loopUser" lu ON lu."loop" = l."id" AND lu."user" = $3 AND lu."isAdmin" = TRUE
-       JOIN "provider" p ON p."id" = $2 AND p."owner" = $3 AND p."lifecycleStatus" = 'active'
-       JOIN "providerEmbedder" pe ON pe."provider" = p."id"
-       WHERE l."id" = $1
-     ), changed AS (
-       INSERT INTO "loopHistoryRag" ("loop", "provider", "enabled", "status", "failureMessage", "embeddingDimensions")
-       SELECT "loop", "provider", TRUE, 'indexing', NULL, NULL FROM eligible
-       ON CONFLICT ("loop") DO UPDATE SET
-         "provider" = EXCLUDED."provider", "generation" = uuidv7(), "enabled" = TRUE, "status" = 'indexing', "failureMessage" = NULL, "embeddingDimensions" = NULL
-       WHERE "loopHistoryRag"."enabled" IS DISTINCT FROM TRUE OR "loopHistoryRag"."provider" IS DISTINCT FROM EXCLUDED."provider"
-       RETURNING "generation"
-     )
-     SELECT EXISTS(SELECT 1 FROM eligible) AS "valid", (SELECT "generation" FROM changed) AS "generation"`,
-    [loopId, providerId, userId],
+  const loopResult = await executor.query(
+    `SELECT l."id"
+     FROM "loop" l
+     JOIN "loopUser" lu ON lu."loop" = l."id" AND lu."user" = $2 AND lu."isAdmin" = TRUE
+     WHERE l."id" = $1
+     FOR UPDATE OF l`,
+    [loopId, userId],
   );
-  const outcome = result.rows[0];
-  if (!outcome?.valid) return { outcome: `invalid` };
-  if (!outcome.generation) return { outcome: `unchanged` };
+  if (!loopResult.rowCount) return { outcome: `invalid` };
+
+  const providerResult = await executor.query<{ provider: string }>(
+    `SELECT p."id" AS "provider"
+       FROM "provider" p
+       WHERE p."id" = $1 AND p."owner" = $2 AND p."lifecycleStatus" = 'active'
+       FOR UPDATE OF p`,
+    [providerId, userId],
+  );
+  if (!providerResult.rows[0]) return { outcome: `invalid` };
+
+  const embedderResult = await executor.query<{ provider: string }>(`SELECT "provider" FROM "providerEmbedder" WHERE "provider" = $1 FOR UPDATE`, [providerId]);
+  if (!embedderResult.rows[0]) return { outcome: `invalid` };
+
+  const existingResult = await executor.query<{ enabled: boolean; provider: string }>(`SELECT "provider", "enabled" FROM "loopHistoryRag" WHERE "loop" = $1 FOR UPDATE`, [loopId]);
+  const existing = existingResult.rows[0];
+  if (existing?.enabled && existing.provider === providerId) return { outcome: `unchanged` };
+
+  const result = await executor.query<{ generation: string }>(
+    `INSERT INTO "loopHistoryRag" ("loop", "provider", "enabled", "status", "failureMessage", "embeddingDimensions")
+     VALUES ($1, $2, TRUE, 'indexing', NULL, NULL)
+     ON CONFLICT ("loop") DO UPDATE SET
+       "provider" = EXCLUDED."provider", "generation" = uuidv7(), "enabled" = TRUE,
+       "status" = 'indexing', "failureMessage" = NULL, "embeddingDimensions" = NULL
+     RETURNING "generation"`,
+    [loopId, providerId],
+  );
+  const generation = result.rows[0]?.generation;
+  if (!generation) throw new Error(`Loop history memory generation was not created.`);
   await executor.query(`DELETE FROM "loopHistoryRagEntry" WHERE "loop" = $1`, [loopId]);
-  return { outcome: `rebuild`, generation: outcome.generation };
+  return { outcome: `rebuild`, generation };
 };
 
 const queryEmbedder = async (loopId: string, generation?: string): Promise<LoopMemoryEmbedder | undefined> => {
@@ -148,12 +172,16 @@ const queryHistoryItems = async (loopId: string, taskId?: string, queueItemId?: 
   return result.rows;
 };
 
-const persistEmbeddedItems = async (loopId: string, items: HistorySourceItem[], options: { generation?: string; updateExisting: boolean }): Promise<boolean> => {
+const persistEmbeddedItems = async (loopId: string, items: HistorySourceItem[], options: { generation?: string; signal?: AbortSignal; updateExisting: boolean }): Promise<boolean> => {
   if (items.length === 0) return true;
+  options.signal?.throwIfAborted();
   const embedder = await queryEmbedder(loopId, options.generation);
   if (!embedder) return false;
   const texts = items.map(serializeHistoryItem);
+  options.signal?.throwIfAborted();
   const vectors = await new ProviderEmbedder(embedder.connection).embed(texts);
+  options.signal?.throwIfAborted();
+  if (!(await queryEmbedder(loopId, embedder.generation))) return false;
   const dimensions = vectors[0]?.length;
   if (!dimensions) throw new Error(`Loop history embedding returned no dimensions.`);
   if (embedder.embeddingDimensions !== null && embedder.embeddingDimensions !== dimensions) {
@@ -197,25 +225,30 @@ const persistEmbeddedItems = async (loopId: string, items: HistorySourceItem[], 
   return result.rows[0]?.relevant === true;
 };
 
-export const indexLoopMemoryBackfill = async (loopId: string, generation: string): Promise<void> => {
+export const indexLoopMemoryBackfill = async (loopId: string, generation: string, signal?: AbortSignal): Promise<void> => {
+  signal?.throwIfAborted();
   const started = await query(`UPDATE "loopHistoryRag" SET "status" = 'indexing', "failureMessage" = NULL WHERE "loop" = $1 AND "generation" = $2 AND "enabled" = TRUE`, [loopId, generation]);
   if ((started.rowCount ?? 0) === 0) return;
   try {
     const items = await queryHistoryItems(loopId);
     for (let index = 0; index < items.length; index += 50) {
-      if (!(await persistEmbeddedItems(loopId, items.slice(index, index + 50), { generation, updateExisting: false }))) return;
+      signal?.throwIfAborted();
+      if (!(await persistEmbeddedItems(loopId, items.slice(index, index + 50), { generation, signal, updateExisting: false }))) return;
     }
+    signal?.throwIfAborted();
     await query(`UPDATE "loopHistoryRag" SET "status" = 'ready', "failureMessage" = NULL WHERE "loop" = $1 AND "generation" = $2 AND "enabled" = TRUE`, [loopId, generation]);
   } catch (error) {
+    if (signal?.aborted) throw error;
     const message = error instanceof Error ? error.message : String(error);
     await query(`UPDATE "loopHistoryRag" SET "status" = 'failed', "failureMessage" = $3 WHERE "loop" = $1 AND "generation" = $2 AND "enabled" = TRUE`, [loopId, generation, message]);
     throw error;
   }
 };
 
-export const indexLoopMemoryItem = async (loopId: string, taskId: string, queueItemId?: string): Promise<void> => {
+export const indexLoopMemoryItem = async (loopId: string, taskId: string, queueItemId?: string, signal?: AbortSignal): Promise<void> => {
+  signal?.throwIfAborted();
   if (!(await queryLoopMemoryEnabled(loopId))) return;
-  await persistEmbeddedItems(loopId, await queryHistoryItems(loopId, taskId, queueItemId), { updateExisting: true });
+  await persistEmbeddedItems(loopId, await queryHistoryItems(loopId, taskId, queueItemId), { signal, updateExisting: true });
 };
 
 export const lookupLoopMemory = async (loopId: string, queryText: string, limit: number): Promise<Array<{ text: string; occurredAt: string; provenance: Record<string, unknown> }>> => {
@@ -224,12 +257,14 @@ export const lookupLoopMemory = async (loopId: string, queryText: string, limit:
   const [vector] = await new ProviderEmbedder(embedder.connection).embed([queryText]);
   if (!vector) return [];
   const result = await query<{ text: string; occurredAt: string; provenance: Record<string, unknown> }>(
-    `SELECT "text", "occurredAt", "provenance"
-     FROM "loopHistoryRagEntry"
-     WHERE "loop" = $1
-     ORDER BY "embedding" <=> $2::vector, "occurredAt", "id"
+    `SELECT entry."text", entry."occurredAt", entry."provenance"
+     FROM "loopHistoryRagEntry" entry
+     JOIN "loopHistoryRag" memory ON memory."loop" = entry."loop"
+       AND memory."generation" = $4 AND memory."enabled" = TRUE
+     WHERE entry."loop" = $1
+     ORDER BY entry."embedding" <=> $2::vector, entry."occurredAt", entry."id"
      LIMIT $3`,
-    [loopId, JSON.stringify(vector), limit],
+    [loopId, JSON.stringify(vector), limit, embedder.generation],
   );
   return result.rows;
 };

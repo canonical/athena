@@ -1,4 +1,4 @@
-import { getPool, query } from "@components/postgres/postgres.js";
+import { getPool, type QueryExecutor, query, withTransaction } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
 import type { LoopProvider, LoopProviderAdminUpdate, Provider, ProviderChatUpdate, ProviderEmbedderUpdate, ProviderInsert, ProviderUpdate } from "./provider.schema.js";
 
@@ -32,6 +32,44 @@ const providerSelect = `
   p."createdAt",
   p."updatedAt"
 `;
+
+type ProviderDependencyLock = {
+  baseUrl: string;
+  hasChat: boolean;
+  hasEmbedder: boolean;
+  embeddingModel: string | null;
+  history: Array<{ enabled: boolean; loop: string }>;
+  lifecycleStatus: `active` | `deprecated` | `archived`;
+};
+
+const lockProviderDependencies = async (executor: QueryExecutor, providerId: string, ownerId: string): Promise<ProviderDependencyLock | undefined> => {
+  const providerResult = await executor.query<{ baseUrl: string; hasChat: boolean; hasEmbedder: boolean; lifecycleStatus: `active` | `deprecated` | `archived` }>(
+    `SELECT p."baseUrl", p."lifecycleStatus",
+            EXISTS (SELECT 1 FROM "providerChat" pc WHERE pc."provider" = p."id") AS "hasChat",
+            EXISTS (SELECT 1 FROM "providerEmbedder" pe WHERE pe."provider" = p."id") AS "hasEmbedder"
+     FROM "provider" p
+     WHERE p."id" = $1 AND p."owner" = $2
+     FOR UPDATE OF p`,
+    [providerId, ownerId],
+  );
+  const provider = providerResult.rows[0];
+  if (!provider) return undefined;
+
+  const embedderResult = provider.hasEmbedder ? await executor.query<{ model: string }>(`SELECT "model" FROM "providerEmbedder" WHERE "provider" = $1 FOR UPDATE`, [providerId]) : undefined;
+  const historyResult = provider.hasEmbedder ? await executor.query<{ enabled: boolean; loop: string }>(`SELECT "loop", "enabled" FROM "loopHistoryRag" WHERE "provider" = $1 ORDER BY "loop" FOR UPDATE`, [providerId]) : undefined;
+
+  return {
+    ...provider,
+    embeddingModel: embedderResult?.rows[0]?.model ?? null,
+    history: historyResult?.rows ?? [],
+  };
+};
+
+const hasEnabledHistory = (dependency: ProviderDependencyLock): boolean => dependency.history.some(({ enabled }) => enabled);
+
+const deleteDisabledHistory = async (executor: QueryExecutor, providerId: string): Promise<void> => {
+  await executor.query(`DELETE FROM "loopHistoryRag" WHERE "provider" = $1 AND "enabled" = FALSE`, [providerId]);
+};
 
 export const queryProviderListByOwner = async (ownerId: string): Promise<Provider[]> => {
   const result = await query<Provider>(
@@ -133,11 +171,23 @@ export const queryProviderCreate = async (input: ProviderInsert, ownerId: string
   }
 };
 
-export const queryProviderUpdate = async (providerId: string, ownerId: string, input: ProviderUpdate): Promise<Provider | undefined> => {
-  if (input.apiKey) {
-    const envelope = encryptSecret(input.apiKey);
-    const result = await query(
-      `
+export type ProviderUpdateResult = Provider | `embedder-in-use` | undefined;
+
+export const queryProviderUpdate = async (providerId: string, ownerId: string, input: ProviderUpdate): Promise<ProviderUpdateResult> => {
+  const envelope = input.apiKey ? encryptSecret(input.apiKey) : undefined;
+  const outcome = await withTransaction(async (transaction) => {
+    const dependency = await lockProviderDependencies(transaction, providerId, ownerId);
+    if (!dependency) return `not-found` as const;
+
+    const endpointChanged = dependency.hasEmbedder && dependency.baseUrl !== input.baseUrl;
+    const embedderDeactivated = dependency.hasEmbedder && dependency.lifecycleStatus === `active` && input.lifecycleStatus !== `active`;
+    const embeddingAvailabilityChanged = endpointChanged || embedderDeactivated;
+    if (embeddingAvailabilityChanged && hasEnabledHistory(dependency)) return `embedder-in-use` as const;
+    if (embeddingAvailabilityChanged) await deleteDisabledHistory(transaction, providerId);
+
+    if (envelope) {
+      await transaction.query(
+        `
         UPDATE "provider"
         SET
           "displayName" = $1,
@@ -151,34 +201,22 @@ export const queryProviderUpdate = async (providerId: string, ownerId: string, i
         WHERE "id" = $9
           AND "owner" = $10
       `,
-      [input.displayName, input.providerType, input.baseUrl, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, providerId, ownerId],
-    );
-
-    if (!result.rowCount) {
-      return undefined;
+        [input.displayName, input.providerType, input.baseUrl, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, providerId, ownerId],
+      );
+    } else {
+      await transaction.query(
+        `UPDATE "provider"
+         SET "displayName" = $1, "providerType" = $2, "baseUrl" = $3, "lifecycleStatus" = $4
+         WHERE "id" = $5 AND "owner" = $6`,
+        [input.displayName, input.providerType, input.baseUrl, input.lifecycleStatus, providerId, ownerId],
+      );
     }
 
-    return queryProviderByIdForOwner(providerId, ownerId);
-  }
+    return `updated` as const;
+  });
 
-  const result = await query(
-    `
-      UPDATE "provider"
-      SET
-        "displayName" = $1,
-        "providerType" = $2,
-        "baseUrl" = $3,
-        "lifecycleStatus" = $4
-      WHERE "id" = $5
-        AND "owner" = $6
-    `,
-    [input.displayName, input.providerType, input.baseUrl, input.lifecycleStatus, providerId, ownerId],
-  );
-
-  if (!result.rowCount) {
-    return undefined;
-  }
-
+  if (outcome === `not-found`) return undefined;
+  if (outcome === `embedder-in-use`) return outcome;
   return queryProviderByIdForOwner(providerId, ownerId);
 };
 
@@ -213,56 +251,38 @@ export const queryProviderChatUpsert = async (providerId: string, ownerId: strin
   return queryProviderByIdForOwner(providerId, ownerId);
 };
 
-export const queryProviderEmbedderUpsert = async (providerId: string, ownerId: string, input: ProviderEmbedderUpdate): Promise<Provider | undefined> => {
-  const result = await query(
-    `
-      INSERT INTO "providerEmbedder" ("provider", "model")
-      SELECT p."id", $1
-      FROM "provider" p
-      WHERE p."id" = $2
-        AND p."owner" = $3
-      ON CONFLICT ("provider") DO UPDATE
-      SET "model" = EXCLUDED."model"
-      RETURNING "provider"
-    `,
-    [input.model, providerId, ownerId],
-  );
+export type ProviderEmbedderUpdateResult = Provider | `embedder-in-use` | undefined;
 
-  if (!result.rowCount) {
-    return undefined;
-  }
+export const queryProviderEmbedderUpsert = async (providerId: string, ownerId: string, input: ProviderEmbedderUpdate): Promise<ProviderEmbedderUpdateResult> => {
+  const outcome = await withTransaction(async (transaction) => {
+    const dependency = await lockProviderDependencies(transaction, providerId, ownerId);
+    if (!dependency) return `not-found` as const;
 
+    const modelChanged = dependency.hasEmbedder && dependency.embeddingModel !== input.model;
+    if (modelChanged && hasEnabledHistory(dependency)) return `embedder-in-use` as const;
+    if (modelChanged) await deleteDisabledHistory(transaction, providerId);
+
+    await transaction.query(
+      `INSERT INTO "providerEmbedder" ("provider", "model") VALUES ($1, $2)
+       ON CONFLICT ("provider") DO UPDATE SET "model" = EXCLUDED."model"`,
+      [providerId, input.model],
+    );
+    return `updated` as const;
+  });
+
+  if (outcome === `not-found`) return undefined;
+  if (outcome === `embedder-in-use`) return outcome;
   return queryProviderByIdForOwner(providerId, ownerId);
 };
 
-export type ProviderCapabilityDeleteResult = `deleted` | `provider-not-found` | `capability-not-found` | `last-capability` | `chat-assigned`;
+export type ProviderCapabilityDeleteResult = `deleted` | `provider-not-found` | `capability-not-found` | `last-capability` | `chat-assigned` | `embedder-in-use`;
 
 export const queryProviderCapabilityDelete = async (providerId: string, ownerId: string, capability: `chat` | `embedder`): Promise<ProviderCapabilityDeleteResult> => {
   const client = await getPool().connect();
 
   try {
     await client.query(`BEGIN`);
-    const result = await client.query<{ hasChat: boolean; hasEmbedder: boolean }>(
-      `
-        SELECT
-          EXISTS (
-            SELECT 1
-            FROM "providerChat" pc
-            WHERE pc."provider" = p."id"
-          ) AS "hasChat",
-          EXISTS (
-            SELECT 1
-            FROM "providerEmbedder" pe
-            WHERE pe."provider" = p."id"
-          ) AS "hasEmbedder"
-        FROM "provider" p
-        WHERE p."id" = $1
-          AND p."owner" = $2
-        FOR UPDATE
-      `,
-      [providerId, ownerId],
-    );
-    const provider = result.rows[0];
+    const provider = await lockProviderDependencies(client, providerId, ownerId);
 
     if (!provider) {
       await client.query(`ROLLBACK`);
@@ -275,6 +295,11 @@ export const queryProviderCapabilityDelete = async (providerId: string, ownerId:
     if (!hasCapability) {
       await client.query(`ROLLBACK`);
       return `capability-not-found`;
+    }
+
+    if (capability === `embedder` && hasEnabledHistory(provider)) {
+      await client.query(`ROLLBACK`);
+      return `embedder-in-use`;
     }
 
     if (!hasOtherCapability) {
@@ -310,6 +335,7 @@ export const queryProviderCapabilityDelete = async (providerId: string, ownerId:
       );
       await client.query(`DELETE FROM "providerChat" WHERE "provider" = $1`, [providerId]);
     } else {
+      await deleteDisabledHistory(client, providerId);
       await client.query(`DELETE FROM "providerEmbedder" WHERE "provider" = $1`, [providerId]);
     }
 
@@ -323,10 +349,17 @@ export const queryProviderCapabilityDelete = async (providerId: string, ownerId:
   }
 };
 
-export const queryProviderDelete = async (providerId: string, ownerId: string): Promise<boolean> => {
-  const result = await query(`DELETE FROM "provider" WHERE "id" = $1 AND "owner" = $2`, [providerId, ownerId]);
+export type ProviderDeleteResult = `deleted` | `provider-not-found` | `embedder-in-use`;
 
-  return Boolean(result.rowCount);
+export const queryProviderDelete = async (providerId: string, ownerId: string): Promise<ProviderDeleteResult> => {
+  return withTransaction(async (transaction) => {
+    const dependency = await lockProviderDependencies(transaction, providerId, ownerId);
+    if (!dependency) return `provider-not-found`;
+    if (dependency.hasEmbedder && hasEnabledHistory(dependency)) return `embedder-in-use`;
+    if (dependency.hasEmbedder) await deleteDisabledHistory(transaction, providerId);
+    await transaction.query(`DELETE FROM "provider" WHERE "id" = $1 AND "owner" = $2`, [providerId, ownerId]);
+    return `deleted`;
+  });
 };
 
 export const queryLoopProviderList = async (loopId: string): Promise<LoopProvider[]> => {

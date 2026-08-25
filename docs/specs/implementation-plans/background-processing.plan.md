@@ -2,7 +2,10 @@
 
 ## Status
 
-Implemented for the Compose deployment and loop-history memory. Rock and charm changes remain deferred.
+Implemented for the Compose deployment and loop-history memory, including domain-keyed
+singleton execution and queue-policy validation. Production rollout checks are tracked in
+[loop-history-rag-hardening.plan.md](./loop-history-rag-hardening.plan.md). Rock and charm
+changes remain deferred.
 
 ## Objective
 
@@ -21,7 +24,8 @@ Normative behavior is defined in [background-processing.md](../definitions/backg
 - Separate `pg-boss-prepare` service for dependency-owned migrations.
 - Separate `athena-worker` Compose service using the Athena image.
 - Default retry count, retry delay, and shutdown timeout configuration.
-- Queue concurrency and other behavior left to pinned `pg-boss` defaults.
+- Pinned `pg-boss` defaults unless a registered job declares a domain-specific queue
+	policy; loop-memory jobs use keyed `singleton` execution.
 - Compose-backed E2E startup waits for the worker.
 
 ## Database integration
@@ -46,14 +50,20 @@ Runtime processes disable automatic `pg-boss` schema creation and migration.
 - `APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT`, default `3`.
 - `APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS`, default `5`.
 
-No concurrency, schema-name, expiration, or retention settings are exposed. Registered job types may override retry policy when necessary.
+No global concurrency, schema-name, expiration, or retention settings are exposed.
+Registered job types may override retry or queue policy when their domain invariants
+require it. Loop-history backfills and incremental ingestion use keyed `singleton`
+execution without adding a global worker-concurrency setting.
 
 ## Registered jobs
 
-- `loop-memory.backfill`, payload version 1: `{ loop }`.
+- `loop-memory.backfill`, payload version 1: `{ loop, generation }`.
 - `loop-memory.ingest`, payload version 1: `{ loop, task, queueItem? }`.
 
-The backfill job embeds bounded batches. The ingestion job supports efficient single-item append handling and task-wide refresh after compaction, status changes, approval, or rejection.
+The backfill job embeds bounded batches, heartbeats its lease, and checks abort and
+generation guards between provider calls. The ingestion job supports efficient single-item
+append handling and task-wide refresh after compaction, status changes, approval, or
+rejection.
 
 ## Validation completed
 
@@ -68,6 +78,10 @@ The backfill job embeds bounded batches. The ingestion job supports efficient si
 - Generic standalone RAG jobs for Markdown or other source adapters.
 - Explicit concurrency tuning, scheduling, progress percentages, and operational UI.
 - Migration of existing task, webhook, and runner processors to the durable-job facility.
+
+The domain-specific backfill serialization and generation-fencing work is tracked in
+[loop-history-rag-hardening.plan.md](./loop-history-rag-hardening.plan.md), not as generic
+worker concurrency tuning.
 
 ## Acceptance criteria
 
@@ -84,5 +98,6 @@ The backfill job embeds bounded batches. The ingestion job supports efficient si
 - [background-processing.md](../definitions/background-processing.md)
 - [rag-index.md](../definitions/rag-index.md)
 - [rag-index.plan.md](./rag-index.plan.md)
+- [loop-history-rag-hardening.plan.md](./loop-history-rag-hardening.plan.md)
 - [database-standards.md](../../database-standards.md)
 - [testing-standards.md](../../testing-standards.md)

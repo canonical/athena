@@ -30,10 +30,20 @@ const taskColumns = pgColumns(taskColumnNames);
 
 const scopeTaskColumns = (scope: string): string => pgColumns(taskColumnNames, scope);
 
-const enqueueTaskMemorySync = async (executor: QueryExecutor, taskId: string): Promise<void> => {
-  const result = await executor.query<{ loop: string }>(`SELECT t."loop" FROM "task" t JOIN "loopHistoryRag" lhr ON lhr."loop" = t."loop" AND lhr."enabled" = TRUE WHERE t."id" = $1`, [taskId]);
-  const loopId = result.rows[0]?.loop;
-  if (loopId) await backgroundJobEnqueue(executor, loopMemoryIngestJob, { loop: loopId, task: taskId });
+const enqueueTaskMemorySync = async (executor: QueryExecutor, taskId: string, queueItem?: string): Promise<void> => {
+  const loopResult = await executor.query<{ loop: string }>(
+    `SELECT l."id" AS "loop"
+     FROM "task" t
+     JOIN "loop" l ON l."id" = t."loop"
+     WHERE t."id" = $1
+     FOR UPDATE OF l`,
+    [taskId],
+  );
+  const loopId = loopResult.rows[0]?.loop;
+  if (!loopId) return;
+
+  const enabled = await executor.query(`SELECT 1 FROM "loopHistoryRag" WHERE "loop" = $1 AND "enabled" = TRUE`, [loopId]);
+  if (enabled.rowCount) await backgroundJobEnqueue(executor, loopMemoryIngestJob, { loop: loopId, task: taskId, queueItem }, { singletonKey: taskId });
 };
 
 export const queryTaskList = async (loopId: string): Promise<Task[]> => {
@@ -583,10 +593,7 @@ export const queryAppendQueueItem = async (taskId: string, processorId: string |
     const loopId = result.rows[0]?.loop;
     if (!loopId) return false;
 
-    const enabled = await transaction.query(`SELECT 1 FROM "loopHistoryRag" WHERE "loop" = $1 AND "enabled" = TRUE`, [loopId]);
-    if (enabled.rowCount) {
-      await backgroundJobEnqueue(transaction, loopMemoryIngestJob, { loop: loopId, task: taskId, queueItem: itemWithId.id }, { singletonKey: `${taskId}:${itemWithId.id}` });
-    }
+    await enqueueTaskMemorySync(transaction, taskId, itemWithId.id);
     return true;
   });
 };
