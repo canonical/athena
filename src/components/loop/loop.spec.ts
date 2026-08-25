@@ -1,4 +1,9 @@
+import type { Page } from "@playwright/test";
 import { authenticate, createLoop, createProviderViaUi, dexEmail, dexLoopMemberEmail, expect, test } from "../../../testing/playwright/index.js";
+
+const captureRagScreenshot = async (page: Page, filename: string) => {
+  await page.screenshot({ path: `testing/results/rag-screenshots/${filename}` });
+};
 
 test(`loop list requires authentication`, async ({ page }) => {
   await page.context().clearCookies();
@@ -279,6 +284,7 @@ test(`loop admins can enable and disable searchable history memory`, async ({ pa
   await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
   await expect(page.getByText(`Indexing the whole loop might take some time.`)).toBeVisible();
   await page.getByLabel(`Embedding provider`).selectOption({ label: `${providerName} (deterministic-embed-1536)` });
+  await captureRagScreenshot(page, `01-rebuild-warning.png`);
 
   page.once(`dialog`, async (dialog) => {
     expect(dialog.message()).toContain(`rebuild the loop's history index`);
@@ -311,6 +317,9 @@ test(`loop admins can enable and disable searchable history memory`, async ({ pa
   const unchangedConfig = (await unchangedResponse.json()) as { status: string; updatedAt: string };
   expect(unchangedConfig.status).toBe(`ready`);
   expect(unchangedConfig.updatedAt).toBe(readyConfig.updatedAt);
+  await page.reload();
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible();
+  await captureRagScreenshot(page, `02-history-memory-ready.png`);
 
   await page.getByLabel(`Embedding provider`).selectOption({ label: `${replacementProviderName} (deterministic-embed-1536)` });
   await expect(page.getByText(`Indexing the whole loop might take some time.`)).toBeVisible();
@@ -333,6 +342,7 @@ test(`loop admins can enable and disable searchable history memory`, async ({ pa
   await expect(page.getByText(`The loop's existing history is being indexed.`)).toHaveCount(0);
   await expect(page.getByText(`History indexing failed`)).toHaveCount(0);
   await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toHaveCount(0);
+  await captureRagScreenshot(page, `03-history-memory-disabled.png`);
 });
 
 test(`loop details tab shows no paused banner for a properly configured loop`, async ({ page }) => {

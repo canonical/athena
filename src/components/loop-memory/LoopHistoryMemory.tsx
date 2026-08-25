@@ -37,28 +37,40 @@ export function LoopHistoryMemory({ canEdit, loopId }: Props) {
     if (data) formik.resetForm({ values: { hasHistoryRag: data.hasHistoryRag, provider: data.provider } });
   }, [data]);
 
-  if (isPending) return <p>Loading loop history memory...</p>;
+  if (isPending)
+    return (
+      <section aria-labelledby="loop-history-memory-heading" className="p-card p-strip is-shallow">
+        <h3 className="p-heading--5" id="loop-history-memory-heading">
+          History memory
+        </h3>
+        <p>Loading loop history memory...</p>
+      </section>
+    );
   if (isError)
     return (
-      <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load loop history memory">
-        {error instanceof Error ? error.message : String(error)}
-      </Notification>
+      <section aria-labelledby="loop-history-memory-heading" className="p-card p-strip is-shallow">
+        <h3 className="p-heading--5" id="loop-history-memory-heading">
+          History memory
+        </h3>
+        <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to load loop history memory">
+          {error instanceof Error ? error.message : String(error)}
+        </Notification>
+      </section>
     );
 
   const rebuildPossible = formik.values.hasHistoryRag && (!data?.hasHistoryRag || formik.values.provider !== data.provider);
 
   return (
-    <section aria-labelledby="loop-history-memory-heading">
+    <section aria-labelledby="loop-history-memory-heading" className="p-card p-strip is-shallow">
       <h3 className="p-heading--5" id="loop-history-memory-heading">
         History memory
       </h3>
+      <p>Let this loop search its own conversation history when older context is relevant.</p>
       <form onSubmit={formik.handleSubmit}>
-        <div className="p-checkbox">
+        <label className="p-checkbox" htmlFor="has-history-rag">
           <input checked={formik.values.hasHistoryRag} className="p-checkbox__input" disabled={!canEdit || formik.isSubmitting} id="has-history-rag" name="hasHistoryRag" onChange={formik.handleChange} type="checkbox" />
-          <label className="p-checkbox__label" htmlFor="has-history-rag">
-            Create a searchable RAG index from this loop's history
-          </label>
-        </div>
+          <span className="p-checkbox__label">Create a searchable RAG index from this loop's history</span>
+        </label>
         <label className="p-form__label" htmlFor="history-memory-provider">
           Embedding provider
         </label>
@@ -109,9 +121,11 @@ export function LoopHistoryMemory({ canEdit, loopId }: Props) {
           </Notification>
         ) : null}
         {canEdit ? (
-          <Button appearance="positive" disabled={formik.isSubmitting || !formik.dirty || (formik.values.hasHistoryRag && !formik.values.provider)} type="submit">
-            {formik.isSubmitting ? `Saving...` : `Save history memory`}
-          </Button>
+          <div className="u-align--right">
+            <Button appearance="positive" disabled={formik.isSubmitting || !formik.dirty || (formik.values.hasHistoryRag && !formik.values.provider)} type="submit">
+              {formik.isSubmitting ? `Saving...` : `Save history memory`}
+            </Button>
+          </div>
         ) : (
           <p>Only loop admins can change history memory settings.</p>
         )}

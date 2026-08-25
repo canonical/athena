@@ -17,28 +17,29 @@ export function LoopDetails({ loopId, loopName, loopDescription, loopIterationCo
   const [isEditorOpen, setIsEditorOpen] = useState(false);
 
   return (
-    <>
-      <div className="u-clearfix">
-        <div className="u-float-left">
-          <h2 className="p-heading--4">Loop details</h2>
+    <section className="p-strip is-shallow u-no-max-width">
+      <div className="p-card p-strip is-shallow">
+        <div className="u-clearfix">
+          <div className="u-float-left">
+            <h2 className="p-heading--4">Loop details</h2>
+          </div>
+          <div className="u-float-right">
+            <Button appearance="positive" onClick={() => setIsEditorOpen(true)} type="button">
+              <Icon aria-hidden="true" light name="edit" />
+              Edit loop
+            </Button>
+          </div>
         </div>
-        <div className="u-float-right">
-          <Button appearance="positive" onClick={() => setIsEditorOpen(true)} type="button">
-            <Icon aria-hidden="true" light name="edit" />
-            Edit loop
-          </Button>
-        </div>
+        <hr />
+        <dl>
+          <dt>Name</dt>
+          <dd>{loopName}</dd>
+          <dt>Description</dt>
+          <dd>{loopDescription || `-`}</dd>
+          <dt>Per-iteration cost limit</dt>
+          <dd>{formatUsd(loopIterationCostLimitUsd)}</dd>
+        </dl>
       </div>
-      <hr />
-      <dl>
-        <dt>Name</dt>
-        <dd>{loopName}</dd>
-        <dt>Description</dt>
-        <dd>{loopDescription || `-`}</dd>
-        <dt>Per-iteration cost limit</dt>
-        <dd>{formatUsd(loopIterationCostLimitUsd)}</dd>
-      </dl>
-      <hr />
       <LoopHistoryMemory canEdit={currentUserIsAdmin} loopId={loopId} />
       <EntityDrawer isOpen={isEditorOpen} onClose={() => setIsEditorOpen(false)} title="Edit loop">
         <LoopEditor
@@ -50,6 +51,6 @@ export function LoopDetails({ loopId, loopName, loopDescription, loopIterationCo
           }}
         />
       </EntityDrawer>
-    </>
+    </section>
   );
 }

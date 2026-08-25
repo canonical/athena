@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import {
   approveToolCall,
   callsTool,
@@ -18,6 +19,10 @@ const taskInstruction = `Give this task a title that describes it.`;
 const titleTool = `athena_define_title`;
 const titleToolLabel = `Define Task Title`;
 const getTitleTool = `athena_get_title`;
+
+const captureRagScreenshot = async (page: Page, filename: string) => {
+  await page.screenshot({ path: `testing/results/rag-screenshots/${filename}` });
+};
 
 test(`a tool call is gated on approval, then executed with the arguments the model chose`, async ({ page, runnableLoop, inference }) => {
   const chosenTitle = `Investigate flaky login`;
@@ -111,6 +116,7 @@ test(`own memory lookup recalls history indexed before it was enabled`, async ({
   await createTaskViaUi(page, runnableLoop.loop.id);
   await sendTaskMessage(page, rememberedFact);
   await expect(page.getByText(`I will remember that.`)).toBeVisible({ timeout: turnTimeout });
+  await captureRagScreenshot(page, `04-source-history.png`);
 
   const embedderName = `Loop memory embedder ${Date.now()}`;
   await createProviderViaUi(page, embedderName, inference.scope, { embedder: { model: `deterministic-embed-1536` } });
@@ -127,6 +133,7 @@ test(`own memory lookup recalls history indexed before it was enabled`, async ({
     await page.reload();
     await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible();
   }).toPass({ timeout: turnTimeout });
+  await captureRagScreenshot(page, `05-backfill-ready.png`);
 
   await inference.mock(
     scenario()
@@ -141,4 +148,13 @@ test(`own memory lookup recalls history indexed before it was enabled`, async ({
   await expect(page.getByRole(`button`, { name: `Show tool call details` })).toBeVisible({ timeout: turnTimeout });
   await expect(page.getByRole(`button`, { name: `Show tool response details` })).toBeVisible({ timeout: turnTimeout });
   await expect(page.getByText(recalledAnswer)).toBeVisible({ timeout: turnTimeout });
+
+  await page.getByRole(`button`, { name: `Show tool call details` }).click();
+  await expect(page.getByRole(`heading`, { name: `Tool call details` })).toBeVisible();
+  await captureRagScreenshot(page, `06-memory-lookup-call.png`);
+  await page.keyboard.press(`Escape`);
+
+  await page.getByRole(`button`, { name: `Show tool response details` }).click();
+  await expect(page.getByRole(`heading`, { name: `Tool response details` })).toBeVisible();
+  await captureRagScreenshot(page, `07-memory-lookup-result.png`);
 });
