@@ -1,4 +1,18 @@
-import { approveToolCall, callsTool, createTaskViaUi, expect, openToolCallApproval, rejectionNoteInHistory, rejectToolCall, replies, scenario, sendTaskMessage, test, turnTimeout } from "../../../testing/playwright/index.js";
+import {
+  approveToolCall,
+  callsTool,
+  createProviderViaUi,
+  createTaskViaUi,
+  expect,
+  openToolCallApproval,
+  rejectionNoteInHistory,
+  rejectToolCall,
+  replies,
+  scenario,
+  sendTaskMessage,
+  test,
+  turnTimeout,
+} from "../../../testing/playwright/index.js";
 
 const taskInstruction = `Give this task a title that describes it.`;
 const titleTool = `athena_define_title`;
@@ -86,4 +100,45 @@ test(`a tool disabled for the loop is never offered, so the model cannot call it
   await expect(page.getByText(`Define Task Objective`)).toBeVisible({ timeout: turnTimeout });
   await expect(page.getByText(titleToolLabel)).toHaveCount(0);
   await expect(page.getByText(`Title: New Task`)).toBeVisible();
+});
+
+test(`own memory lookup recalls history indexed before it was enabled`, async ({ page, runnableLoop, inference }) => {
+  const memoryTool = `own-memory-lookup`;
+  const rememberedFact = `The release codename is Silver Kestrel.`;
+  const recalledAnswer = `The release codename was Silver Kestrel.`;
+
+  await inference.mock(scenario().whenConversationMentions(rememberedFact, replies(`I will remember that.`)));
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, rememberedFact);
+  await expect(page.getByText(`I will remember that.`)).toBeVisible({ timeout: turnTimeout });
+
+  const embedderName = `Loop memory embedder ${Date.now()}`;
+  await createProviderViaUi(page, embedderName, inference.scope, { embedder: { model: `deterministic-embed-1536` } });
+  await page.goto(`http://athena.localhost/loop/${runnableLoop.loop.id}/details`);
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await page.getByLabel(`Embedding provider`).selectOption({ label: `${embedderName} (deterministic-embed-1536)` });
+  page.once(`dialog`, async (dialog) => {
+    expect(dialog.message()).toContain(`rebuild the loop's history index`);
+    await dialog.accept();
+  });
+  await page.getByRole(`button`, { name: `Save history memory` }).click();
+
+  await expect(async () => {
+    await page.reload();
+    await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible();
+  }).toPass({ timeout: turnTimeout });
+
+  await inference.mock(
+    scenario()
+      .whenToolOffered(memoryTool, callsTool(memoryTool, { query: `release codename`, limit: 5 }))
+      .onceHistoryShows(rememberedFact, replies(recalledAnswer))
+      .otherwise(replies(`I could not recall it.`)),
+  );
+
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, `What release codename did I give you earlier?`);
+
+  await expect(page.getByRole(`button`, { name: `Show tool call details` })).toBeVisible({ timeout: turnTimeout });
+  await expect(page.getByRole(`button`, { name: `Show tool response details` })).toBeVisible({ timeout: turnTimeout });
+  await expect(page.getByText(recalledAnswer)).toBeVisible({ timeout: turnTimeout });
 });

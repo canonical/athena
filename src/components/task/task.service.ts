@@ -1,5 +1,7 @@
+import { backgroundJobEnqueue } from "@components/background-job/background-job.service.js";
+import { loopMemoryIngestJob } from "@components/loop-memory/loop-memory.jobs.js";
 import { pgColumns } from "@components/postgres/pg.utilities.js";
-import { query } from "@components/postgres/postgres.js";
+import { type QueryExecutor, query, withTransaction } from "@components/postgres/postgres.js";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { v7 as uuidv7 } from "uuid";
 import type { Task, TaskCreate, TaskQueueItemInput } from "./task.schema.js";
@@ -27,6 +29,12 @@ const taskColumnNames = [
 const taskColumns = pgColumns(taskColumnNames);
 
 const scopeTaskColumns = (scope: string): string => pgColumns(taskColumnNames, scope);
+
+const enqueueTaskMemorySync = async (executor: QueryExecutor, taskId: string): Promise<void> => {
+  const result = await executor.query<{ loop: string }>(`SELECT t."loop" FROM "task" t JOIN "loopHistoryRag" lhr ON lhr."loop" = t."loop" AND lhr."enabled" = TRUE WHERE t."id" = $1`, [taskId]);
+  const loopId = result.rows[0]?.loop;
+  if (loopId) await backgroundJobEnqueue(executor, loopMemoryIngestJob, { loop: loopId, task: taskId });
+};
 
 export const queryTaskList = async (loopId: string): Promise<Task[]> => {
   const result = await query<Task>(
@@ -425,8 +433,9 @@ export const queryTaskAssignCurrentModel = async (loopId: string, taskId: string
 };
 
 export const queryTaskCompactQueue = async (loopId: string, taskId: string, processorId: string, summary: string): Promise<boolean> => {
-  const result = await query(
-    `
+  return withTransaction(async (transaction) => {
+    const result = await transaction.query(
+      `
       WITH snapshot AS (
         SELECT
           t."queue",
@@ -486,11 +495,15 @@ export const queryTaskCompactQueue = async (loopId: string, taskId: string, proc
       WHERE t."loop" = $1
         AND t."id" = $2
         AND t."processorUnit" = $3
-    `,
-    [loopId, taskId, processorId, summary],
-  );
+      RETURNING t."id"
+      `,
+      [loopId, taskId, processorId, summary],
+    );
 
-  return (result.rowCount ?? 0) > 0;
+    const updated = (result.rowCount ?? 0) > 0;
+    if (updated) await enqueueTaskMemorySync(transaction, taskId);
+    return updated;
+  });
 };
 
 export const queryTaskDefineObjective = async (loopId: string, taskId: string, processorId: string, objective: string): Promise<boolean> => {
@@ -552,34 +565,36 @@ export const queryTaskUpdateObjectiveByUser = async (loopId: string, taskId: str
 
 export const queryAppendQueueItem = async (taskId: string, processorId: string | null, queueItem: TaskQueueItemInput, requeueIfCompleted = false): Promise<boolean> => {
   const itemWithId = { ...queueItem, id: uuidv7() };
-  const result = await query(
-    `
-      UPDATE "task" t
-      SET "queue" = t."queue" || CASE
-            WHEN COALESCE($3::jsonb #>> '{value,role}', '') <> 'user' THEN jsonb_build_array(
-              (
-                (
-                  $3::jsonb
-                  || jsonb_build_object('persona', to_jsonb(t."currentPersona"))
-                )
-                || jsonb_build_object('timestamp', to_jsonb(clock_timestamp()))
-              )
-            )
-            ELSE jsonb_build_array(($3::jsonb || jsonb_build_object('timestamp', to_jsonb(clock_timestamp()))))
-          END,
-          "status" = CASE WHEN $4::boolean AND t."status" = 'completed' THEN 'queued' ELSE t."status" END
-      WHERE t."id" = $1
-        AND ((t."processorUnit" IS NULL AND $2::uuid IS NULL) OR t."processorUnit" = $2::uuid)
-    `,
-    [taskId, processorId, JSON.stringify(itemWithId), requeueIfCompleted],
-  );
+  return withTransaction(async (transaction) => {
+    const result = await transaction.query<{ loop: string }>(
+      `UPDATE "task" t
+       SET "queue" = t."queue" || CASE
+             WHEN COALESCE($3::jsonb #>> '{value,role}', '') <> 'user' THEN jsonb_build_array(
+               (($3::jsonb || jsonb_build_object('persona', to_jsonb(t."currentPersona"))) || jsonb_build_object('timestamp', to_jsonb(clock_timestamp())))
+             )
+             ELSE jsonb_build_array(($3::jsonb || jsonb_build_object('timestamp', to_jsonb(clock_timestamp()))))
+           END,
+           "status" = CASE WHEN $4::boolean AND t."status" = 'completed' THEN 'queued' ELSE t."status" END
+       WHERE t."id" = $1
+         AND ((t."processorUnit" IS NULL AND $2::uuid IS NULL) OR t."processorUnit" = $2::uuid)
+       RETURNING t."loop"`,
+      [taskId, processorId, JSON.stringify(itemWithId), requeueIfCompleted],
+    );
+    const loopId = result.rows[0]?.loop;
+    if (!loopId) return false;
 
-  return (result.rowCount ?? 0) > 0;
+    const enabled = await transaction.query(`SELECT 1 FROM "loopHistoryRag" WHERE "loop" = $1 AND "enabled" = TRUE`, [loopId]);
+    if (enabled.rowCount) {
+      await backgroundJobEnqueue(transaction, loopMemoryIngestJob, { loop: loopId, task: taskId, queueItem: itemWithId.id }, { singletonKey: `${taskId}:${itemWithId.id}` });
+    }
+    return true;
+  });
 };
 
 export const queryTaskQueueItemStatusUpdate = async (taskId: string, processorId: string, id: string, status: TaskQueueItemInput["status"]): Promise<boolean> => {
-  const result = await query(
-    `
+  return withTransaction(async (transaction) => {
+    const result = await transaction.query(
+      `
       UPDATE "task" t
       SET "queue" = (
         SELECT COALESCE(
@@ -602,17 +617,22 @@ export const queryTaskQueueItemStatusUpdate = async (taskId: string, processorId
           WHERE queue_item.item->>'id' = $3
             AND COALESCE(queue_item.item->>'status', '') <> $4
         )
-    `,
-    [taskId, processorId, id, status],
-  );
+      RETURNING t."id"
+      `,
+      [taskId, processorId, id, status],
+    );
 
-  return (result.rowCount ?? 0) > 0;
+    const updated = (result.rowCount ?? 0) > 0;
+    if (updated) await enqueueTaskMemorySync(transaction, taskId);
+    return updated;
+  });
 };
 
 // Approve: moves awaiting-approval → approved so the processor can execute the tool calls.
 export const queryTaskToolCallApprove = async (loopId: string, taskId: string, queueItemId: string): Promise<boolean> => {
-  const result = await query(
-    `
+  return withTransaction(async (transaction) => {
+    const result = await transaction.query(
+      `
       UPDATE "task" t
       SET "queue" = (
         SELECT COALESCE(
@@ -637,17 +657,22 @@ export const queryTaskToolCallApprove = async (loopId: string, taskId: string, q
           WHERE qi.item->>'id' = $3
             AND qi.item->>'status' = 'awaiting-approval'
         )
-    `,
-    [loopId, taskId, queueItemId],
-  );
+      RETURNING t."id"
+      `,
+      [loopId, taskId, queueItemId],
+    );
 
-  return (result.rowCount ?? 0) > 0;
+    const updated = (result.rowCount ?? 0) > 0;
+    if (updated) await enqueueTaskMemorySync(transaction, taskId);
+    return updated;
+  });
 };
 
 // Reject: moves awaiting-approval → completed and appends a rejection tool response for each tool call.
 export const queryTaskToolCallReject = async (loopId: string, taskId: string, queueItemId: string): Promise<boolean> => {
-  const result = await query(
-    `
+  return withTransaction(async (transaction) => {
+    const result = await transaction.query(
+      `
       UPDATE "task" t
       SET "queue" = (
         WITH source AS (
@@ -698,9 +723,13 @@ export const queryTaskToolCallReject = async (loopId: string, taskId: string, qu
           WHERE qi.item->>'id' = $3
             AND qi.item->>'status' = 'awaiting-approval'
         )
-    `,
-    [loopId, taskId, queueItemId],
-  );
+      RETURNING t."id"
+      `,
+      [loopId, taskId, queueItemId],
+    );
 
-  return (result.rowCount ?? 0) > 0;
+    const updated = (result.rowCount ?? 0) > 0;
+    if (updated) await enqueueTaskMemorySync(transaction, taskId);
+    return updated;
+  });
 };

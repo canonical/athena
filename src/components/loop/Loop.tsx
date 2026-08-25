@@ -111,7 +111,15 @@ export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId,
       ) : null}
       {tab === `details` ? (
         <Suspense fallback={<div>Loading details...</div>}>
-          <LazyLoopDetails loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} loopIterationCostLimitUsd={loop?.iterationCostLimitUsd ?? null} onFeedback={setFeedback} onSaved={reloadLoop} />
+          <LazyLoopDetails
+            currentUserIsAdmin={loop?.currentUserIsAdmin ?? false}
+            loopId={loopId}
+            loopName={loop?.name ?? ``}
+            loopDescription={loop?.description ?? ``}
+            loopIterationCostLimitUsd={loop?.iterationCostLimitUsd ?? null}
+            onFeedback={setFeedback}
+            onSaved={reloadLoop}
+          />
         </Suspense>
       ) : null}
       {tab === `tools` ? (

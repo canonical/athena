@@ -28,7 +28,8 @@
     "watch:be": "nodemon --config ./nodemon.json",
     "watch": "sh -c 'npm run watch:fe & npm run watch:be & wait'",
     "coverage:start": "NODE_OPTIONS='--loader @istanbuljs/esm-loader-hook' nyc --silent --cwd . --reporter=json --temp-dir .nyc_output node dist/server.js",
-    "start": "NODE_USE_ENV_PROXY=1 node --enable-source-maps dist/server.js"
+    "start": "NODE_USE_ENV_PROXY=1 node --enable-source-maps dist/server.js",
+    "start:worker": "NODE_USE_ENV_PROXY=1 node --enable-source-maps dist/worker.js"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
@@ -63,7 +64,8 @@
     "formik": "2.4.9",
     "openid-client": "6.8.4",
     "passport": "0.7.0",
-    "pg": "8.22.0",
+    "pg": "8.23.0",
+    "pg-boss": "12.28.0",
     "pino-http": "11.0.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

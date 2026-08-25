@@ -1,5 +1,6 @@
 import { Button, Icon } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
+import { LoopHistoryMemory } from "@components/loop-memory/LoopHistoryMemory.js";
 import { useState } from "react";
 import { LoopEditor } from "./LoopEditor.js";
 import type { LoopDetailsProps } from "./loop.schema.js";
@@ -12,7 +13,7 @@ const formatUsd = (value: number | null): string => {
   return `$${value.toFixed(6)}`;
 };
 
-export function LoopDetails({ loopId, loopName, loopDescription, loopIterationCostLimitUsd, onFeedback, onSaved }: LoopDetailsProps) {
+export function LoopDetails({ loopId, loopName, loopDescription, loopIterationCostLimitUsd, currentUserIsAdmin, onFeedback, onSaved }: LoopDetailsProps) {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
 
   return (
@@ -37,6 +38,8 @@ export function LoopDetails({ loopId, loopName, loopDescription, loopIterationCo
         <dt>Per-iteration cost limit</dt>
         <dd>{formatUsd(loopIterationCostLimitUsd)}</dd>
       </dl>
+      <hr />
+      <LoopHistoryMemory canEdit={currentUserIsAdmin} loopId={loopId} />
       <EntityDrawer isOpen={isEditorOpen} onClose={() => setIsEditorOpen(false)} title="Edit loop">
         <LoopEditor
           loop={{ createdAt: ``, description: loopDescription, id: loopId, name: loopName, iterationCostLimitUsd: loopIterationCostLimitUsd, updatedAt: `` }}

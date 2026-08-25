@@ -77,7 +77,7 @@ services:
       - traefik.http.services.dex.loadbalancer.server.port=5556
 
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: athena
       POSTGRES_USER: athena
@@ -107,12 +107,22 @@ services:
       - -c
       - |
         set -eu
-        psql -h postgres -U athena -d athena -v APP_ROLE_NAME=athena -f /migrations/pg/migrate.sql
+        psql -h postgres -U athena -d athena -v ON_ERROR_STOP=1 -v APP_ROLE_NAME=athena -f /migrations/pg/migrate.sql
         for f in /migrations/pg/seed.local/*.sql; do
           [ -e "$$f" ] || continue
           echo ">>> Running local seed: $$f"
-          psql -h postgres -U athena -d athena -v APP_ROLE_NAME=athena -f "$$f"
+          psql -h postgres -U athena -d athena -v ON_ERROR_STOP=1 -v APP_ROLE_NAME=athena -f "$$f"
         done
+
+  pg-boss-prepare:
+    build:
+      context: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGBOSS_DATABASE_URL: ${APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING:?APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING is required}
+    command: ["npm", "exec", "--", "pg-boss", "migrate"]
 
   # Deterministic inference service used by Playwright specs.
   test-inference:
@@ -145,6 +155,8 @@ services:
         condition: service_healthy
       prepare:
         condition: service_completed_successfully
+      pg-boss-prepare:
+        condition: service_completed_successfully
     environment:
       APP_ATHENA_PORT: "8000"
       APP_ATHENA_NODE_ENV: development
@@ -159,6 +171,9 @@ services:
       APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY: ${APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY:?APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY is required}
       APP_ATHENA_SESSION_MAX_AGE: ${APP_ATHENA_SESSION_MAX_AGE:-86400000}
       APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING: ${APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING:?APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING is required}
+      APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS: ${APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS:-30000}
+      APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT: ${APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT:-3}
+      APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS: ${APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS:-5}
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
       COVERAGE: ${COVERAGE:-}
     extra_hosts:
@@ -180,6 +195,28 @@ services:
       - traefik.http.routers.athena.rule=Host(`athena.localhost`) || Host(`${APP_ATHENA_PUBLIC_HOST:-athena.localhost}`)
       - traefik.http.routers.athena.entrypoints=web
       - traefik.http.services.athena.loadbalancer.server.port=8000
+
+  athena-worker:
+    build:
+      context: .
+    command: ["./scripts/start-athena-worker-container.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prepare:
+        condition: service_completed_successfully
+      pg-boss-prepare:
+        condition: service_completed_successfully
+    environment:
+      APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY: ${APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY:?APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY is required}
+      APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING: ${APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING:?APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING is required}
+      APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS: ${APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS:-30000}
+      APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT: ${APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT:-3}
+      APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS: ${APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS:-5}
+    volumes:
+      - ./src:/app/src
+      - ./tsconfig.server.json:/app/tsconfig.server.json:ro
+    restart: unless-stopped
 
   cloudflared:
     image: cloudflare/cloudflared:latest

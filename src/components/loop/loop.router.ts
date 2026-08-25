@@ -1,5 +1,7 @@
 import { getAuthenticatedUserId } from "@components/authentication/session.js";
 import { defineRoutes } from "@components/express/express.router.js";
+import { loopMemoryGet, loopMemoryUpdate } from "@components/loop-memory/loop-memory.controller.js";
+import { loopMemoryConfigUpdateSchema } from "@components/loop-memory/loop-memory.schema.js";
 import { uuid } from "@components/utilities/zod.utilities.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -210,6 +212,24 @@ route({
   handler: async ({ params, response, respond }) => {
     const readiness = await loopReadinessGet(params.loop, getAuthenticatedUserId(response));
     respond({ status: 200, data: readiness });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/:loop/history-memory`,
+  validators: { params: loopParamsSchema },
+  handler: async ({ params, response, respond }) => {
+    respond({ status: 200, data: await loopMemoryGet(params.loop, getAuthenticatedUserId(response)) });
+  },
+});
+
+route({
+  method: `put`,
+  route: `/:loop/history-memory`,
+  validators: { params: loopParamsSchema, body: loopMemoryConfigUpdateSchema },
+  handler: async ({ params, body, response, respond }) => {
+    respond({ status: 200, data: await loopMemoryUpdate(params.loop, getAuthenticatedUserId(response), body) });
   },
 });
 

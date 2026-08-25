@@ -124,12 +124,14 @@ const buildLoopTools = (loopId: string, disabledProviderTools: string[]): LoopTo
 
   return {
     loop: loopId,
-    tools: providerToolDefinitions.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      enabled: enabledNames.has(tool.name),
-      requiresApproval: tool.requiresApproval,
-    })),
+    tools: providerToolDefinitions
+      .filter((tool) => tool.configurable !== false)
+      .map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        enabled: enabledNames.has(tool.name),
+        requiresApproval: tool.requiresApproval,
+      })),
   };
 };
 

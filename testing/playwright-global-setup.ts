@@ -117,6 +117,25 @@ const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
   throw new Error(`Timed out waiting for ${url}`);
 };
 
+const waitForComposeService = async (service: string, attempts = 25): Promise<void> => {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const runningServices = execFileSync(`docker`, [`compose`, `ps`, `--status`, `running`, `--services`], {
+      cwd: workspaceRoot,
+      encoding: `utf8`,
+    })
+      .split(`\n`)
+      .map((entry) => entry.trim());
+
+    if (runningServices.includes(service)) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+  }
+
+  throw new Error(`Timed out waiting for Compose service ${service}`);
+};
+
 const globalSetup = async (): Promise<void> => {
   await renderDexUsers();
 
@@ -133,7 +152,7 @@ const globalSetup = async (): Promise<void> => {
       stdio: `inherit`,
     });
 
-    execFileSync(`docker`, [`compose`, `--profile`, `test`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `test-inference`, `athena`], {
+    execFileSync(`docker`, [`compose`, `--profile`, `test`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `pg-boss-prepare`, `dex`, `test-inference`, `athena`, `athena-worker`], {
       cwd: workspaceRoot,
       stdio: `inherit`,
     });
@@ -143,6 +162,7 @@ const globalSetup = async (): Promise<void> => {
     }
   }
 
+  await waitForComposeService(`athena-worker`);
   await waitForUrl(statusUrl);
   await waitForUrl(dexDiscoveryUrl);
   await waitForUrl(frontendUrl);

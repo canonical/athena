@@ -1,5 +1,11 @@
 # RAG Index Implementation Plan
 
+## Status
+
+The provider embedder capability, durable background-job foundation, pgvector setup, and
+private loop-history memory are implemented. The standalone `ragIndex`, Markdown source,
+shared `ragEntry`, and `loopRagAttachment` work described below remain planned.
+
 ## Objective
 
 Implement the RAG index abstraction defined in
@@ -35,10 +41,15 @@ In scope:
 - A per-index lookup tool, governed by the per-loop tool allow/deny list.
 - Config CRUD, rebuild, and audit.
 
+Delivered prerequisite scope:
+
+- Private loop-history memory enabled by `hasHistoryRag`, with a selected embedder,
+  asynchronous backfill, transactional incremental ingestion, lifecycle state, and the
+  derived loop-scoped `own-memory-lookup` tool.
+
 Out of scope (deferred):
 
-- Task and conversation adapters (including loop-history memory) and task-timeline
-  as-of ordering.
+- Other task and conversation adapters and general task-timeline as-of ordering.
 - Live file-watching and incremental supersession; the MVP rebuilds a snapshot.
 - Cross-loop attachment (sharing an index across loops) and its authorization.
 - Curated writes and any commit tool.
@@ -61,12 +72,16 @@ Out of scope (deferred):
 - Ingestion is out-of-band via `rebuild`; it is never fired from loop task handling and
   cannot affect a task outcome. The Markdown corpus is a snapshot; `rebuild` is the
   update path.
+- Loop history is an already-delivered private projection rather than an implementation
+  of the future general attachment schema. Persisting a history item atomically queues
+  ingestion, while enablement queues an idempotent backfill of existing live and archived
+  task history.
 - Ingestion is two-phase: chunk rows are persisted first with `embedding` NULL, then
   embedded in a separate step that targets `embedding IS NULL`, so it is resumable and
-  degrades gracefully when no provider is available. The MVP runs both phases inline in the
-  admin-triggered `rebuild` command; because phase two is an idempotent job unit, the scale
-  path is a durable job queue — a Postgres-backed one (`pg-boss` or `graphile-worker`)
-  reusing the existing database, rather than a Redis-backed `BullMQ` or a new service.
+  degrades gracefully when no provider is available. Both phases run as durable
+  PostgreSQL-backed jobs through
+  [background-processing.md](../definitions/background-processing.md); the admin-triggered
+  command atomically queues a rebuild and returns without waiting for ingestion.
 - Chunking is a pluggable strategy, independent of the source adapter. The MVP strategy is
   a fixed-size overlapping window (`fixedOverlap`, parametrized by window size and overlap,
   sized in tokens against the embedding input limit); backtrack offsets are stored in
@@ -147,6 +162,8 @@ Out of scope (deferred):
   per-`sourceType` adapter strategy; splitting projected text into chunks is a separate
   per-`chunkingStrategy` strategy; the index delegates to both.
 - MVP: created when an admin opts a loop in, sourcing that loop's Markdown collection.
+- Loop memory: one private `loopHistory` index is created when an admin enables
+  `hasHistoryRag` and selects an active provider embedder.
 
 `loopRagAttachment` (a loop's use of an index):
 
@@ -245,9 +262,9 @@ handling. It runs in two phases so chunking and embedding are decoupled:
 - Graceful degradation: if the referenced embedder capability is unavailable, phase 1
   still persists the chunks and phase 2 fills them in on a later run; retrieval meanwhile
   returns only already-embedded rows.
-- The corpus is a snapshot; live watching and incremental supersession are future. The MVP
-  runs both phases inline in `rebuild`; see [Decisions](#decisions) for the queue scale
-  path.
+- The corpus is a snapshot; live watching and incremental supersession are future. The
+  planned `rag.rebuild` job performs phase one and enqueues bounded `rag.embedBatch` jobs
+  for phase two. Each job carries the projection version so superseded work cannot write.
 
 ## Retrieval (lookup tool)
 
@@ -300,6 +317,10 @@ handling. It runs in two phases so chunking and embedding are decoupled:
   invalidates all existing vectors before `rebuild`, and a rebuilding status applies
   throughout; Athena never serves a mixture of models or dimensions.
 - All config changes are audited.
+- Delivered loop details expose `hasHistoryRag`, its embedder selector, and
+  indexing/ready/failed state. Enabling on an existing loop warns that backfill can take
+  several minutes. `own-memory-lookup` availability is derived from this setting and is
+  not governed by the general tool allow/deny UI.
 
 ## Audit
 
@@ -321,23 +342,30 @@ Per [testing-standards.md](../../testing-standards.md):
 
 ## Implementation steps
 
-1. Deliver the shared provider chat/embedder capability split in
+1. [Done] Deliver the shared provider chat/embedder capability split in
    [provider-capabilities.plan.md](./provider-capabilities.plan.md).
-2. Add the pgvector extension and `ragIndex` / `ragEntry` / `loopRagAttachment` migrations
+2. [Done] Deliver the durable worker and transactional enqueueing foundation in
+   [background-processing.plan.md](./background-processing.plan.md).
+3. Add the pgvector extension and `ragIndex` / `ragEntry` / `loopRagAttachment` migrations
    (shared entry table, btree `index`, no global ANN index); update the database image and
    compose.
-3. Define the component `schema.ts` (Zod and types), the source-adapter strategy, and
+4. Define the component `schema.ts` (Zod and types), the source-adapter strategy, and
    `ragIndex` / `loopRagAttachment` CRUD with loop-admin authorization; on opt-in, create
    the Markdown index and attach it to the loop.
-4. Implement the Markdown adapter (enumerate and project the file collection) and the
+5. Implement the Markdown adapter (enumerate and project the file collection) and the
    `fixedOverlap` chunking strategy (windowed split with offset lineage) behind the
    strategy contract, feeding the shared redact/embed/idempotent-upsert pipeline under
    `rebuild`.
-5. Implement the lookup tool: mandatory index-scope filter, pure semantic ranking, bounded
+6. Register the planned `rag.rebuild` and `rag.embedBatch` jobs with projection-version
+   guards, bounded batches, default queue execution, and user-visible lifecycle state.
+7. Implement the lookup tool: mandatory index-scope filter, pure semantic ranking, bounded
    chunk output with citation, and tool-execution recording and snapshot.
-6. Register the lookup tool per index and gate it on the per-loop tool allow/deny list.
-7. Add audit.
-8. Add tests for isolation, lineage, idempotent rebuild, snapshot replay, and failure paths.
+8. Register the lookup tool per index and gate it on the per-loop tool allow/deny list.
+9. Add audit.
+10. [Done] Add private loop-history enablement, backfill, atomic incremental ingestion,
+    lifecycle state, and the loop-scoped `own-memory-lookup` tool.
+11. Add tests for isolation, lineage, idempotent rebuild, history backfill and incremental
+    recall, snapshot replay, and failure paths.
 
 ## Acceptance criteria
 
@@ -350,6 +378,9 @@ Per [testing-standards.md](../../testing-standards.md):
 5. Embedding or provider unavailability degrades to no context without changing ownership or
    closing tasks.
 6. `rebuild` is idempotent under retry and concurrent runs, skipping unchanged documents.
+7. [Delivered] A loop admin can enable history memory only with an embedder, sees asynchronous
+   indexing state, and can retrieve relevant live or archived history through
+   `own-memory-lookup` without crossing loop boundaries.
 
 ## Related specs
 
@@ -359,4 +390,5 @@ Per [testing-standards.md](../../testing-standards.md):
 - [llm-harness.md](../definitions/llm-harness.md)
 - [openai-api-connection.plan.md](./openai-api-connection.plan.md)
 - [provider-capabilities.plan.md](./provider-capabilities.plan.md)
+- [background-processing.plan.md](./background-processing.plan.md)
 - [nfr.md](../definitions/nfr.md)

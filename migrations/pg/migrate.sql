@@ -3,6 +3,7 @@
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 \echo >>> Running Athena function migrations
 \ir ./fncs/000100.uuidv7.sql
@@ -36,6 +37,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 \ir ./ddls/002400.providerChat.sql
 \ir ./ddls/002500.providerEmbedder.sql
 \ir ./ddls/002600.providerCapabilities.sql
+\ir ./ddls/002700.loopHistoryRag.sql
+\ir ./ddls/002800.loopHistoryRagEntry.sql
 \ir ./ddls/999999.cleanup.sql
 
 \echo >>> Running Athena seed data

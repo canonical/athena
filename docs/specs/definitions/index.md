@@ -3,6 +3,7 @@
 Normative definition files for Athena orchestration rules and constraints.
 
 - [approval.matrix.md](./approval.matrix.md)
+- [background-processing.md](./background-processing.md)
 - [dod.md](./dod.md)
 - [task.md](./task.md)
 - [handoff.definition.md](./handoff.definition.md)

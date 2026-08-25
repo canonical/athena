@@ -31,12 +31,10 @@ orchestration code.
 
 ## Index model and sources
 
-An index owns its data source, embedding capability reference, and chunking, ingestion, and rebuild
-procedures. A source adapter turns one source type into ingestible documents that a
-chunking strategy then splits; adapters are pluggable, and a Markdown file collection is
-the only one in the MVP. Task and
-conversation sources — including a loop's own history — are future adapters over the
-same abstraction. A loop-to-index attachment makes an index available to a loop and
+An index owns its data source, embedding capability reference, and chunking, ingestion,
+and rebuild procedures. A source adapter turns one source type into ingestible documents.
+Adapters are pluggable. The initial adapters are a Markdown file collection and a loop's
+own persisted history. A loop-to-index attachment makes an index available to a loop and
 carries that loop's consumption settings for it.
 
 Isolation follows attachment: a persona retrieves only through indexes attached to its
@@ -92,6 +90,9 @@ provider is unavailable — the chunks persist and are embedded on a later run.
 - The Markdown source is treated as a snapshot: `rebuild` is the update path, and the
   index is eventually consistent with the files. Live file-watching and incremental
   supersession are a future capability.
+- Loop history is a live source. Enabling it backfills existing task queues and archives;
+  every subsequently persisted history item atomically queues incremental ingestion.
+  Each persisted item is one entry without additional chunking in the initial version.
 - Ingestion must not persist secrets, since index content is re-surfaced into persona
   context.
 
@@ -145,23 +146,52 @@ detaches the index and removes its entries. Changing the embedding model or chun
 parameters invalidates existing vectors and requires an admin-triggered `rebuild` that
 exposes a rebuilding status; Athena never mixes vectors across model versions.
 
+## Loop-owned history memory
+
+A loop may enable `hasHistoryRag` and select an active provider embedder. The implemented
+storage uses a private `loopHistoryRag` configuration and loop-scoped
+`loopHistoryRagEntry` rows rather than the future general `ragIndex` attachment model.
+Enabling queues a backfill. The UI
+warns that existing history may take several minutes to become dependable and exposes
+missing, indexing, ready, and failed lifecycle state. Disabled retained indexes use
+`missing` because they are unavailable to the loop runtime.
+
+The source contains everything Athena persists as loop history across every task: live
+queue messages, archived messages, user and assistant content, assistant tool calls, tool
+results and failures, approval or rejection messages, compaction records, persona
+attribution, status, and timestamps. Each source item becomes one entry for now. Its
+lineage includes the loop, task, queue-item identity, archive/live origin, timestamp,
+role, persona, and tool metadata where present.
+
+New history persistence and its ingestion job share one PostgreSQL transaction. Backfill
+embeds batches of 50; incremental ingestion handles one appended item or refreshes a task
+after mutations to existing or multiple items. Both are idempotent on loop, task, and
+queue-item identity. Disabling prevents new ingestion and removes the tool from use but
+retains the derived entries for efficient re-enablement.
+
+The `own-memory-lookup` tool searches only the executing persona's current loop-history
+index. It cannot select another loop or a general attached index. Its availability is
+derived only from `hasHistoryRag`: it is not displayed or independently configurable in
+the loop Tools screen. The persona supplies the semantic query and optional result limit;
+Athena embeds that query unchanged. Calls and results persist as normal tool messages.
+
 ## Failure handling
 
 - Retrieval failures are tool execution failures, recorded per
   [tool-usage.md](./tool-usage.md); a failed lookup returns no context and the persona
   proceeds without it.
-- Ingestion failure leaves the source intact — the files remain canonical — and the
-  index is repaired by a later `rebuild`.
+- Ingestion failure leaves canonical source history intact. A failed backfill exposes its
+  error on `loopHistoryRag` and can be retried by re-enabling or changing its provider.
 - Embedding uses the referenced provider's embedder capability. It does not participate in
   the loop chat-provider selection or failover behavior in
   [llm-harness.md](./llm-harness.md).
 
-## The Markdown file collection as the first source
+## Planned standalone source: Markdown file collections
 
-The first source, and the example implementation of the abstraction, is a collection of
-Markdown files — a reference knowledge base a loop can consult. It is deliberately chosen
-to showcase the general capability: documents are the archetypal RAG source and exercise
-the chunking, overlap, and lineage that a record-oriented source would not.
+The planned example implementation of the general attachment abstraction is a collection
+of Markdown files — a reference knowledge base a loop can consult. It is deliberately
+chosen to exercise chunking, overlap, and lineage that the already-delivered
+record-oriented loop-history source does not.
 
 - Source: a set of Markdown files, treated as a snapshot and (re)projected by `rebuild`.
 - Chunks: overlapping windows of each file's text, with `filePath` and character-span
@@ -173,8 +203,8 @@ the chunking, overlap, and lineage that a record-oriented source would not.
 
 ## Future directions
 
-- Task and conversation adapters over the same abstraction — including a loop's own
-  history as retrievable memory — with task-timeline as-of ordering.
+- Other task and conversation adapters and task-timeline as-of ordering beyond the
+  loop-owned live memory source.
 - Live, incrementally-updated sources with supersession, replacing the snapshot `rebuild`
   model.
 - Curated entries: personas committing distilled knowledge as an additive tier on the
