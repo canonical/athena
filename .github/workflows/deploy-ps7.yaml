@@ -111,12 +111,13 @@ jobs:
     uses: ./.github/workflows/db-migrations.yaml
     with:
       environment: ${{ inputs.environment || 'edge' }}
+      ref: ${{ needs.validate.outputs.resolved_tag }}
     secrets:
       DB_CONNECT_STRING: ${{ secrets.DB_CONNECT_STRING }}
 
   deploy:
     needs: [validate, db-migrations]
-    if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.db-migrations.result == 'success' || needs.db-migrations.result == 'skipped' || inputs.skip_db_migrations == true || inputs.skip_db_migrations == 'true  ') }}
+    if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.db-migrations.result == 'success' || needs.db-migrations.result == 'skipped' || inputs.skip_db_migrations == true || inputs.skip_db_migrations == 'true') }}
     runs-on: [self-hosted-linux-amd64-noble-private-endpoint-medium]
     permissions:
       contents: read
