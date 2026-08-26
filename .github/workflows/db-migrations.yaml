@@ -10,6 +10,10 @@ on:
         required: true
         type: string
         default: "edge"
+      ref:
+        description: "Git ref/tag to check out"
+        required: false
+        type: string
     secrets:
       DB_CONNECT_STRING:
         required: true
@@ -24,6 +28,10 @@ on:
           - edge
           - staging
           - production
+      ref:
+        description: "Git ref/tag to check out"
+        required: false
+        type: string
 
 permissions: {}
 
@@ -39,6 +47,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
 
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@4eb059ff7f16592f9c84d5ca339c53cb7c5064e2 # v2
