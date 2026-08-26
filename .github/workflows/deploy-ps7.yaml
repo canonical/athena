@@ -12,6 +12,11 @@ on:
         required: false
         type: environment
         default: "edge"
+      skip_db_migrations:
+        description: "Skip DB migrations (not recommended)"
+        required: false
+        type: boolean
+        default: false
       version:
         description: "Release tag to deploy (e.g., v1.0.0 or latest)"
         required: true
@@ -98,9 +103,21 @@ jobs:
           echo "**Release Tag:** $RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
           echo "**Resolved Version:** $RESOLVED_VERSION" >> $GITHUB_STEP_SUMMARY
 
-  deploy:
+  db-migrations:
     needs: validate
-    if: ${{ needs.validate.result == 'success' }}
+    permissions:
+      contents: read
+    if: ${{ needs.validate.result == 'success' && (inputs.skip_db_migrations == false || inputs.skip_db_migrations == 'false' || inputs.skip_db_migrations == null) }}
+    uses: ./.github/workflows/db-migrations.yaml
+    with:
+      environment: ${{ inputs.environment || 'edge' }}
+      ref: ${{ needs.validate.outputs.resolved_tag }}
+    secrets:
+      DB_CONNECT_STRING: ${{ secrets.DB_CONNECT_STRING }}
+
+  deploy:
+    needs: [validate, db-migrations]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.db-migrations.result == 'success' || needs.db-migrations.result == 'skipped' || inputs.skip_db_migrations == true || inputs.skip_db_migrations == 'true') }}
     runs-on: [self-hosted-linux-amd64-noble-private-endpoint-medium]
     permissions:
       contents: read
