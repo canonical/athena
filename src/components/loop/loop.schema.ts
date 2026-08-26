@@ -168,6 +168,7 @@ export type LoopProps = {
 };
 
 export type LoopDetailsProps = {
+  currentUserIsAdmin: boolean;
   loopId: string;
   loopName: string;
   loopDescription: string;

@@ -1,11 +1,14 @@
 import { authenticationRouter } from "@components/authentication/authentication.router.js";
 import { requireAuthentication } from "@components/authentication/authentication-middleware.js";
+import { backgroundJobStartProducer } from "@components/background-job/background-job.service.js";
 import { defineMiddlewares } from "@components/base/define-middlewares.js";
+import { backendConfig } from "@components/config/backend-config.js";
 import { config } from "@components/config/config.js";
 import { defineLoggingErrorHandler } from "@components/logging/logging.middleware.js";
 import { log } from "@components/logging/logging.service.js";
 import { loopRouter } from "@components/loop/loop.router.js";
 import { personaRouter } from "@components/persona/persona.router.js";
+import { ensurePG } from "@components/postgres/postgres.js";
 import { providerRouter } from "@components/provider/provider.router.js";
 import { repositoryRouter } from "@components/repository/repository.router.js";
 import { startRunnerQueueConsumer } from "@components/runner/runner.queue.consumer.js";
@@ -23,6 +26,8 @@ import express, { type Request, type Response } from "express";
 const app = express();
 const port = config.application.port;
 const apiRoot = `/api`;
+
+ensurePG({ connectionString: backendConfig.database.connectionString });
 
 app.set(`trust proxy`, 1);
 defineMiddlewares(app);
@@ -53,6 +58,8 @@ app.use((_request: Request, response: Response) => {
 });
 
 defineLoggingErrorHandler(app);
+
+await backgroundJobStartProducer();
 
 app.listen(port, () => {
   log.info(`Athena server listening on port ${port}`);

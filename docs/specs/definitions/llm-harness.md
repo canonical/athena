@@ -21,6 +21,23 @@ Execution environment is selected per task step by the active routing persona (`
 
 Athena routing authority remains unchanged. Execution-environment selection does not change ownership, handoff, or approval semantics.
 
+## Provider capabilities
+
+A provider is one owner-scoped connection that may expose a chat capability, an embedder
+capability, or both. The capabilities share the provider's type, base URL, encrypted
+credential, ownership, and lifecycle configuration. Chat-specific and embedding-specific
+model configuration and runtime behavior remain separate.
+
+- Only the chat capability participates in loop provider assignment, selection, and
+  failover.
+- An embedding-only provider can never enter chat selection.
+- RAG indexes reference the embedder capability directly; embedding does not select from
+  the loop chat-provider pool.
+- A provider with both capabilities does not duplicate its endpoint or credential.
+
+The implementation contract and migration sequence are defined in
+[provider-capabilities.plan.md](../implementation-plans/provider-capabilities.plan.md).
+
 ## Definition ownership and visibility
 
 - Harness definitions and provider definitions are independent resources and are not loop-scoped records.
@@ -76,10 +93,11 @@ Additional runners and harnesses may be added to the catalog after capability an
 
 - Provider runtime in this phase is OpenRouter-only.
 - OpenRouter credentials are entered directly as API keys by the owner and assigned to loops as key pools.
-- Provider definitions must not require or store model selection fields.
+- Shared provider definitions do not store capability-specific model selection fields.
+- Chat and embedder model settings belong to their respective provider capabilities.
 - Model selection is decided at routing/execution time by the active routing persona and deterministic Athena policy.
-- Provider endpoints remain HTTPS-only.
-- Multiple OpenRouter keys and multiple Copilot keys can be assigned to a loop.
+- Provider endpoints use HTTPS in normal operation; HTTP is permitted for deterministic test inference.
+- Multiple chat-capable OpenRouter providers and multiple Copilot keys can be assigned to a loop.
 - Athena definitions remain canonical for behavior and policy regardless of selected provider/key.
 - Provider/key choice must not alter deterministic routing, ownership rules, or approval authority.
 

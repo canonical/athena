@@ -56,6 +56,12 @@ The current application serves an authenticated SPA plus a JSON API.
   - workgraph management under `/workgraph/...`
 - Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
 - The server also starts background processors for tasks and inbound webhook items.
+- Athena provides PostgreSQL-backed durable-job infrastructure through `pg-boss`. The
+  HTTP process produces registered jobs and a separate worker process consumes them.
+- A loop admin can enable private history memory with an embedding-capable provider.
+  Athena backfills live and archived task history in the worker, incrementally indexes
+  later history, and exposes the loop-scoped `own-memory-lookup` tool while memory is
+  enabled.
 
 ## E2E testing
 
@@ -95,14 +101,13 @@ Coverage-enabled runs collect frontend and backend coverage data; `npm run test:
 
 ## Default runtime configuration
 
-Athena reads backend runtime configuration from environment variables with the prefixes `APP_ATHENA` and `APP`, in that order.
+Athena reads backend runtime configuration from environment variables with the prefixes `APP_ATHENA`, `APP`, and `ATHENA`, in that order.
 
 ### Required backend variables
 
 - `APP_ATHENA_PORT`
 - `APP_ATHENA_ALLOWED_ORIGINS`
 - `APP_ATHENA_FRONTEND_BASE_URL`
-- `APP_ATHENA_OAUTH_CALLBACK_URL`
 - `APP_ATHENA_OIDC_CLIENT_SECRET`
 - `APP_ATHENA_SECRET_KEY`
 - `APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY`
@@ -115,9 +120,13 @@ Athena reads backend runtime configuration from environment variables with the p
 - `APP_ATHENA_LOG_SERVICE_NAME=athena-service`
 - `APP_ATHENA_LOG_LEVEL=info`
 - `APP_ATHENA_LOG_ENABLED=true`
+- `APP_ATHENA_OAUTH_CALLBACK_URL=http://athena.localhost/api/authentication/callback`
 - `APP_ATHENA_OIDC_DISCOVERY_URL=http://dex.localhost/dex/.well-known/openid-configuration`
 - `APP_ATHENA_OIDC_CLIENT_ID=athena`
 - `APP_ATHENA_SESSION_MAX_AGE=86400000`
+- `APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS=30000`
+- `APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT=3`
+- `APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS=5`
 
 ### Frontend build-time variable
 
@@ -131,6 +140,9 @@ The checked-in sample is [.example.env](./.example.env). It includes:
 
 - `POSTGRES_PASSWORD`
 - `APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING`
+- `APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS`
+- `APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT`
+- `APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS`
 - `APP_ATHENA_PORT`
 - `APP_ATHENA_DEV_MODE`
 - `APP_ATHENA_OAUTH_CALLBACK_URL`

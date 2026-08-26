@@ -279,10 +279,11 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
         p."credentialKeyVersion",
         p."providerType" AS "definitionType",
         p."baseUrl",
-        p."defaultModel",
-        p."enabledModels"
+        pc."defaultModel",
+        COALESCE(pc."enabledModels", ARRAY[]::text[]) AS "enabledModels"
       FROM "loopProvider" lp
       JOIN "provider" p ON p."id" = lp."provider"
+      JOIN "providerChat" pc ON pc."provider" = p."id"
       WHERE lp."loop" = $1
         AND p."lifecycleStatus" = 'active'
         AND p."providerType" = 'openrouter'

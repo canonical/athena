@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { config } from "@components/config/config.js";
+import { backendConfig } from "@components/config/backend-config.js";
 
 export type SecretEnvelope = {
   ciphertext: string;
@@ -14,7 +14,7 @@ const ivLength = 12;
 // Key version enables forward rotation without changing row shape.
 const keyVersion = `v1`;
 
-const getEncryptionKey = (): Buffer => createHash(`sha256`).update(config.authentication.credentials.encryptionKey).digest();
+const getEncryptionKey = (): Buffer => createHash(`sha256`).update(backendConfig.credentials.encryptionKey).digest();
 
 export const encryptSecret = (value: string): SecretEnvelope => {
   const iv = randomBytes(ivLength);

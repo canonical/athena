@@ -7,6 +7,7 @@ export type ProviderToolDefinition = {
   name: string;
   label: string;
   description: string;
+  configurable?: boolean;
   requiresApproval: boolean;
   inputSchema: z.ZodType<ProviderToolInput>;
 };
@@ -22,6 +23,19 @@ const workgraphItemInputSchema = workgraphInputSchema
   .strict();
 
 export const providerToolDefinitions: ReadonlyArray<ProviderToolDefinition> = [
+  {
+    name: `own-memory-lookup`,
+    label: `Look Up Loop Memory`,
+    description: `Search the current loop's own persisted conversation and service history for relevant prior context. This tool can never search another loop.`,
+    configurable: false,
+    requiresApproval: false,
+    inputSchema: z
+      .object({
+        query: requiredString(`query is required.`).describe(`Semantic query describing the prior loop context to recall.`),
+        limit: z.number().int().min(1).max(20).optional().describe(`Maximum memory entries to return. Defaults to 5.`),
+      })
+      .strict(),
+  },
   {
     name: `task_repositories`,
     label: `List Repositories`,
@@ -382,7 +396,7 @@ export const enabledProviderToolDefinitionsFromDisabled = (disabledToolNames: Re
 
 export const disabledProviderToolNamesFromEnabled = (enabledToolNames: ReadonlyArray<string>): string[] => {
   const normalizedEnabled = new Set(normalizeProviderToolNames(enabledToolNames));
-  return providerToolNames.filter((toolName) => !normalizedEnabled.has(toolName));
+  return providerToolDefinitions.filter((tool) => tool.configurable !== false && !normalizedEnabled.has(tool.name)).map((tool) => tool.name);
 };
 
 export const providerToolInputSchemas: Record<string, z.ZodType<ProviderToolInput>> = Object.fromEntries(providerToolDefinitions.map((tool) => [tool.name, tool.inputSchema])) as Record<string, z.ZodType<ProviderToolInput>>;

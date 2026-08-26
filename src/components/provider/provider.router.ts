@@ -9,8 +9,13 @@ import {
   loopProviderList,
   loopProviderUpdateByAdmin,
   providerAssign,
+  providerChatDelete,
+  providerChatUpdate,
   providerCreate,
   providerDelete,
+  providerEmbedderDelete,
+  providerEmbedderUpdate,
+  providerEmbedderVerify,
   providerGet,
   providerList,
   providerModelPreview,
@@ -18,7 +23,7 @@ import {
   providerUpdate,
   providerValidateModels,
 } from "./provider.controller.js";
-import { loopProviderAdminUpdateSchema, providerInsertSchema, providerModelPreviewRequestSchema, providerModelValidateRequestSchema, providerUpdateSchema } from "./provider.schema.js";
+import { loopProviderAdminUpdateSchema, providerChatUpdateSchema, providerEmbedderUpdateSchema, providerInsertSchema, providerModelPreviewRequestSchema, providerModelValidateRequestSchema, providerUpdateSchema } from "./provider.schema.js";
 
 export const providerRouter = Router();
 const route = defineRoutes(providerRouter);
@@ -105,7 +110,7 @@ route({
 
 route({
   method: `get`,
-  route: `/:provider/models`,
+  route: `/:provider/chat/models`,
   validators: {
     params: providerParamsSchema,
   },
@@ -117,7 +122,7 @@ route({
 
 route({
   method: `post`,
-  route: `/:provider/models/validate`,
+  route: `/:provider/chat/models/validate`,
   validators: {
     params: providerParamsSchema,
     body: providerModelValidateRequestSchema,
@@ -125,6 +130,56 @@ route({
   handler: async ({ params, body, request, response, respond }) => {
     const results = await providerValidateModels(params.provider, getAuthenticatedUserId(response), body.models, resolveRequestLogger(request));
     respond({ status: 200, data: { results } });
+  },
+});
+
+route({
+  method: `put`,
+  route: `/:provider/chat`,
+  validators: { params: providerParamsSchema, body: providerChatUpdateSchema },
+  handler: async ({ params, body, response, respond }) => {
+    const provider = await providerChatUpdate(params.provider, getAuthenticatedUserId(response), body);
+    respond({ status: 200, data: provider });
+  },
+});
+
+route({
+  method: `delete`,
+  route: `/:provider/chat`,
+  validators: { params: providerParamsSchema },
+  handler: async ({ params, response, respond }) => {
+    await providerChatDelete(params.provider, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
+});
+
+route({
+  method: `put`,
+  route: `/:provider/embedder`,
+  validators: { params: providerParamsSchema, body: providerEmbedderUpdateSchema },
+  handler: async ({ params, body, response, respond }) => {
+    const provider = await providerEmbedderUpdate(params.provider, getAuthenticatedUserId(response), body);
+    respond({ status: 200, data: provider });
+  },
+});
+
+route({
+  method: `delete`,
+  route: `/:provider/embedder`,
+  validators: { params: providerParamsSchema },
+  handler: async ({ params, response, respond }) => {
+    await providerEmbedderDelete(params.provider, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
+});
+
+route({
+  method: `post`,
+  route: `/:provider/embedder/verify`,
+  validators: { params: providerParamsSchema },
+  handler: async ({ params, response, respond }) => {
+    const result = await providerEmbedderVerify(params.provider, getAuthenticatedUserId(response));
+    respond({ status: 200, data: result });
   },
 });
 

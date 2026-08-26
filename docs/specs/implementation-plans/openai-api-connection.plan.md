@@ -4,11 +4,15 @@
 
 Define owner-scoped provider definitions and loop-level OpenRouter key selection that is deterministic, auditable, and secure.
 
+Provider definitions now act as shared connections for explicit chat and embedder
+capabilities. The capability refactor is planned separately in
+[provider-capabilities.plan.md](./provider-capabilities.plan.md).
+
 ## Scope
 
 - Owner-scoped provider definition schema
 - OpenRouter-only runtime for this phase
-- HTTPS-only endpoint validation
+- HTTPS endpoint validation with an HTTP exception for deterministic test inference
 - Loop assignment lifecycle and permissions
 - Deterministic key selection algorithms and fallback
 - Credential envelope persistence and redaction behavior
@@ -22,9 +26,12 @@ Provider definitions are independent records with:
 1. `providerId` (stable identifier)
 2. `displayName`
 3. `providerType` (`openrouter` only in this phase)
-4. `baseUrl` (HTTPS only)
+4. `baseUrl` (HTTPS in normal operation; HTTP permitted for deterministic test inference)
 5. encrypted credential envelope fields
 6. lifecycle status
+
+Chat and embedder model configuration belongs to capability-specific records; the shared
+definition above owns their common endpoint and credential.
 
 ### Loop assignment contract
 
@@ -53,7 +60,7 @@ Fallback contract:
 ## Validation rules
 
 1. `providerType` must be `openrouter` in this phase.
-2. `baseUrl` must be HTTPS.
+2. `baseUrl` must use HTTPS, except for deterministic test inference where HTTP is permitted.
 3. `requestTimeoutMs` must be bounded.
 4. `maxRetries` must be bounded.
 5. Priority values must be unique per loop.
@@ -87,13 +94,13 @@ For each selection attempt, capture:
 4. Implement loop member assignment and admin-only order/override updates.
 5. Implement deterministic key selection engine and fallback behavior.
 6. Integrate minimal execution-time hook in task flow.
-7. Add E2E tests for permissions, HTTPS enforcement, OpenRouter-only enforcement, deterministic selection, and redaction.
+7. Add E2E tests for permissions, endpoint scheme enforcement, the deterministic test-inference exception, OpenRouter-only enforcement, deterministic selection, and redaction.
 
 ## Acceptance criteria
 
 1. Owners can manage provider definitions independent of loops.
 2. OpenRouter-only provider runtime is enforced.
-3. HTTPS-only endpoint validation is enforced.
+3. HTTPS endpoint validation and the deterministic test-inference HTTP exception are enforced.
 4. Multi-key assignment and deterministic selection are supported.
 5. Secret material is never exposed.
 

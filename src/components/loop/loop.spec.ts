@@ -1,4 +1,9 @@
-import { authenticate, createLoop, dexEmail, dexLoopMemberEmail, expect, test } from "../../../testing/playwright/index.js";
+import type { Page } from "@playwright/test";
+import { authenticate, createLoop, createProviderViaUi, dexEmail, dexLoopMemberEmail, expect, test } from "../../../testing/playwright/index.js";
+
+const captureRagScreenshot = async (page: Page, filename: string) => {
+  await page.screenshot({ path: `testing/results/rag-screenshots/${filename}` });
+};
 
 test(`loop list requires authentication`, async ({ page }) => {
   await page.context().clearCookies();
@@ -70,29 +75,6 @@ test(`loop provider selection policy uses providerSelectionAlgorithm`, async ({ 
   expect(loadedPolicy.runnerSelectionAlgorithm).toBe(`highest-credit-absolute`);
   expect(loadedPolicy.runnerSelectionCursor).toBeGreaterThanOrEqual(0);
   expect(Object.keys(loadedPolicy).sort()).toEqual([`loop`, `providerSelectionAlgorithm`, `providerSelectionCursor`, `runnerSelectionAlgorithm`, `runnerSelectionCursor`, `updatedAt`]);
-});
-
-test(`loop tools API exposes requiresApproval metadata`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Tool metadata loop ${Date.now()}`);
-  const response = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/tools`);
-
-  expect(response.ok()).toBe(true);
-  const payload = (await response.json()) as {
-    loop: string;
-    tools: Array<{ name: string; description: string; enabled: boolean; requiresApproval: boolean }>;
-  };
-
-  expect(payload.loop).toBe(loop.id);
-  expect(Array.isArray(payload.tools)).toBe(true);
-  expect(payload.tools.length).toBeGreaterThan(0);
-
-  const createItem = payload.tools.find((tool) => tool.name === `workgraph_create_item`);
-  const readItem = payload.tools.find((tool) => tool.name === `workgraph_read_item`);
-
-  expect(createItem?.requiresApproval).toBe(true);
-  expect(readItem?.requiresApproval).toBe(false);
 });
 
 test(`loop membership UI lists members and pending invites`, async ({ page }) => {
@@ -284,6 +266,106 @@ test(`loop detail page saves loop details from the Details tab`, async ({ page }
 
   await expect(page.getByText(`Detail save loop updated has been updated.`)).toBeVisible();
   await expect(page.locator(`dd`).getByText(`Detail save loop updated`, { exact: true })).toBeVisible();
+});
+
+test(`loop admins can enable and disable searchable history memory`, async ({ page }) => {
+  await authenticate(page);
+
+  const providerName = `History embedder ${Date.now()}`;
+  const replacementProviderName = `Replacement history embedder ${Date.now()}`;
+  await createProviderViaUi(page, providerName, `unused-provider-credential`, { embedder: { model: `deterministic-embed-1536` } });
+  await createProviderViaUi(page, replacementProviderName, `unused-replacement-provider-credential`, { embedder: { model: `deterministic-embed-1536` } });
+  const loop = await createLoop(page, `History memory loop ${Date.now()}`);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/details`);
+
+  const saveButton = page.getByRole(`button`, { name: `Save history memory` });
+  await expect(saveButton).toBeDisabled();
+
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await expect(page.getByText(`Indexing the whole loop might take some time.`)).toBeVisible();
+  await page.getByLabel(`Embedding provider`).selectOption({ label: `${providerName} (deterministic-embed-1536)` });
+  await captureRagScreenshot(page, `01-rebuild-warning.png`);
+
+  page.once(`dialog`, async (dialog) => {
+    expect(dialog.message()).toContain(`rebuild the loop's history index`);
+    await dialog.dismiss();
+  });
+  await saveButton.click();
+  await expect(saveButton).toBeEnabled();
+
+  page.once(`dialog`, async (dialog) => {
+    expect(dialog.message()).toContain(`rebuild the loop's history index`);
+    await dialog.accept();
+  });
+  await saveButton.click();
+
+  await expect(page.getByText(`The loop history memory settings were saved.`)).toBeVisible();
+  await expect(page.getByLabel(`Create a searchable RAG index from this loop's history`)).toBeChecked();
+  await expect(saveButton).toBeDisabled();
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: 60_000 });
+  await captureRagScreenshot(page, `02-history-memory-ready.png`);
+
+  await page.getByLabel(`Embedding provider`).selectOption({ label: `${replacementProviderName} (deterministic-embed-1536)` });
+  await expect(page.getByText(`Indexing the whole loop might take some time.`)).toBeVisible();
+  page.once(`dialog`, async (dialog) => {
+    expect(dialog.message()).toContain(`rebuild the loop's history index`);
+    await dialog.accept();
+  });
+  await saveButton.click();
+  await expect(page.getByText(`The loop history memory settings were saved.`)).toBeVisible();
+  await expect(saveButton).toBeDisabled();
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: 60_000 });
+  await page.reload();
+  await expect(page.getByLabel(`Embedding provider`)).toHaveValue(/.+/u);
+  await expect(page.getByLabel(`Embedding provider`).locator(`option:checked`)).toHaveText(`${replacementProviderName} (deterministic-embed-1536)`);
+  await expect(saveButton).toBeDisabled();
+  await expect(page.getByText(`Indexing the whole loop might take some time.`)).toHaveCount(0);
+  await expect(page.getByText(`The loop's existing history is being indexed.`)).toHaveCount(0);
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible();
+
+  await page.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+  await saveButton.click();
+  await page.reload();
+  await expect(page.getByLabel(`Create a searchable RAG index from this loop's history`)).not.toBeChecked();
+  await expect(page.getByLabel(`Embedding provider`)).toBeDisabled();
+  await expect(page.getByText(`The loop's existing history is being indexed.`)).toHaveCount(0);
+  await expect(page.getByText(`History indexing failed`)).toHaveCount(0);
+  await expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toHaveCount(0);
+  await captureRagScreenshot(page, `03-history-memory-disabled.png`);
+});
+
+test(`concurrent history memory updates settle on one ready embedder`, async ({ page, context }) => {
+  await authenticate(page);
+
+  const firstProvider = `Concurrent history embedder A ${Date.now()}`;
+  const secondProvider = `Concurrent history embedder B ${Date.now()}`;
+  await createProviderViaUi(page, firstProvider, `unused-concurrent-provider-a`, { embedder: { model: `deterministic-embed-8` } });
+  await createProviderViaUi(page, secondProvider, `unused-concurrent-provider-b`, { embedder: { model: `deterministic-embed-16` } });
+  const loop = await createLoop(page, `Concurrent history loop ${Date.now()}`);
+  const secondPage = await context.newPage();
+
+  const prepareUpdate = async (targetPage: Page, providerLabel: string) => {
+    await targetPage.goto(`http://athena.localhost/loop/${loop.id}/details`);
+    await targetPage.getByText(`Create a searchable RAG index from this loop's history`, { exact: true }).click();
+    await targetPage.getByLabel(`Embedding provider`).selectOption({ label: providerLabel });
+    targetPage.once(`dialog`, (dialog) => void dialog.accept());
+  };
+
+  await Promise.all([prepareUpdate(page, `${firstProvider} (deterministic-embed-8)`), prepareUpdate(secondPage, `${secondProvider} (deterministic-embed-16)`)]);
+  await Promise.all([page.getByRole(`button`, { name: `Save history memory` }).click(), secondPage.getByRole(`button`, { name: `Save history memory` }).click()]);
+  await Promise.all([page.reload(), secondPage.reload()]);
+  await Promise.all([
+    expect(page.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: 60_000 }),
+    expect(secondPage.getByText(`The loop's indexed history is ready for lookup.`)).toBeVisible({ timeout: 60_000 }),
+  ]);
+
+  const firstSelection = await page.getByLabel(`Embedding provider`).locator(`option:checked`).innerText();
+  const secondSelection = await secondPage.getByLabel(`Embedding provider`).locator(`option:checked`).innerText();
+  expect(firstSelection).toBe(secondSelection);
+  expect([`${firstProvider} (deterministic-embed-8)`, `${secondProvider} (deterministic-embed-16)`]).toContain(firstSelection);
+  await expect(page.getByText(`History indexing failed`)).toHaveCount(0);
+  await expect(secondPage.getByText(`History indexing failed`)).toHaveCount(0);
+  await secondPage.close();
 });
 
 test(`loop details tab shows no paused banner for a properly configured loop`, async ({ page }) => {

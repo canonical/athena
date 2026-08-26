@@ -1,3 +1,4 @@
+import * as memoryExecutors from "@components/loop-memory/loop-memory.tool.js";
 import * as athenaExecutors from "./tool.athena.service.js";
 import { providerToolInputSchemas } from "./tool.catalog.js";
 import * as githubExecutors from "./tool.github.service.js";
@@ -27,6 +28,7 @@ const validateToolInput = (request: ProviderToolRequest): string[] => {
 };
 
 const providerToolExecutors: Record<string, ProviderToolExecutor> = {
+  "own-memory-lookup": async (context, input) => memoryExecutors.executeOwnMemoryLookup(context, input),
   task_repositories: async (context) => githubExecutors.executeTaskRepositories(context),
   task_runners: async (context, input) => runnerExecutors.executeTaskRunners(context, input),
   task_workgraphs: async (context) => workgraphExecutors.executeTaskWorkgraphs(context),

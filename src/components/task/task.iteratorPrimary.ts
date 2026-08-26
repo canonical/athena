@@ -2,8 +2,9 @@ import { log } from "@components/logging/logging.service.js";
 import { queryLoopDisabledProviderToolsById } from "@components/loop/loop.service.js";
 import { resolveLoopSelection } from "@components/loop/loop-selection.service.js";
 import type { OpenRouterMessage, OpenRouterTool } from "@components/openrouter/openrouter.schema.js";
-import { fetchOpenRouterChatCompletion, readOpenRouterAssistantText } from "@components/openrouter/openrouter.service.js";
+import { readOpenRouterAssistantText } from "@components/openrouter/openrouter.service.js";
 import { queryLoopPersonaById } from "@components/persona/persona.service.js";
+import { ProviderChat } from "@components/provider/provider.chat.service.js";
 import { isTaskReadyForModel, parseJsonWithSchema } from "@components/task/task.iteratorUtilities.js";
 import type { Task, TaskQueueItemInput } from "@components/task/task.schema.js";
 import {
@@ -171,24 +172,22 @@ export const iterateTaskBootstrapWorkgraphItem = async (task: Task, processorId:
   };
   const messageHistory: OpenRouterMessage[] = systemMessage ? [systemMessage, bootstrapUserMessage] : [bootstrapUserMessage];
 
-  const payload = await fetchOpenRouterChatCompletion(
-    {
-      baseUrl,
-      apiKey: providerResolution.selected.secret,
+  const payload = await new ProviderChat({
+    providerType: providerResolution.selected.definitionType,
+    baseUrl,
+    apiKey: providerResolution.selected.secret,
+  }).complete({
+    model,
+    messages: messageHistory,
+    ...(toolDefinitions.length > 0 ? { tools: toolDefinitions, toolChoice: `auto` as const } : {}),
+    responseFormat: `text`,
+    operation: `task-iterate-bootstrap-workgraph-item`,
+    context: {
+      taskId: task.id,
+      loopId: task.loop,
+      toolDefinitionCount: toolDefinitions.length,
     },
-    {
-      model,
-      messages: messageHistory,
-      ...(toolDefinitions.length > 0 ? { tools: toolDefinitions, toolChoice: `auto` as const } : {}),
-      responseFormat: `text`,
-      operation: `task-iterate-bootstrap-workgraph-item`,
-      context: {
-        taskId: task.id,
-        loopId: task.loop,
-        toolDefinitionCount: toolDefinitions.length,
-      },
-    },
-  );
+  });
 
   const responseMessage = payload.choices?.[0]?.message;
   const assistantText = readPrimaryAssistantContent(responseMessage, `Unable to parse bootstrap assistant response.`);
@@ -437,25 +436,23 @@ export const iterateTaskFirstPendingToolCall = async (task: Task, processorId: s
     content: [`Return a JSON object with key content.`, `content should be the assistant response text only.`].join("\n"),
   };
 
-  const llmPayload = await fetchOpenRouterChatCompletion(
-    {
-      baseUrl,
-      apiKey: providerResolution.selected.secret,
+  const llmPayload = await new ProviderChat({
+    providerType: providerResolution.selected.definitionType,
+    baseUrl,
+    apiKey: providerResolution.selected.secret,
+  }).complete({
+    model,
+    messages: [...messageHistory, continuationPromptMessage],
+    ...(toolDefinitions.length > 0 ? { tools: toolDefinitions, toolChoice: `auto` as const } : {}),
+    responseFormat: `text`,
+    operation: `task-iterate-first-pending-tool-call`,
+    context: {
+      taskId: task.id,
+      loopId: task.loop,
+      firstPendingToolCallIndex,
+      toolDefinitionCount: toolDefinitions.length,
     },
-    {
-      model,
-      messages: [...messageHistory, continuationPromptMessage],
-      ...(toolDefinitions.length > 0 ? { tools: toolDefinitions, toolChoice: `auto` as const } : {}),
-      responseFormat: `text`,
-      operation: `task-iterate-first-pending-tool-call`,
-      context: {
-        taskId: task.id,
-        loopId: task.loop,
-        firstPendingToolCallIndex,
-        toolDefinitionCount: toolDefinitions.length,
-      },
-    },
-  );
+  });
 
   const llmResponseMessage = llmPayload.choices?.[0]?.message;
   const llmAssistantText = readPrimaryAssistantContent(llmResponseMessage, `Unable to parse task tool-call continuation response.`);
@@ -551,25 +548,23 @@ export const iterateTaskFirstPendingUserMessage = async (task: Task, processorId
     content: [`Return a JSON object with key content.`, `content should be the assistant response text only.`].join("\n"),
   };
 
-  const payload = await fetchOpenRouterChatCompletion(
-    {
-      baseUrl,
-      apiKey: providerResolution.selected.secret,
+  const payload = await new ProviderChat({
+    providerType: providerResolution.selected.definitionType,
+    baseUrl,
+    apiKey: providerResolution.selected.secret,
+  }).complete({
+    model,
+    messages: [...messageHistory, completionPromptMessage],
+    ...(toolDefinitions.length > 0 ? { tools: toolDefinitions, toolChoice: `auto` as const } : {}),
+    responseFormat: `text`,
+    operation: `task-iterate-first-pending-user-message`,
+    context: {
+      taskId: task.id,
+      loopId: task.loop,
+      firstPendingUserMessageIndex,
+      toolDefinitionCount: toolDefinitions.length,
     },
-    {
-      model,
-      messages: [...messageHistory, completionPromptMessage],
-      ...(toolDefinitions.length > 0 ? { tools: toolDefinitions, toolChoice: `auto` as const } : {}),
-      responseFormat: `text`,
-      operation: `task-iterate-first-pending-user-message`,
-      context: {
-        taskId: task.id,
-        loopId: task.loop,
-        firstPendingUserMessageIndex,
-        toolDefinitionCount: toolDefinitions.length,
-      },
-    },
-  );
+  });
 
   const responseMessage = payload.choices?.[0]?.message;
   const assistantText = readPrimaryAssistantContent(responseMessage, `Unable to parse task user-message continuation response.`);

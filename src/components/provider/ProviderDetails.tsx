@@ -18,6 +18,8 @@ export function ProviderDetails({ provider, lifecycleLabel }: ProviderDetailsPro
         <dd>{lifecycleLabel[provider.lifecycleStatus] ?? provider.lifecycleStatus}</dd>
         <dt>Credential configured</dt>
         <dd>{provider.hasCredential ? `Yes` : `No`}</dd>
+        <dt>Capabilities</dt>
+        <dd>{[provider.chat ? `Chat` : null, provider.embedder ? `Embedder` : null].filter(Boolean).join(`, `)}</dd>
       </dl>
     </div>
   );

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { v5 as uuidv5 } from "uuid";
@@ -117,8 +117,31 @@ const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
   throw new Error(`Timed out waiting for ${url}`);
 };
 
+const waitForComposeService = async (service: string, attempts = 25): Promise<void> => {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const runningServices = execFileSync(`docker`, [`compose`, `ps`, `--status`, `running`, `--services`], {
+      cwd: workspaceRoot,
+      encoding: `utf8`,
+    })
+      .split(`\n`)
+      .map((entry) => entry.trim());
+
+    if (runningServices.includes(service)) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+  }
+
+  throw new Error(`Timed out waiting for Compose service ${service}`);
+};
+
 const globalSetup = async (): Promise<void> => {
   await renderDexUsers();
+
+  if (process.env.COVERAGE) {
+    await mkdir(join(workspaceRoot, `testing`, `results`, `.nyc_worker`), { recursive: true });
+  }
 
   const localSeedDir = join(workspaceRoot, `migrations`, `pg`, `seed.local`);
   const localSeedDirHidden = `${localSeedDir}.bak`;
@@ -128,12 +151,12 @@ const globalSetup = async (): Promise<void> => {
   }
 
   try {
-    execFileSync(`docker`, [`compose`, `down`, `-v`], {
+    execFileSync(`docker`, [`compose`, `--profile`, `test`, `down`, `-v`], {
       cwd: workspaceRoot,
       stdio: `inherit`,
     });
 
-    execFileSync(`docker`, [`compose`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `athena`], {
+    execFileSync(`docker`, [`compose`, `--profile`, `test`, `up`, `-d`, `--build`, `--scale`, `athena-worker=3`, `traefik`, `postgres`, `prepare`, `pg-boss-prepare`, `dex`, `test-inference`, `athena`, `athena-worker`], {
       cwd: workspaceRoot,
       stdio: `inherit`,
     });
@@ -143,9 +166,11 @@ const globalSetup = async (): Promise<void> => {
     }
   }
 
+  await waitForComposeService(`athena-worker`);
   await waitForUrl(statusUrl);
   await waitForUrl(dexDiscoveryUrl);
   await waitForUrl(frontendUrl);
+  await waitForUrl(`http://127.0.0.1:8099/health`);
 };
 
 export default globalSetup;

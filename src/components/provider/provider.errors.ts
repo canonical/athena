@@ -20,3 +20,17 @@ export class ProviderForbiddenError extends HttpError {
     this.name = `ProviderForbiddenError`;
   }
 }
+
+export class ProviderConflictError extends HttpError {
+  constructor(message: string, details?: unknown) {
+    super({ status: 409, message, details });
+    this.name = `ProviderConflictError`;
+  }
+}
+
+export class ProviderUpstreamError extends HttpError {
+  constructor(message: string, details?: unknown) {
+    super({ status: 502, message, details });
+    this.name = `ProviderUpstreamError`;
+  }
+}

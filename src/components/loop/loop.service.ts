@@ -15,6 +15,11 @@ const parseStringArray = (value: unknown): string[] => {
 
 const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
+const applyHistoryMemoryToolAvailability = (disabledProviderTools: string[], historyMemoryEnabled: boolean): string[] => {
+  const explicitlyDisabled = disabledProviderTools.filter((toolName) => toolName !== `own-memory-lookup`);
+  return historyMemoryEnabled ? explicitlyDisabled : [...explicitlyDisabled, `own-memory-lookup`];
+};
+
 export const queryLoopById = async (loopId: string): Promise<Loop | undefined> => {
   const result = await query<Loop>(
     `
@@ -32,7 +37,7 @@ export const queryLoopById = async (loopId: string): Promise<Loop | undefined> =
 export const queryLoopForUser = async (loopId: string, userId: string): Promise<Loop | undefined> => {
   const result = await query<Loop>(
     `
-      SELECT ${loopSelectColumns}
+      SELECT ${loopSelectColumns}, lu."isAdmin" AS "currentUserIsAdmin"
       FROM "loop" l
       JOIN "loopUser" lu ON lu."loop" = l."id"
       WHERE l."id" = $1
@@ -217,17 +222,20 @@ export const queryLoopDisabledProviderTools = async (loopId: string, userId: str
 };
 
 export const queryLoopDisabledProviderToolsById = async (loopId: string): Promise<string[]> => {
-  const result = await query<{ disabledProviderTools: unknown }>(
+  const result = await query<{ disabledProviderTools: unknown; historyMemoryEnabled: boolean }>(
     `
-      SELECT COALESCE("disabledProviderTools", '[]'::jsonb) AS "disabledProviderTools"
-      FROM "loop"
-      WHERE "id" = $1
+      SELECT
+        COALESCE(l."disabledProviderTools", '[]'::jsonb) AS "disabledProviderTools",
+        EXISTS (SELECT 1 FROM "loopHistoryRag" lhr WHERE lhr."loop" = l."id" AND lhr."enabled" = TRUE) AS "historyMemoryEnabled"
+      FROM "loop" l
+      WHERE l."id" = $1
       LIMIT 1
     `,
     [loopId],
   );
 
-  return parseStringArray(result.rows[0]?.disabledProviderTools);
+  const row = result.rows[0];
+  return applyHistoryMemoryToolAvailability(parseStringArray(row?.disabledProviderTools), row?.historyMemoryEnabled ?? false);
 };
 
 export const queryLoopDisabledProviderToolsUpdate = async (loopId: string, userId: string, disabledProviderTools: string[]): Promise<string[] | undefined> => {
@@ -286,6 +294,7 @@ export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopRead
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = $1
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
@@ -295,24 +304,26 @@ export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopRead
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = $1
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
             AND p."providerType" = 'openrouter'
-            AND COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NOT NULL
-            AND COALESCE(array_length(p."enabledModels", 1), 0) > 0
+            AND COALESCE(NULLIF(BTRIM(pc."defaultModel"), ''), NULL) IS NOT NULL
+            AND COALESCE(array_length(pc."enabledModels", 1), 0) > 0
         ) AS "activeProviderWithModelConfigCount",
         (
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = $1
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
             AND p."providerType" = 'openrouter'
             AND (
-              COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NULL
-              OR COALESCE(array_length(p."enabledModels", 1), 0) = 0
+              COALESCE(NULLIF(BTRIM(pc."defaultModel"), ''), NULL) IS NULL
+              OR COALESCE(array_length(pc."enabledModels", 1), 0) = 0
             )
         ) AS "activeProviderMissingModelConfigCount",
         (
@@ -388,6 +399,7 @@ export const queryLoopReadinessCountsAll = async (): Promise<LoopReadinessCounts
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = l."id"
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
@@ -397,24 +409,26 @@ export const queryLoopReadinessCountsAll = async (): Promise<LoopReadinessCounts
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = l."id"
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
             AND p."providerType" = 'openrouter'
-            AND COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NOT NULL
-            AND COALESCE(array_length(p."enabledModels", 1), 0) > 0
+            AND COALESCE(NULLIF(BTRIM(pc."defaultModel"), ''), NULL) IS NOT NULL
+            AND COALESCE(array_length(pc."enabledModels", 1), 0) > 0
         ) AS "activeProviderWithModelConfigCount",
         (
           SELECT COUNT(*)::text
           FROM "loopProvider" lp
           JOIN "provider" p ON p."id" = lp."provider"
+          JOIN "providerChat" pc ON pc."provider" = p."id"
           WHERE lp."loop" = l."id"
             AND lp."enabled" = TRUE
             AND p."lifecycleStatus" = 'active'
             AND p."providerType" = 'openrouter'
             AND (
-              COALESCE(NULLIF(BTRIM(p."defaultModel"), ''), NULL) IS NULL
-              OR COALESCE(array_length(p."enabledModels", 1), 0) = 0
+              COALESCE(NULLIF(BTRIM(pc."defaultModel"), ''), NULL) IS NULL
+              OR COALESCE(array_length(pc."enabledModels", 1), 0) = 0
             )
         ) AS "activeProviderMissingModelConfigCount",
         (

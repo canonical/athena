@@ -24,6 +24,9 @@ type ProviderFormValues = {
   baseUrl: string;
   apiKey: string;
   lifecycleStatus: (typeof providerLifecycleStatuses)[number];
+  chatEnabled: boolean;
+  embedderEnabled: boolean;
+  embeddingModel: string;
 };
 
 const toFormikErrors = (error: z.ZodError, values: ProviderFormValues): Partial<Record<keyof ProviderFormValues, string>> => {
@@ -45,18 +48,25 @@ export function ProviderEditor({ provider, onSuccess, onDelete, isDeleting = fal
   const toastNotify = useToastNotification();
 
   const parseProviderFormValues = (values: ProviderFormValues) => {
-    const payload = {
+    if (isEdit) {
+      return providerUpdateSchema.safeParse({
+        displayName: values.displayName,
+        providerType: values.providerType,
+        baseUrl: values.baseUrl,
+        apiKey: values.apiKey || undefined,
+        lifecycleStatus: values.lifecycleStatus,
+      });
+    }
+
+    return providerInsertSchema.safeParse({
       displayName: values.displayName,
       providerType: values.providerType,
       baseUrl: values.baseUrl,
-      defaultModel: provider?.defaultModel,
-      enabledModels: provider?.enabledModels,
-      apiKey: isEdit ? values.apiKey || undefined : values.apiKey,
+      apiKey: values.apiKey,
       lifecycleStatus: values.lifecycleStatus,
-    };
-
-    const schema = isEdit ? providerUpdateSchema : providerInsertSchema;
-    return schema.safeParse(payload);
+      chat: values.chatEnabled ? { defaultModel: null, enabledModels: null } : null,
+      embedder: values.embedderEnabled ? { model: values.embeddingModel } : null,
+    });
   };
 
   const parseProviderInsertFormValues = (values: ProviderFormValues) =>
@@ -66,6 +76,8 @@ export function ProviderEditor({ provider, onSuccess, onDelete, isDeleting = fal
       baseUrl: values.baseUrl,
       apiKey: values.apiKey,
       lifecycleStatus: values.lifecycleStatus,
+      chat: values.chatEnabled ? { defaultModel: null, enabledModels: null } : null,
+      embedder: values.embedderEnabled ? { model: values.embeddingModel } : null,
     });
 
   const parseProviderUpdateFormValues = (values: ProviderFormValues) =>
@@ -73,8 +85,6 @@ export function ProviderEditor({ provider, onSuccess, onDelete, isDeleting = fal
       displayName: values.displayName,
       providerType: values.providerType,
       baseUrl: values.baseUrl,
-      defaultModel: provider?.defaultModel,
-      enabledModels: provider?.enabledModels,
       apiKey: values.apiKey || undefined,
       lifecycleStatus: values.lifecycleStatus,
     });
@@ -87,6 +97,9 @@ export function ProviderEditor({ provider, onSuccess, onDelete, isDeleting = fal
       baseUrl: provider?.baseUrl ?? `https://openrouter.ai/api/v1`,
       apiKey: ``,
       lifecycleStatus: provider?.lifecycleStatus ?? `active`,
+      chatEnabled: provider ? provider.chat !== null : true,
+      embedderEnabled: provider ? provider.embedder !== null : false,
+      embeddingModel: provider?.embedder?.model ?? ``,
     },
     validate: (values) => {
       const parseResult = parseProviderFormValues(values);
@@ -122,7 +135,7 @@ export function ProviderEditor({ provider, onSuccess, onDelete, isDeleting = fal
         }
 
         const savedProvider = await createProvider(parseResult.data);
-        onSuccess(`Provider created`, `${savedProvider.displayName} is available for loop assignment.`);
+        onSuccess(`Provider created`, `${savedProvider.displayName} has been created.`);
       } catch (submitError) {
         const message = submitError instanceof Error ? submitError.message : String(submitError);
         toastNotify.failure(isEdit ? `Unable to update provider` : `Unable to create provider`, submitError instanceof Error ? submitError : new Error(message));
@@ -157,6 +170,27 @@ export function ProviderEditor({ provider, onSuccess, onDelete, isDeleting = fal
           </option>
         ))}
       </select>
+      {!isEdit ? (
+        <>
+          <fieldset>
+            <legend>Capabilities</legend>
+            <label className="p-checkbox" htmlFor="provider-editor-chat-enabled">
+              <input id="provider-editor-chat-enabled" type="checkbox" {...formik.getFieldProps(`chatEnabled`)} checked={formik.values.chatEnabled} />
+              <span className="p-checkbox__label">Chat</span>
+            </label>
+            <label className="p-checkbox" htmlFor="provider-editor-embedder-enabled">
+              <input id="provider-editor-embedder-enabled" type="checkbox" {...formik.getFieldProps(`embedderEnabled`)} checked={formik.values.embedderEnabled} />
+              <span className="p-checkbox__label">Embedder</span>
+            </label>
+          </fieldset>
+          {formik.values.embedderEnabled ? (
+            <>
+              <label htmlFor="provider-editor-embedding-model">Embedding model</label>
+              <input id="provider-editor-embedding-model" type="text" {...formik.getFieldProps(`embeddingModel`)} />
+            </>
+          ) : null}
+        </>
+      ) : null}
       <div className="u-align--right">
         {provider && onDelete ? (
           <Button appearance="negative" disabled={formik.isSubmitting || isDeleting} onClick={() => void onDelete(provider)} type="button">

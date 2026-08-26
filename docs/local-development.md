@@ -45,7 +45,9 @@ The Compose stack includes:
 
 - `traefik` on `localhost:80`
 - `postgres` on `localhost:5432`
-- `prepare`, a one-shot migration runner
+- `prepare`, Athena's one-shot SQL migration runner
+- `pg-boss-prepare`, the one-shot pg-boss schema migration runner
+- `athena-worker`, the durable background-job consumer
 - `dex` on `localhost:5556`, also reachable through `http://athena.localhost/dex`
 - `athena` on `http://athena.localhost`
 

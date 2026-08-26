@@ -1,5 +1,5 @@
 import { log } from "@components/logging/logging.service.js";
-import { Pool, types as pgTypes } from "pg";
+import { Pool, type PoolClient, types as pgTypes } from "pg";
 
 type PoolOptions = {
   connectionString: string;
@@ -63,6 +63,45 @@ export const getPool = (): Pool => {
   }
 
   return pool;
+};
+
+export type QueryExecutor = Pick<Pool | PoolClient, `query`>;
+
+export const withTransaction = async <T>(operation: (transaction: QueryExecutor) => Promise<T>): Promise<T> => {
+  const client = await getPool().connect();
+  let transactionStarted = false;
+
+  try {
+    await client.query(`BEGIN`);
+    transactionStarted = true;
+    const result = await operation(client);
+    await client.query(`COMMIT`);
+    return result;
+  } catch (error) {
+    if (transactionStarted) {
+      try {
+        await client.query(`ROLLBACK`);
+      } catch (rollbackError) {
+        log.error(`PostgreSQL transaction rollback failed`, {
+          error: rollbackError instanceof Error ? { name: rollbackError.name, message: rollbackError.message, stack: rollbackError.stack } : { message: String(rollbackError) },
+        });
+      }
+    }
+
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+export const closePG = async (): Promise<void> => {
+  if (!pool) {
+    return;
+  }
+
+  await pool.end();
+  pool = undefined;
+  initialized = false;
 };
 
 type PoolQuery = ReturnType<typeof getPool>[`query`];
