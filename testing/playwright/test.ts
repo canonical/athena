@@ -1,6 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test as baseTest } from "@playwright/test";
+import { authenticate } from "./auth.js";
+import { type InferenceMock, TestInferenceService, testInferenceBaseUrl } from "./inference.js";
+import { prepareRunnableLoop, type RunnableLoop } from "./runnable-loop.js";
 
 export * from "@playwright/test";
 
@@ -54,8 +57,24 @@ const createCoverageFileName = (titlePath: string[], retry: number, repeatEachIn
   return `${readableName || `e2e-coverage`}-${process.pid}-r${retry}-e${repeatEachIndex}-n${coverageFileSequence}.json`;
 };
 
+type AthenaFixtures = {
+  /** Manages deterministic inference scenarios for one spec. */
+  testInference: TestInferenceService;
+  /** A runnable loop established entirely through Athena's UI. */
+  runnableLoop: RunnableLoop;
+  /** Scenario controller bound to the runnable loop's provider credential. */
+  inference: InferenceMock;
+};
+
 // Keep a local wrapper so future shared fixtures can be added without changing test imports.
-export const test = baseTest.extend({
+export const test = baseTest.extend<AthenaFixtures>({
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright parses this parameter for fixture dependencies and rejects a non-destructured one.
+  testInference: async ({}, use) => {
+    const testInference = new TestInferenceService(testInferenceBaseUrl);
+    await use(testInference);
+    await testInference.teardown();
+  },
+
   page: async ({ page }, use, testInfo) => {
     await use(page);
 
@@ -71,5 +90,15 @@ export const test = baseTest.extend({
 
     await mkdir(frontendCoverageDirectory, { recursive: true });
     await writeFile(path.join(frontendCoverageDirectory, createCoverageFileName(testInfo.titlePath, testInfo.retry, testInfo.repeatEachIndex)), JSON.stringify(remapContainerCoveragePaths(coverage)), `utf8`);
+  },
+
+  runnableLoop: async ({ page, testInference }, use) => {
+    await authenticate(page);
+    const runnableLoop = await prepareRunnableLoop(page, testInference);
+    await use(runnableLoop);
+  },
+
+  inference: async ({ runnableLoop }, use) => {
+    await use(runnableLoop.inference);
   },
 });

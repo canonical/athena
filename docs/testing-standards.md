@@ -7,8 +7,8 @@ This document is the source of truth for test strategy and test scope.
 1. Athena uses Playwright end-to-end testing only.
 2. We do not introduce unit tests or integration-only test suites unless explicitly requested.
 3. E2E tests are the primary verification mechanism for backend and frontend behavior.
-4. E2E specs must not use mocks, fixtures, or test doubles; they should exercise the real application stack end to end.
-5. All E2E scenarios are UI-driven in every case: setup, triggering actions, and assertions must be performed through the rendered application UI.
+4. E2E specs must not replace Athena behavior or dependencies with mocks, test doubles, request interception, injected fakes, or stubbed modules. A deterministic inference service is the sole exception because tests cannot provision a real LLM; Athena must reach it through ordinary provider configuration and networking.
+5. All setup—including reusable Playwright fixtures—actions, and assertions must use the rendered application UI.
 6. Tests must not use direct database access or SQL helpers for test setup, mutation, or assertions.
 7. When UI coverage depends on state that cannot yet be created through the UI, add or extend a user-facing flow first, then test through UI; do not bypass via direct DB writes in specs.
 

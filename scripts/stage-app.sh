@@ -27,6 +27,7 @@ ITEMS=(
   .npmrc
   tsconfig.json
   tsconfig.server.json
+  tsconfig.testing.json
   vite.config.ts
   nodemon.json
   playwright.config.ts

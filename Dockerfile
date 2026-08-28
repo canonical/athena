@@ -12,7 +12,7 @@ RUN npm ci
 
 COPY playwright.config.ts ./
 COPY vite.config.ts ./
-COPY tsconfig.json tsconfig.server.json ./
+COPY tsconfig.json tsconfig.server.json tsconfig.testing.json ./
 COPY src ./src
 COPY scripts ./scripts
 COPY testing ./testing

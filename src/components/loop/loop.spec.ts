@@ -72,29 +72,6 @@ test(`loop provider selection policy uses providerSelectionAlgorithm`, async ({ 
   expect(Object.keys(loadedPolicy).sort()).toEqual([`loop`, `providerSelectionAlgorithm`, `providerSelectionCursor`, `runnerSelectionAlgorithm`, `runnerSelectionCursor`, `updatedAt`]);
 });
 
-test(`loop tools API exposes requiresApproval metadata`, async ({ page }) => {
-  await authenticate(page);
-
-  const loop = await createLoop(page, `Tool metadata loop ${Date.now()}`);
-  const response = await page.request.get(`http://athena.localhost/api/loop/${loop.id}/tools`);
-
-  expect(response.ok()).toBe(true);
-  const payload = (await response.json()) as {
-    loop: string;
-    tools: Array<{ name: string; description: string; enabled: boolean; requiresApproval: boolean }>;
-  };
-
-  expect(payload.loop).toBe(loop.id);
-  expect(Array.isArray(payload.tools)).toBe(true);
-  expect(payload.tools.length).toBeGreaterThan(0);
-
-  const createItem = payload.tools.find((tool) => tool.name === `workgraph_create_item`);
-  const readItem = payload.tools.find((tool) => tool.name === `workgraph_read_item`);
-
-  expect(createItem?.requiresApproval).toBe(true);
-  expect(readItem?.requiresApproval).toBe(false);
-});
-
 test(`loop membership UI lists members and pending invites`, async ({ page }) => {
   await authenticate(page);
 

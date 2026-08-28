@@ -18,4 +18,8 @@ export const uuid = (message = `must be a valid UUID.`) => zodUuid({ version: `v
 
 export const httpsUrl = url(`baseUrl must be a valid URL.`).refine((value) => value.startsWith(`https://`), { message: `baseUrl must use HTTPS.` });
 
+export const modelEndpointUrl = url(`baseUrl must be a valid URL.`).refine((value) => value.startsWith(`https://`) || value.startsWith(`http://`), {
+  message: `baseUrl must use HTTP or HTTPS.`,
+});
+
 export const isValidUuid = (value: string): boolean => uuid().safeParse(value).success;
