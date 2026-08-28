@@ -22,6 +22,16 @@ Tool usage is always attached to an active task.
 - Tool invocations can fail. Failures are recorded in task context and handled by the active persona.
 - Tool usage must not leak secrets into user-visible responses.
 
+Approval-gated tool calls are always approved or rejected by the user in the
+Chat UI through the standard tool-call approval mechanism. Task progression
+tools are approval-gated. The `complete_step` tool is used by
+an assigned step LLM to submit an occurrence summary and finish the current step
+execution. The `complete_task` tool is available only after the final step and is
+used to finish the task. The user grants or rejects either tool call from the
+Chat UI. Neither tool may apply its state transition before approval is granted.
+After approval or rejection, the user may add a message, and a rejected step
+completion is returned to the routing persona for its next-step decision.
+
 ## Tool execution record (minimum)
 
 Each tool invocation appended to task context must include at least:
