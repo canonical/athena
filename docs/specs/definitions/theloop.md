@@ -21,7 +21,6 @@ The active routing persona (`isRouting = true`) can involve the user in the loop
    - [responsibility.rules.md](./responsibility.rules.md)
    - [interaction.protocol.md](./interaction.protocol.md)
    - [handoff.definition.md](./handoff.definition.md)
-   - [approval.matrix.md](./approval.matrix.md)
 
 2. Athena routes the task with its context to the assigned persona. The persona processes the task, and either a new task is emitted for another persona, or the task is marked as completed and the user is notified.
 

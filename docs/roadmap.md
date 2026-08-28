@@ -5,6 +5,7 @@
 | Authentication          |                                    |                                 | ✅     |      |
 | Loop                    |                                    |                                 | 🚧     | [theloop.md][theloop] |
 | -                       | Task                               |                                 | 🚧     | [task.md][task] |
+| -                       | -                                  | Task Steps                      | 📝     | [task-steps.md][task-steps] |
 | -                       | -                                  | User Request Task Source        | 🚧     | [user-request.md][user-request] |
 | -                       | -                                  | Tool Execution Task Source      | ⏳     | [task-source.phase2.plan.md][phase2] |
 | -                       | -                                  | Webhook Task Source             | 🚧     | [webhook-task.md][webhook-task] |
@@ -14,7 +15,7 @@
 | -                       | Sub-task                           |                                 | ⏳     |      |
 | -                       | Deterministic Routing              |                                 | 🚧     | [theloop.md][theloop] |
 | -                       | Persona Handoffs                   |                                 | 🚧     | [handoff.definition.md][handoff] |
-| -                       | Approval-Gated Actions             |                                 | 🚧     | [approval.matrix.md][approval] |
+| -                       | Approval-Gated Actions             |                                 | 🚧     | [tool-usage.md][tool-usage] |
 | -                       | Inter-loop Links                   |                                 | ⏳     | [inter-loop.links.md][inter-loop] |
 | -                       | Loop Readiness                     |                                 | ✅     |      |
 | -                       | Pause and Resume                   |                                 | ⏳     | [llm-harness.md][llm-harness] |
@@ -75,7 +76,6 @@
 | White Labeling          |                                    |                                 | ⏳     |      |
 | -                       | Custom Sidebar Logo & Favicon      |                                 | ⏳     |      |
 
-[approval]: ./specs/definitions/approval.matrix.md
 [handoff]: ./specs/definitions/handoff.definition.md
 [inter-loop]: ./specs/definitions/inter-loop.links.md
 [juju-athena-machine-charm]: ./specs/definitions/juju-athena-machine-charm.md
@@ -88,6 +88,7 @@
 [rag-index]: ./specs/definitions/rag-index.md
 [runner-harness]: ./specs/definitions/runner-harness.md
 [task]: ./specs/definitions/task.md
+[task-steps]: ./specs/definitions/task-steps.md
 [theloop]: ./specs/definitions/theloop.md
 [tool-usage]: ./specs/definitions/tool-usage.md
 [user-request]: ./specs/definitions/user-request.md
