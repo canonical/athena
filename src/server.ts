@@ -6,6 +6,7 @@ import { defineLoggingErrorHandler } from "@components/logging/logging.middlewar
 import { log } from "@components/logging/logging.service.js";
 import { loopRouter } from "@components/loop/loop.router.js";
 import { personaRouter } from "@components/persona/persona.router.js";
+import { closePG } from "@components/postgres/postgres.js";
 import { providerRouter } from "@components/provider/provider.router.js";
 import { repositoryRouter } from "@components/repository/repository.router.js";
 import { startRunnerQueueConsumer } from "@components/runner/runner.queue.consumer.js";
@@ -54,10 +55,38 @@ app.use((_request: Request, response: Response) => {
 
 defineLoggingErrorHandler(app);
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   log.info(`Athena server listening on port ${port}`);
 
   startTaskProcessor();
   startWebhookItemProcessor();
   startRunnerQueueConsumer();
 });
+
+let stopping = false;
+
+const stop = async (signal: NodeJS.Signals): Promise<void> => {
+  if (stopping) {
+    return;
+  }
+
+  stopping = true;
+  log.info(`Athena server stopping`, { signal });
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    await closePG();
+    log.info(`Athena server stopped`, { signal });
+  } catch (error) {
+    process.exitCode = 1;
+    log.error(`Athena server shutdown failed`, {
+      signal,
+      error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : { message: String(error) },
+    });
+  }
+};
+
+process.once(`SIGTERM`, () => void stop(`SIGTERM`));
+process.once(`SIGINT`, () => void stop(`SIGINT`));

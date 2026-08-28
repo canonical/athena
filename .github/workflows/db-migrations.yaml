@@ -69,14 +69,15 @@ jobs:
 
           echo "## DB Migrations" >> "$GITHUB_STEP_SUMMARY"
           echo "- Environment target: ${ENVIRONMENT}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Service: athena" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Services: athena, background jobs" >> "$GITHUB_STEP_SUMMARY"
 
           cleanup() {
             docker compose -f compose.ci.yaml --ansi never down --remove-orphans --volumes
           }
           trap cleanup EXIT
 
-          docker compose -f compose.ci.yaml --ansi never up --quiet-pull --abort-on-container-exit --exit-code-from prepare-ci prepare-ci
+          docker compose -f compose.ci.yaml --ansi never run --rm prepare-ci
+          docker compose -f compose.ci.yaml --ansi never run --rm prepare-background-jobs-ci
 
       - if: ${{ failure() && runner.debug }}
         name: Setup tmate session
