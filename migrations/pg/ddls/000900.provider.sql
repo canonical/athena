@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS "provider" (
   "owner" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "displayName" TEXT NOT NULL,
   "providerType" TEXT NOT NULL CHECK ("providerType" IN ('openrouter')),
-  "baseUrl" TEXT NOT NULL CHECK ("baseUrl" ~* '^https://'),
+  "baseUrl" TEXT NOT NULL,
   "defaultModel" TEXT,
   "enabledModels" TEXT[],
   "credentialCiphertext" TEXT NOT NULL,
@@ -13,8 +13,24 @@ CREATE TABLE IF NOT EXISTS "provider" (
   "lifecycleStatus" TEXT NOT NULL DEFAULT 'active' CHECK ("lifecycleStatus" IN ('active', 'deprecated', 'archived')),
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE ("owner", "displayName")
+  UNIQUE ("owner", "displayName"),
+  CONSTRAINT "providerBaseUrlScheme" CHECK ("baseUrl" ~* '^https?://')
 );
+
+-- Replace the HTTPS-only constraint created by earlier versions of this migration.
+ALTER TABLE "provider" DROP CONSTRAINT IF EXISTS "provider_baseUrl_check";
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = '"provider"'::regclass AND conname = 'providerBaseUrlScheme'
+  ) THEN
+    ALTER TABLE "provider"
+      ADD CONSTRAINT "providerBaseUrlScheme" CHECK ("baseUrl" ~* '^https?://');
+  END IF;
+END
+$$;
 
 CREATE INDEX IF NOT EXISTS "idxProviderOwner" ON "provider"("owner");
 CREATE INDEX IF NOT EXISTS "idxProviderProviderType" ON "provider"("providerType");
