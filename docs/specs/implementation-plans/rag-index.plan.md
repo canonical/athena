@@ -64,16 +64,17 @@ Out of scope (deferred):
 - Ingestion is two-phase: chunk rows are persisted first with `embedding` NULL, then
   embedded in a separate step that targets `embedding IS NULL`, so it is resumable and
   degrades gracefully when no provider is available. The MVP runs both phases inline in the
-  admin-triggered `rebuild` command; because phase two is an idempotent job unit, the scale
-  path is a durable job queue — a Postgres-backed one (`pg-boss` or `graphile-worker`)
-  reusing the existing database, rather than a Redis-backed `BullMQ` or a new service.
+  admin-triggered `rebuild` command. Moving phase two out of process is a later integration
+  with Athena's existing PostgreSQL-backed `pg-boss` infrastructure; the provider
+  capability change does not register or enqueue a background job.
 - Chunking is a pluggable strategy, independent of the source adapter. The MVP strategy is
   a fixed-size overlapping window (`fixedOverlap`, parametrized by window size and overlap,
   sized in tokens against the embedding input limit); backtrack offsets are stored in
   characters. New strategies (structural, semantic, recursive) register against the same
   contract without touching sources or retrieval.
-- Embeddings extend the loop OpenAI-compatible provider contract (a profile with an
-  `embeddingModel`, called at `/v1/embeddings`), so
+- Embeddings use the loop OpenAI-compatible provider contract (a shared connection with
+  independent `embeddingDefaultModel` and `embeddingEnabledModels`, called at
+  `/v1/embeddings`), so
   [openai-api-connection.plan.md](./openai-api-connection.plan.md) grows an embeddings
   capability. The provider is per-loop config, not a fixed vendor.
 - The MVP pins `text-embedding-3-small` (1536 dimensions), reachable over `/v1/embeddings`
@@ -187,15 +188,17 @@ only in the component `schema.ts`, component at `src/components/rag/`.
 
 ## Embedding integration (provider extension)
 
-- Add `embeddingModel` (optional) to the provider profile; a profile that declares it can
-  serve embeddings.
+- A provider may serve chat, embeddings, both, or neither over one shared `baseUrl` and
+  credential. Embedding capability is derived from a non-empty `embeddingEnabledModels`.
 - Embeddings call the profile `baseUrl` at the `/embeddings` path with
-  `{ input, model: embeddingModel }`.
-- Selection uses deterministic provider priority per
-  [llm-harness.md](../definitions/llm-harness.md), considering only embedding-capable
-  profiles.
-- If no embedding-capable provider is available, `rebuild` defers and retrieval proceeds
+  `{ input, model }`, using the provider and model pinned by the index.
+- Rebuild does not fail over to another provider. This prevents one index from mixing
+  vectors produced by different provider/model contracts.
+- If the pinned provider or model is unavailable, embedding defers and retrieval proceeds
   with no context.
+- A future background embedding job carries only stable index/rebuild identity. Its handler
+  loads the pinned provider and model at execution time, never serializes credentials, and
+  uses a stable operation key plus a transactional domain guard for at-least-once delivery.
 
 ## Chunking
 
@@ -315,7 +318,8 @@ Per [testing-standards.md](../../testing-standards.md):
 
 ## Implementation steps
 
-1. Extend the provider profile with `embeddingModel` and an embeddings call path.
+1. Extend the provider profile with independent chat and embedding model settings and an
+  embeddings call path.
 2. Add the pgvector extension and `ragIndex` / `ragEntry` / `loopRagAttachment` migrations
    (shared entry table, btree `index`, no global ANN index); update the database image and
    compose.

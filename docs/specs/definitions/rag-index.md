@@ -150,8 +150,10 @@ exposes a rebuilding status; Athena never mixes vectors across model versions.
   proceeds without it.
 - Ingestion failure leaves the source intact — the files remain canonical — and the
   index is repaired by a later `rebuild`.
-- Embedding uses the loop provider contract and inherits its availability and failover
-  behavior in [llm-harness.md](./llm-harness.md).
+- Embedding uses the loop provider contract but is pinned to the index's configured
+  provider and model. Unavailability defers embedding; it does not fail over and mix vector
+  contracts within one index. Provider availability rules remain defined in
+  [llm-harness.md](./llm-harness.md).
 
 ## The Markdown file collection as the first source
 

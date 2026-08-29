@@ -107,16 +107,7 @@ export type LoopMembership = z.infer<typeof loopMembershipSchema>;
 export type LoopInviteCreate = z.infer<typeof loopInviteCreateSchema>;
 export type LoopUserAdminUpdate = z.infer<typeof loopUserAdminUpdateSchema>;
 
-export const loopReadinessBlockerCodes = [
-  `NO_ACTIVE_ROUTING_PERSONA`,
-  `MULTIPLE_ACTIVE_ROUTING_PERSONAS`,
-  `NO_ACTIVE_EXECUTION_PERSONA`,
-  `NO_ACTIVE_PROVIDER`,
-  `NO_PROVIDER_MODEL_CONFIGURATION`,
-  `PROVIDER_MODEL_CONFIGURATION_INCOMPLETE`,
-  `NO_ACTIVE_RUNNER`,
-  `NO_ACTIVE_WORKGRAPH`,
-] as const;
+export const loopReadinessBlockerCodes = [`NO_ACTIVE_ROUTING_PERSONA`, `MULTIPLE_ACTIVE_ROUTING_PERSONAS`, `NO_ACTIVE_EXECUTION_PERSONA`, `NO_ACTIVE_CHAT_PROVIDER`, `NO_ACTIVE_RUNNER`, `NO_ACTIVE_WORKGRAPH`] as const;
 
 export const loopReadinessBlockerSchema = z.object({
   code: z.enum(loopReadinessBlockerCodes),

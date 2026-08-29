@@ -123,7 +123,7 @@ route({
     body: providerModelValidateRequestSchema,
   },
   handler: async ({ params, body, request, response, respond }) => {
-    const results = await providerValidateModels(params.provider, getAuthenticatedUserId(response), body.models, resolveRequestLogger(request));
+    const results = await providerValidateModels(params.provider, getAuthenticatedUserId(response), body.capability, body.models, resolveRequestLogger(request));
     respond({ status: 200, data: { results } });
   },
 });

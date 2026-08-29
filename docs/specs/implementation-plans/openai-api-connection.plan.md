@@ -2,12 +2,14 @@
 
 ## Objective
 
-Define owner-scoped provider definitions and loop-level OpenRouter key selection that is deterministic, auditable, and secure.
+Define owner-scoped provider definitions with independent chat and embedding capabilities, plus loop-level OpenRouter key selection that is deterministic, auditable, and secure.
 
 ## Scope
 
 - Owner-scoped provider definition schema
 - OpenRouter-only runtime for this phase
+- OpenAI-compatible chat-completion and embedding capabilities
+- Independent model configuration and validation per capability
 - HTTP and HTTPS endpoint validation
 - Loop assignment lifecycle and permissions
 - Deterministic key selection algorithms and fallback
@@ -24,7 +26,13 @@ Provider definitions are independent records with:
 3. `providerType` (`openrouter` only in this phase)
 4. `baseUrl` (HTTP or HTTPS)
 5. encrypted credential envelope fields
-6. lifecycle status
+6. `chatDefaultModel` and `chatEnabledModels`
+7. `embeddingDefaultModel` and `embeddingEnabledModels`
+8. lifecycle status
+
+One definition has one base URL and credential and may expose chat, embedding, both, or
+neither. A capability is available when its enabled-model list is non-empty. A default
+model is optional, but when present it must belong to that capability's enabled list.
 
 ### Loop assignment contract
 
@@ -58,6 +66,13 @@ Fallback contract:
 4. `maxRetries` must be bounded.
 5. Priority values must be unique per loop.
 6. Assignment order/override edits are admin-only.
+7. Chat and embedding models are validated through their corresponding upstream endpoint.
+8. An upstream provider authentication failure is a provider-validation failure and must
+	not be surfaced as an Athena session authentication response.
+
+Model discovery classifies models by their advertised output modalities. `text` output is
+chat-capable and `embedding` output is embedding-capable. Missing modality metadata remains
+chat-compatible for providers that do not expose the richer catalog shape.
 
 ## Security and credential handling
 
@@ -86,8 +101,10 @@ For each selection attempt, capture:
 3. Implement owner-only provider definition CRUD.
 4. Implement loop member assignment and admin-only order/override updates.
 5. Implement deterministic key selection engine and fallback behavior.
-6. Integrate minimal execution-time hook in task flow.
-7. Add E2E tests for permissions, endpoint scheme enforcement, OpenRouter-only enforcement, deterministic selection, and redaction.
+6. Integrate chat-capable provider selection into task execution.
+7. Add the OpenAI-compatible embeddings client and capability-specific model validation.
+8. Add E2E tests for permissions, endpoint scheme enforcement, independent capability
+	configuration, validation failures, deterministic selection, and redaction.
 
 ## Acceptance criteria
 
@@ -96,6 +113,11 @@ For each selection attempt, capture:
 3. HTTP and HTTPS endpoint validation is enforced.
 4. Multi-key assignment and deterministic selection are supported.
 5. Secret material is never exposed.
+6. Chat and embedding model settings can be configured independently on one provider.
+7. Embedding batch responses are associated by response index and returned in input order.
+8. Embedding credential failures preserve the previously saved provider configuration.
+9. Every execution-time provider selection is filtered by its explicitly requested
+	capability.
 
 ## Related specs
 

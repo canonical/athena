@@ -3,6 +3,9 @@ import { z } from "zod";
 
 export const providerTypes = [`openrouter`] as const;
 export const providerLifecycleStatuses = [`active`, `deprecated`, `archived`] as const;
+export const providerCapabilities = [`chat`, `embedding`] as const;
+
+const modelIdSchema = z.string().trim().min(1);
 
 export const providerSchema = z.object({
   id: uuid(),
@@ -10,8 +13,10 @@ export const providerSchema = z.object({
   displayName: requiredString(`displayName is required.`),
   providerType: z.enum(providerTypes),
   baseUrl: requiredString(`baseUrl is required.`).pipe(modelEndpointUrl),
-  defaultModel: z.string().trim().min(1).nullable().default(null),
-  enabledModels: z.array(z.string().trim().min(1)).nullable().default(null),
+  chatDefaultModel: modelIdSchema.nullable().default(null),
+  chatEnabledModels: z.array(modelIdSchema).nullable().default(null),
+  embeddingDefaultModel: modelIdSchema.nullable().default(null),
+  embeddingEnabledModels: z.array(modelIdSchema).nullable().default(null),
   lifecycleStatus: z.enum(providerLifecycleStatuses).default(`active`),
   hasCredential: z.boolean(),
   createdAt: isoDateTime,
@@ -22,8 +27,10 @@ const providerMutableSchema = providerSchema.pick({
   displayName: true,
   providerType: true,
   baseUrl: true,
-  defaultModel: true,
-  enabledModels: true,
+  chatDefaultModel: true,
+  chatEnabledModels: true,
+  embeddingDefaultModel: true,
+  embeddingEnabledModels: true,
   lifecycleStatus: true,
 });
 
@@ -31,9 +38,11 @@ export const providerInsertSchema = providerMutableSchema.extend({
   apiKey: requiredString(`apiKey is required.`),
 });
 
-export const providerUpdateSchema = providerInsertSchema.pick({ displayName: true, providerType: true, baseUrl: true, defaultModel: true, enabledModels: true, lifecycleStatus: true }).extend({
-  apiKey: requiredString(`apiKey is required.`).optional(),
-});
+export const providerUpdateSchema = providerInsertSchema
+  .pick({ displayName: true, providerType: true, baseUrl: true, chatDefaultModel: true, chatEnabledModels: true, embeddingDefaultModel: true, embeddingEnabledModels: true, lifecycleStatus: true })
+  .extend({
+    apiKey: requiredString(`apiKey is required.`).optional(),
+  });
 
 export const loopProviderInsertSchema = z.object({
   provider: uuid(),
@@ -55,6 +64,7 @@ export const loopProviderAdminUpdateSchema = z.object({
 
 export const providerModelSchema = z.object({
   id: z.string(),
+  capabilities: z.array(z.enum(providerCapabilities)),
   displayName: z.string().optional(),
   description: z.string().optional(),
   contextLength: z.number().int().positive().optional(),
@@ -82,6 +92,7 @@ export const providerModelPreviewRequestSchema = z.object({
 });
 
 export const providerModelValidateRequestSchema = z.object({
+  capability: z.enum(providerCapabilities),
   models: z.array(z.string().trim().min(1)).min(1),
 });
 
@@ -119,6 +130,7 @@ export const loopProviderSchema = providerSchema.pick({ displayName: true, provi
 
 export type ProviderInsert = z.infer<typeof providerInsertSchema>;
 export type ProviderUpdate = z.infer<typeof providerUpdateSchema>;
+export type ProviderCapability = (typeof providerCapabilities)[number];
 export type LoopProviderInsert = z.infer<typeof loopProviderInsertSchema>;
 export type LoopProviderAdminUpdate = z.infer<typeof loopProviderAdminUpdateSchema>;
 export type Provider = z.infer<typeof providerSchema>;

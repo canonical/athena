@@ -97,6 +97,10 @@ Both OpenRouter and Copilot key pools must support:
 
 Determinism contract:
 
+- Every provider selection request names its required capability. Candidates lacking that
+   capability are excluded before the selection algorithm runs.
+- Capability filtering is part of eligibility, not fallback: chat and embedding provider
+   pools must not substitute for each other.
 - Tie breakers are deterministic: priority, then createdAt, then id.
 - Missing metrics or algorithm-specific evaluation failures must use deterministic fallback (priority failover) and preserve audit reason.
 - Selection and skip decisions must be auditable per execution attempt.
