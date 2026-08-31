@@ -1,192 +1,187 @@
 # RAG Index Definition
 
-## Summary
+## Purpose
 
-A RAG index gives Athena's personas access to a body of knowledge that
-exceeds their context window: it holds that knowledge as embedded, chunked entries and,
-on request, returns the most relevant slice to the persona that asks. The index is a
-standalone entity that a loop attaches, and a persona consumes it as a lookup tool
-alongside its other tools. This document defines the general capability first, then the
-first example source — a collection of Markdown files.
+A RAG index is a standalone semantic retrieval object. It owns a source projection,
+segmentation behavior, embedding contract, retrieval behavior, lifecycle, and entries.
+Consumers access indexes through common lookup infrastructure rather than index-kind-specific
+tools.
 
-## Problem
+Loop self-memory is the first index kind, not the base abstraction. It projects selected
+activity from one loop, but reusable document, repository, workgraph, and other index kinds
+must fit the same common infrastructure.
 
-Personas are LLM agents and decide from a bounded context window, but the knowledge
-relevant to a decision routinely exceeds it — reference material, specifications,
-runbooks, and other bodies of documentation that cannot all be held in context. Athena
-has no way to give a persona retrievable access to such a corpus, so decisions are made
-on whatever happens to fit in the prompt.
+## Common index model
 
-## The capability
+`ragIndex` owns only concerns shared by every index:
 
-A RAG index is a first-class, standalone entity over a pluggable data source. A loop
-gains access to a body of knowledge by attaching an index; a persona retrieves from the
-indexes attached to its loop through a lookup tool.
+- Stable identity and index kind.
+- Immutable source/reference and segmentation descriptors.
+- Embedding provider, model, and discovered vector dimension.
+- Lifecycle, rebuild progress, and diagnostics.
 
-It is a context input only: it never changes ownership, routing authority, or approvals
-defined in [theloop.md](./theloop.md). It is deterministic, auditable, replayable,
-opt-in per loop, and governed by loop administrators under the same model as harness and
-provider settings in [llm-harness.md](./llm-harness.md); Athena remains deterministic
-orchestration code.
+The base index does not contain a loop foreign key. It stores generic source and
+segmentation descriptors, and index-kind services validate source ownership.
+This prevents loop self-memory from defining the shape of future standalone indexes.
 
-## Index model and sources
+`ragIndex.sourceRef` is the source projection's immutable top-level locator. For
+`loopActivity` it is the source loop UUID; a future HTTP API source could store its URL.
+For loop activity, server transactions validate the loop source and serialize configuration
+by loop. This value is distinct from `ragEntry.sourceRef`, which identifies one projected
+record within the source.
 
-An index owns its data source, embedding model, and chunking, ingestion, and rebuild
-procedures. A source adapter turns one source type into ingestible documents that a
-chunking strategy then splits; adapters are pluggable, and a Markdown file collection is
-the only one in the MVP. Task and
-conversation sources — including a loop's own history — are future adapters over the
-same abstraction. A loop-to-index attachment makes an index available to a loop and
-carries that loop's consumption settings for it.
+Configuration is immutable in the current scope. Changing source, segmentation, embedding,
+provider, or model creates a replacement index. Rebuilding does not create another entity:
+it clears and repopulates the same immutable index. Replacement atomically deletes the old
+index and its derived data before attaching the new index, releasing the old provider.
 
-Isolation follows attachment: a persona retrieves only through indexes attached to its
-loop, and retrieval never reaches an index the loop has not attached. Attaching an index
-to more than one loop (sharing) requires authorized, audited attachment and is out of
-scope for the MVP.
+## Index kinds and ownership
 
-## The index is a derived projection
+The first kind is `loopActivity`:
 
-The index is a derived projection over its source, never the canonical record. Because
-it is derived:
+- Its `sourceRef` is the source loop UUID.
+- Server transactions maintain at most one self-memory index per loop.
+- It is loop-owned and non-detachable.
+- Deleting its source loop explicitly deletes its self-memory `ragIndex` in the same
+   transaction.
+- Disabling it deletes its derived observations and entries while retaining configuration
+   identity.
 
-- It must be fully rebuildable from its source, and nothing enters it except through the
-  ingestion pipeline.
-- Configuration changes — a different embedding model, new chunking parameters — are
-  re-projections via `rebuild`, not data migrations.
-- Rebuildability is per-source: the Markdown source is fully rebuildable from the files
-  themselves.
+Future standalone indexes may add owner-scoped kind tables when their ownership model
+requires them and may be attached to loops.
+Standalone discovery, sharing authorization, and attachment CRUD are deferred, but the base
+schema must not prevent them. Deleting a loop removes those attachments but does not delete
+the reusable indexes.
 
-## Chunking and lineage
+A provider cannot be deleted while any `ragIndex` references it. Provider deletion reports
+the IDs of loops whose indexes use it. A provider assignment cannot be removed from a loop
+while that loop's current index uses it.
 
-Splitting a document into chunks is a pluggable **chunking strategy**, independent of the
-source adapter: the adapter yields a document's text, and the strategy cuts that text into
-an ordered list of chunks. Keeping the two concerns orthogonal lets any chunking strategy
-compose with any source, and lets the splitting approach evolve — structural, semantic, or
-recursive — without touching the sources or the retrieval engine.
+## Loop-local aliases and lookup
 
-A chunk is text plus a backtrack to its exact origin. Whatever the strategy, each chunk
-records its lineage — for the Markdown source, the file path and the character span
-(`startOffset`, `endOffset`) it was cut from, plus its ordinal in the document. Lineage
-makes every retrieved chunk traceable to its source location and citable back to it, and
-ingestion is idempotent on that identity, so re-running it never double-inserts.
+Consumers address one index at a time through a loop-local alias. The universal lookup tool
+accepts an alias, query, and optional result bound, resolves exactly one index, and runs the
+fixed retrieval pipeline.
 
-The MVP strategy is a **fixed-size overlapping window**, parametrized by a window size and
-a neighbor overlap: consecutive windows share a configurable span, so a passage split
-across a boundary still appears whole in at least one chunk. Both parameters are index
-configuration (see [Index configuration](#index-configuration)). Because windows overlap,
-a single passage can surface as two adjacent chunks; the MVP returns both (recurrence is
-itself a signal) and defers merge or deduplication.
+The reserved alias `self` resolves directly to the loop's `loopActivity` `ragIndex`; it does
+not require a general attachment row. Future reusable indexes use a loop attachment table
+with a unique alias per loop. Attachment lifecycle controls loop access only and must not
+change or delete a shared index. Index lifecycle controls projection and storage.
 
-## Ingestion and rebuild
+## Pipeline behavior
 
-Ingestion is out-of-band: it is never fired from within loop task handling, so it
-cannot affect any task outcome. It runs in two decoupled phases: the chunking strategy
-splits each document and the pipeline upserts the chunks, then each chunk still missing an
-embedding is put through the model. A chunk is written before its embedding and becomes
-retrievable only once embedded, so ingestion degrades gracefully when the embedding
-provider is unavailable — the chunks persist and are embedded on a later run.
+The common pipeline has these stages:
 
-- `rebuild` re-projects the whole source: it walks the corpus, chunks each document,
-  upserts the chunks, and embeds those still missing an embedding. A per-document content
-  hash lets `rebuild` skip unchanged documents cheaply.
-- The Markdown source is treated as a snapshot: `rebuild` is the update path, and the
-  index is eventually consistent with the files. Live file-watching and incremental
-  supersession are a future capability.
-- Ingestion must not persist secrets, since index content is re-surfaced into persona
-  context.
+1. **Source projection** belongs to the index kind and emits typed source records with stable
+   identity, occurrence time, text, and safe provenance.
+2. **Segmentation** maps one source record to one or more ordered segments. Loop activity
+   uses `wholeEntry`, which preserves the complete bounded source record as one segment with
+   key `whole` and ordinal `0`.
+3. **Embedding** maps segment text to vectors through the fixed provider implementation.
+   One index has exactly one provider, model, and vector dimension.
+4. **Retrieval** embeds a query, selects and ranks entries, applies stable tie-breaking, and
+   returns safe result metadata. Initial retrieval is exact cosine similarity.
+5. **Storage** uses Athena's default RAG entry repository. It owns all PostgreSQL vector SQL;
+   source projection, retrieval, and tool execution do not embed storage queries.
 
-## Retrieval
+Source and segmentation descriptors are part of immutable index configuration. The current
+loop-activity kind fixes them to `loopActivity` and `wholeEntry`; they are not runtime
+strategy selections. Introduce an abstraction only when a second implemented projection
+requires one. Embedding remains a modular contract but is not persisted as an index choice.
+Retrieval and storage are fixed services.
 
-An index is consumed one way in the MVP: as a **lookup tool**. Attaching an index to a
-loop and granting a persona its lookup tool — through the same per-loop tool allow/deny
-list as any other tool in [tool-usage.md](./tool-usage.md) — is what gives that persona
-access. There is no separate access flag; RAG access is tool access.
+The implemented fixed services are:
 
-- A persona calls the tool with a query; Athena scopes the retrieval to the loop's
-  attached indexes and returns a bounded, ordered list of chunks ranked by semantic
-  similarity, each carrying its lineage as attribution.
-- The result is injected into the persona through the normal tool-result path and
-  recorded as a tool execution per [tool-usage.md](./tool-usage.md).
+- `provider` embedding is fixed and sends ordered text batches through the index's configured
+   OpenRouter-compatible provider and model.
+- Default retrieval embeds one query, then delegates bounded ranking to the entry repository.
+- Default storage owns entry upsert and vector-distance SQL. Its current ranking
+   implementation uses exact cosine similarity.
 
-Deterministic assembly of context at routing time is not part of this capability;
-retrieval is always a persona-initiated tool call.
+The storage boundary accepts writes only while the index is `rebuilding` or `ready`. The
+first vector establishes `embeddingDimension`; later vectors must match it. Lookup requires
+a `ready` index and a query vector with the same dimension.
 
-## Determinism and replay
+Phase 2 will implement observation projection where the background worker reads pending
+loop-activity observations. It will map each observation into the common entry shape and
+preserve it as one bounded segment with key `whole` and ordinal `0` before embedding and
+storage. Cross-kind source-reference namespacing and projection dispatch are deferred until
+a second source kind demonstrates the required identity rules.
 
-- Retrieval is a tool execution: its returned chunks are snapshotted into the tool
-  execution record per [tool-usage.md](./tool-usage.md), and replay reuses that snapshot
-  verbatim rather than re-querying a possibly-rebuilt index.
-- Exact vector search makes live retrieval deterministic for a fixed index and query, so
-  the snapshot and a fresh query agree until the index is rebuilt.
-- The Markdown source carries no task-timeline position, so retrieval applies no as-of
-  filter; a future task or conversation source, whose entries are ordered against the
-  loop timeline, would reintroduce as-of ordering.
+## Rebuilds and entries
 
-## Index configuration
+`ragIndex` owns its embedding contract, rebuild lifecycle, progress, and failure
+diagnostics. There is no generation entity or retained copy of derived data.
 
-Configuration lives in two places: the index itself — source, embedding model, chunking
-parameters — on the `ragIndex` record, and how a loop consumes an attached index on the
-attachment. Changes are audited (actor, timestamp, prior and new value), consistent with
-[llm-harness.md](./llm-harness.md).
+Starting or retrying a rebuild is one transaction:
 
-- `source`: the corpus the index projects; for the Markdown adapter, the file collection
-  to ingest.
-- `chunking`: the chunking strategy and its parameters; the MVP strategy is a fixed-size
-  overlapping window, parametrized by a window size and a neighbor overlap.
-- `embedding`: `providerRef`, `model`, and `modelVersion`. The MVP pins a concrete model
-  and dimension; see
-  [rag-index.plan.md](../implementation-plans/rag-index.plan.md).
+1. Set the index lifecycle to `rebuilding` and reset progress and diagnostics.
+2. Delete all entries and kind-specific observations for the index.
 
-Lifecycle: retrieval is opt-in — a loop has no index until an admin enables it, which
-creates the index over its source, attaches it, and rebuilds from the source. Disabling
-detaches the index and removes its entries. Changing the embedding model or chunking
-parameters invalidates existing vectors and requires an admin-triggered `rebuild` that
-exposes a rebuilding status; Athena never mixes vectors across model versions.
+The background rebuild then projects canonical source state into the empty index. Only a
+`ready` index participates in lookup. Rebuild work is serialized per index, and workers
+must verify the expected lifecycle before every write. A rebuild never mixes embedding
+contracts because changing provider, model, source, or segmentation creates a replacement
+index.
 
-## Failure handling
+The current temporary compatibility policy deliberately has no rebuild revision. If a
+deployment cannot trust an existing index format or rebuild state, it purges and re-creates
+the index so subsequent work targets a new index identity.
 
-- Retrieval failures are tool execution failures, recorded per
-  [tool-usage.md](./tool-usage.md); a failed lookup returns no context and the persona
-  proceeds without it.
-- Ingestion failure leaves the source intact — the files remain canonical — and the
-  index is repaired by a later `rebuild`.
-- Embedding uses the loop provider contract but is pinned to the index's configured
-  provider and model. Unavailability defers embedding; it does not fail over and mix vector
-  contracts within one index. Provider availability rules remain defined in
-  [llm-harness.md](./llm-harness.md).
+`ragEntry` is source-neutral segmented output:
 
-## The Markdown file collection as the first source
+- Index.
+- Source identity and occurrence timestamp.
+- Segment identity/ordinal.
+- Bounded redacted text and safe provenance.
+- Optional logical identity and supersession state.
+- Vector storage owned by the repository implementation.
 
-The first source, and the example implementation of the abstraction, is a collection of
-Markdown files — a reference knowledge base a loop can consult. It is deliberately chosen
-to showcase the general capability: documents are the archetypal RAG source and exercise
-the chunking, overlap, and lineage that a record-oriented source would not.
+Entry identity includes index, source reference, occurrence timestamp, and segment identity.
+Repeated content at different times is valid.
 
-- Source: a set of Markdown files, treated as a snapshot and (re)projected by `rebuild`.
-- Chunks: overlapping windows of each file's text, with `filePath` and character-span
-  lineage for backtrack and citation.
-- Consumer: any index-enabled persona, through the index's lookup tool; the routing
-  persona in [theloop.md](./theloop.md) is one such consumer, not a privileged one.
-- Scope: the index is attached only to the loop that enabled it, so retrieval is strictly
-  loop-scoped.
+## Loop activity specialization
 
-## Future directions
+The loop activity kind observes task messages, task state, tool decisions/results, runner
+results, and curated workgraph state. Operational processor/routing churn and raw provider
+payloads are excluded.
 
-- Task and conversation adapters over the same abstraction — including a loop's own
-  history as retrievable memory — with task-timeline as-of ordering.
-- Live, incrementally-updated sources with supersession, replacing the snapshot `rebuild`
-  model.
-- Curated entries: personas committing distilled knowledge as an additive tier on the
-  same index and retrieval engine.
-- Query-time facets derived from chunk parameters (for example partitioning a corpus by
-  environment), and cross-loop sharing of an index.
+Messages are additive. Mutable task/workgraph state uses logical identity and supersession.
+Before persistence, observations are redacted and bounded to one UTF-8-safe 8 KiB source
+record. `wholeEntry` then preserves that record as one entry without further splitting.
+
+Observation insertion is transactional with canonical domain mutation. Versioned background
+jobs perform rebuild and projection. Job payloads contain only index identity, never content
+or credentials.
+
+## Lifecycle
+
+The self-memory lifecycle is `disabled | rebuilding | ready | failed`:
+
+- `disabled`: no lookup, observations, or entries; immutable configuration remains.
+- `rebuilding`: previous derived data has been deleted and canonical history is being
+   projected; lookup is unavailable.
+- `ready`: the index is queryable and live observations continue projecting.
+- `failed`: diagnostics remain; retry drops any partial derived data and rebuilds the same
+   index.
+
+Disabling deletes all self-memory derived data. Re-enabling performs a full rebuild,
+including canonical activity created while disabled. Jobs verify index lifecycle before
+every write, and only one rebuild may run for an index at a time.
+
+## Security and replay
+
+Every lookup resolves through the calling loop's alias namespace and independently checks
+index availability and access. Indexed content is untrusted prompt input. Secrets are
+redacted before RAG persistence, and logs/job payloads never contain text, queries, vectors,
+or credentials.
+
+Lookup results enter the normal tool-result path. Persisted tool results are replay
+snapshots and never re-query the index.
 
 ## Cross references
 
-- Loop ownership, membership, and routing: [theloop.md](./theloop.md)
-- Tool execution records and tool allow/deny policy: [tool-usage.md](./tool-usage.md)
-- Provider configuration, validation, and availability:
-  [llm-harness.md](./llm-harness.md)
-- Embedding provider contract:
-  [openai-api-connection.plan.md](../implementation-plans/openai-api-connection.plan.md)
-- Non-functional requirements: [nfr.md](./nfr.md)
+- Background delivery: [background-processing.md](./background-processing.md)
+- Provider capability selection: [llm-harness.md](./llm-harness.md)
+- Tool policy and replay: [tool-usage.md](./tool-usage.md)
+- Implementation plan: [rag-index.plan.md](../implementation-plans/rag-index.plan.md)

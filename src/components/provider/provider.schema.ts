@@ -131,6 +131,14 @@ export const loopProviderSchema = providerSchema.pick({ displayName: true, provi
 export type ProviderInsert = z.infer<typeof providerInsertSchema>;
 export type ProviderUpdate = z.infer<typeof providerUpdateSchema>;
 export type ProviderCapability = (typeof providerCapabilities)[number];
+
+export type ProviderUsingRagIndex = {
+  id: string;
+  loop: string | null;
+};
+
+export type ProviderDeleteResult = { status: `deleted` } | { status: `notFound` } | { status: `inUse`; ragIndexes: ProviderUsingRagIndex[] };
+export type LoopProviderDeleteResult = { status: `deleted` } | { status: `notFound` } | { status: `inUse`; ragIndexes: ProviderUsingRagIndex[] };
 export type LoopProviderInsert = z.infer<typeof loopProviderInsertSchema>;
 export type LoopProviderAdminUpdate = z.infer<typeof loopProviderAdminUpdateSchema>;
 export type Provider = z.infer<typeof providerSchema>;

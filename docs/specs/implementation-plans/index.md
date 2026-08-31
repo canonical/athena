@@ -36,7 +36,10 @@ Implementation order:
 
 ### RAG Index (depends on provider/embeddings contract)
 
-- [ ] Deliver [rag-index.plan.md](./rag-index.plan.md): a general retrieval-index abstraction with a Markdown-file-collection adapter as the example source — overlapping chunking with file-and-offset lineage, pull retrieval through a per-index lookup tool gated by the tool allow/deny list, pure semantic ranking, single fixed embedding model, Postgres with pgvector, strictly per-loop. Embeds via the OpenAI-compatible provider contract (`text-embedding-3-small`, 1536).
+- [ ] Deliver [rag-index.plan.md](./rag-index.plan.md): common standalone RAG index infrastructure with loop-activity source and whole-entry segmentation descriptors plus embedding, retrieval, and storage components; loop self-memory is the first non-detachable index kind and is retrieved through the universal alias-based `rag_lookup` tool.
+  - [ ] Complete Phase 0 PostgreSQL pgvector missing-extension and upgrade verification.
+  - [x] Complete Phase 1 common index core and loop-memory configuration.
+  - [ ] Complete Phase 2 transactional observations and durable projection.
 
 ### Phase 0: Foundations
 

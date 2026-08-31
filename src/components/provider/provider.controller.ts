@@ -1,6 +1,7 @@
 import type { AppLogger } from "@components/logging/logging.schema.js";
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { fetchOpenRouterModels, validateOpenRouterEmbeddingModel, validateOpenRouterModel } from "@components/openrouter/openrouter.service.js";
+import { queryLoopProviderDelete, queryProviderDelete } from "@components/rag/rag.transaction.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
 import { ProviderForbiddenError, ProviderNotFoundError, ProviderValidationError } from "./provider.errors.js";
 import type {
@@ -17,13 +18,11 @@ import type {
 } from "./provider.schema.js";
 import {
   queryLoopProviderAssign,
-  queryLoopProviderDelete,
   queryLoopProviderList,
   queryLoopProviderUpdateByAdmin,
   queryProviderApiConnectionByOwner,
   queryProviderByIdForOwner,
   queryProviderCreate,
-  queryProviderDelete,
   queryProviderListByOwner,
   queryProviderUpdate,
 } from "./provider.service.js";
@@ -122,8 +121,17 @@ export const providerUpdate = async (providerId: string, ownerId: string, input:
 export const providerDelete = async (providerId: string, ownerId: string): Promise<void> => {
   validateProviderId(providerId);
 
-  if (!(await queryProviderDelete(providerId, ownerId))) {
+  const result = await queryProviderDelete(providerId, ownerId);
+
+  if (result.status === `notFound`) {
     throw new ProviderNotFoundError(`Provider not found.`);
+  }
+
+  if (result.status === `inUse`) {
+    const loopIds = Array.from(new Set(result.ragIndexes.map((index) => index.loop).filter((loop): loop is string => loop !== null)));
+    throw new ProviderValidationError(`Provider cannot be deleted because it is used by loops: ${loopIds.join(`, `)}.`, {
+      usingEntities: loopIds.map((loop) => ({ type: `loop`, id: loop })),
+    });
   }
 };
 
@@ -286,7 +294,15 @@ export const loopProviderDelete = async (loopId: string, providerId: string, use
     throw new ProviderForbiddenError(`Only loop admins may remove assignments.`);
   }
 
-  if (!(await queryLoopProviderDelete(loopId, providerId))) {
+  const result = await queryLoopProviderDelete(loopId, providerId);
+
+  if (result.status === `notFound`) {
     throw new ProviderNotFoundError(`Loop provider not found.`);
+  }
+
+  if (result.status === `inUse`) {
+    throw new ProviderValidationError(`Provider cannot be removed from loop ${loopId} because it is used by RAG index ${result.ragIndexes.map((index) => index.id).join(`, `)}.`, {
+      usingEntities: [{ type: `loop`, id: loopId }],
+    });
   }
 };

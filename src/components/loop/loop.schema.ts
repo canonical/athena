@@ -144,7 +144,7 @@ export type Feedback = {
   message: string;
 };
 
-export const loopTabs = [`tasks`, `details`, `tools`, `members`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
+export const loopTabs = [`tasks`, `details`, `memory`, `tools`, `members`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
 export const loopTabSchema = z.enum(loopTabs);
 
 export type Tab = z.infer<typeof loopTabSchema>;

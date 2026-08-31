@@ -147,12 +147,6 @@ export const queryProviderUpdate = async (providerId: string, ownerId: string, i
   return result.rows[0];
 };
 
-export const queryProviderDelete = async (providerId: string, ownerId: string): Promise<boolean> => {
-  const result = await query(`DELETE FROM "provider" WHERE "id" = $1 AND "owner" = $2`, [providerId, ownerId]);
-
-  return Boolean(result.rowCount);
-};
-
 export const queryLoopProviderList = async (loopId: string): Promise<LoopProvider[]> => {
   const result = await query<LoopProvider>(
     `
@@ -255,12 +249,6 @@ export const queryLoopProviderUpdateByAdmin = async (loopId: string, providerId:
 
   const assignments = await queryLoopProviderList(loopId);
   return assignments.find((assignment) => assignment.provider === providerId);
-};
-
-export const queryLoopProviderDelete = async (loopId: string, providerId: string): Promise<boolean> => {
-  const result = await query(`DELETE FROM "loopProvider" WHERE "loop" = $1 AND "provider" = $2`, [loopId, providerId]);
-
-  return Boolean(result.rowCount);
 };
 
 export type LoopProviderCandidateRow = {

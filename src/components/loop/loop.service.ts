@@ -131,22 +131,6 @@ export const queryLoopUpdate = async (loopId: string, input: LoopUpdate, userId:
   return result.rows[0];
 };
 
-export const queryLoopDelete = async (loopId: string, userId: string): Promise<boolean> => {
-  const result = await query(
-    `
-      DELETE FROM "loop" AS l
-      USING "loopUser" AS lu
-      WHERE l."id" = $1
-        AND lu."loop" = l."id"
-        AND lu."user" = $2
-        AND lu."isAdmin" = TRUE
-    `,
-    [loopId, userId],
-  );
-
-  return Boolean(result.rowCount);
-};
-
 export const queryLoopProviderSelectionPolicy = async (loopId: string, userId: string): Promise<ProviderSelectionPolicy | undefined> => {
   const result = await query<ProviderSelectionPolicy>(
     `

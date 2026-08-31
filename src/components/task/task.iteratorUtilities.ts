@@ -55,7 +55,7 @@ export const resolveTaskProviderContext = async (task: Pick<Task, "loop" | "curr
   const providerResolution = task.currentProvider ? await resolveLoopSelectionByAssignment(task.loop, `provider`, task.currentProvider, { capability: `chat` }) : await resolveLoopSelection(task.loop, `provider`, { capability: `chat` });
 
   const baseUrl = providerResolution.selected?.baseUrl ?? null;
-  const model = task.currentModel ?? providerResolution.selected?.chatDefaultModel ?? providerResolution.selected?.chatEnabledModels[0] ?? null;
+  const model = task.currentModel ?? providerResolution.selected?.defaultModel ?? providerResolution.selected?.enabledModels[0] ?? null;
 
   return {
     providerResolution,
