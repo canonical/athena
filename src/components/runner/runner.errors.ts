@@ -1,5 +1,12 @@
 import { HttpError } from "@components/express/express.errors.js";
 
+export class CopilotAgentTaskIdMissingError extends Error {
+  constructor() {
+    super(`GitHub agent task submission response did not include an id.`);
+    this.name = `CopilotAgentTaskIdMissingError`;
+  }
+}
+
 export class RunnerValidationError extends HttpError {
   constructor(message: string, details?: unknown) {
     super({ status: 400, message, details });

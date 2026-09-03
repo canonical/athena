@@ -1,3 +1,5 @@
+import { CopilotAgentTaskIdMissingError } from "./runner.errors.js";
+
 const GITHUB_API_VERSION = `2026-03-10`;
 const GITHUB_API_BASE = `https://api.github.com`;
 
@@ -73,9 +75,14 @@ export const submitCopilotAgentTask = async (apiKey: string, repository: string,
   }
 
   const data = (await response.json()) as CopilotAgentTask;
+  const externalTaskId = typeof data.id === `string` ? data.id.trim() : ``;
 
-  console.log(`[copilot-adapter] agent task submitted`, { repository, externalTaskId: data.id, state: data.state });
-  return { externalTaskId: data.id };
+  if (!externalTaskId) {
+    throw new CopilotAgentTaskIdMissingError();
+  }
+
+  console.log(`[copilot-adapter] agent task submitted`, { repository, externalTaskId, state: data.state });
+  return { externalTaskId };
 };
 
 export const pollCopilotAgentTask = async (apiKey: string, repository: string, externalTaskId: string): Promise<{ done: boolean; succeeded: boolean; result: string }> => {
