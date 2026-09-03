@@ -100,7 +100,7 @@ export const queryRunnerQueueReclaimStaleClaims = async (consumerId: string): Pr
           "consumerPingedAt" < NOW() - INTERVAL '5 minutes'
           OR "consumerPingedAt" IS NULL
         )
-      RETURNING ${runnerQueueColumns}
+      RETURNING ${runnerQueueColumnsUnscoped}
     `,
     [consumerId],
   );
