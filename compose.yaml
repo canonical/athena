@@ -114,6 +114,25 @@ services:
           psql -h postgres -U athena -d athena -v APP_ROLE_NAME=athena -f "$$f"
         done
 
+  # Deterministic inference service used by Playwright specs.
+  test-inference:
+    profiles:
+      - test
+    build:
+      context: .
+    command: ["node", "/app/node_modules/@canonical/test-inference/dist/server.js"]
+    environment:
+      PORT: "8080"
+    # Playwright registers scenarios through this host port.
+    ports:
+      - "127.0.0.1:8099:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
   athena:
     build:
       context: .
