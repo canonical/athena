@@ -14,7 +14,7 @@ from paas_charm.app import App
 
 logger = logging.getLogger(__name__)
 
-VERSION = "1.1.2"
+VERSION = "1.1.4"
 
 
 class AthenaApp(App):

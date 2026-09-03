@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS "runnerQueue" (
   "status" TEXT NOT NULL DEFAULT 'pending' CHECK ("status" IN ('pending', 'claimed', 'completed', 'failed')),
   "claimedBy" UUID NULL,
   "claimedAt" TIMESTAMPTZ NULL,
+  "consumerPingedAt" TIMESTAMPTZ NULL,
   "externalTaskId" TEXT NULL,
   "result" TEXT NULL,
   "error" TEXT NULL,
@@ -16,9 +17,20 @@ CREATE TABLE IF NOT EXISTS "runnerQueue" (
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE "runnerQueue"
+  ADD COLUMN IF NOT EXISTS "consumerPingedAt" TIMESTAMPTZ NULL;
+
+UPDATE "runnerQueue"
+SET "consumerPingedAt" = "claimedAt"
+WHERE "status" = 'claimed'
+  AND "consumerPingedAt" IS NULL;
+
 CREATE INDEX IF NOT EXISTS "idxRunnerQueueRunnerStatus" ON "runnerQueue"("runner", "status");
 CREATE INDEX IF NOT EXISTS "idxRunnerQueueTask" ON "runnerQueue"("task");
 CREATE INDEX IF NOT EXISTS "idxRunnerQueueLoop" ON "runnerQueue"("loop");
+CREATE INDEX IF NOT EXISTS "idxRunnerQueueConsumerPingedAt"
+  ON "runnerQueue"("status", "consumerPingedAt")
+  WHERE "status" = 'claimed';
 
 SELECT ensureUpdatedAtTrigger('runnerQueue');
 
