@@ -3,6 +3,7 @@ import { readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { v5 as uuidv5 } from "uuid";
+import { testInferenceHealthUrl } from "./playwright/inference.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -128,12 +129,12 @@ const globalSetup = async (): Promise<void> => {
   }
 
   try {
-    execFileSync(`docker`, [`compose`, `down`, `-v`], {
+    execFileSync(`docker`, [`compose`, `--profile`, `test`, `down`, `-v`], {
       cwd: workspaceRoot,
       stdio: `inherit`,
     });
 
-    execFileSync(`docker`, [`compose`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `athena`], {
+    execFileSync(`docker`, [`compose`, `--profile`, `test`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `test-inference`, `athena`], {
       cwd: workspaceRoot,
       stdio: `inherit`,
     });
@@ -146,6 +147,7 @@ const globalSetup = async (): Promise<void> => {
   await waitForUrl(statusUrl);
   await waitForUrl(dexDiscoveryUrl);
   await waitForUrl(frontendUrl);
+  await waitForUrl(testInferenceHealthUrl);
 };
 
 export default globalSetup;

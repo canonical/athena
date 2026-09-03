@@ -8,7 +8,7 @@ Define owner-scoped provider definitions and loop-level OpenRouter key selection
 
 - Owner-scoped provider definition schema
 - OpenRouter-only runtime for this phase
-- HTTPS-only endpoint validation
+- HTTP and HTTPS endpoint validation
 - Loop assignment lifecycle and permissions
 - Deterministic key selection algorithms and fallback
 - Credential envelope persistence and redaction behavior
@@ -22,7 +22,7 @@ Provider definitions are independent records with:
 1. `providerId` (stable identifier)
 2. `displayName`
 3. `providerType` (`openrouter` only in this phase)
-4. `baseUrl` (HTTPS only)
+4. `baseUrl` (HTTP or HTTPS)
 5. encrypted credential envelope fields
 6. lifecycle status
 
@@ -53,7 +53,7 @@ Fallback contract:
 ## Validation rules
 
 1. `providerType` must be `openrouter` in this phase.
-2. `baseUrl` must be HTTPS.
+2. `baseUrl` must use HTTP or HTTPS.
 3. `requestTimeoutMs` must be bounded.
 4. `maxRetries` must be bounded.
 5. Priority values must be unique per loop.
@@ -87,13 +87,13 @@ For each selection attempt, capture:
 4. Implement loop member assignment and admin-only order/override updates.
 5. Implement deterministic key selection engine and fallback behavior.
 6. Integrate minimal execution-time hook in task flow.
-7. Add E2E tests for permissions, HTTPS enforcement, OpenRouter-only enforcement, deterministic selection, and redaction.
+7. Add E2E tests for permissions, endpoint scheme enforcement, OpenRouter-only enforcement, deterministic selection, and redaction.
 
 ## Acceptance criteria
 
 1. Owners can manage provider definitions independent of loops.
 2. OpenRouter-only provider runtime is enforced.
-3. HTTPS-only endpoint validation is enforced.
+3. HTTP and HTTPS endpoint validation is enforced.
 4. Multi-key assignment and deterministic selection are supported.
 5. Secret material is never exposed.
 

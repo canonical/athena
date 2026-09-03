@@ -78,7 +78,7 @@ Additional runners and harnesses may be added to the catalog after capability an
 - OpenRouter credentials are entered directly as API keys by the owner and assigned to loops as key pools.
 - Provider definitions must not require or store model selection fields.
 - Model selection is decided at routing/execution time by the active routing persona and deterministic Athena policy.
-- Provider endpoints remain HTTPS-only.
+- Provider endpoints accept HTTP and HTTPS.
 - Multiple OpenRouter keys and multiple Copilot keys can be assigned to a loop.
 - Athena definitions remain canonical for behavior and policy regardless of selected provider/key.
 - Provider/key choice must not alter deterministic routing, ownership rules, or approval authority.
