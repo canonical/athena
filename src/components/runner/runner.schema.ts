@@ -101,6 +101,7 @@ export const runnerQueueItemSchema = z.object({
   status: z.enum(runnerQueueStatuses),
   claimedBy: uuid().nullable(),
   claimedAt: isoDateTime.nullable(),
+  consumerPingedAt: isoDateTime.nullable(),
   externalTaskId: z.string().nullable(),
   result: z.string().nullable(),
   error: z.string().nullable(),
