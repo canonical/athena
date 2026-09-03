@@ -6,6 +6,14 @@ SELECT pg_advisory_xact_lock(hashtextextended('athena-schema-migrations', 0));
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+DO $$
+BEGIN
+	IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+		RAISE EXCEPTION 'The vector extension is not installed. Install it before Athena schema migrations.';
+	END IF;
+END
+$$;
+
 \echo >>> Running Athena function migrations
 \ir ./fncs/000100.uuidv7.sql
 \ir ./fncs/000200.updatedAt.sql
@@ -34,6 +42,9 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 \ir ./ddls/002000.loopUserRoleAudit.sql
 \ir ./ddls/002100.runnerQueue.sql
 \ir ./ddls/002200.loopRunnerRepository.sql
+\ir ./ddls/002500.ragIndex.sql
+\ir ./ddls/002700.loopActivityObservation.sql
+\ir ./ddls/002800.ragEntry.sql
 \ir ./ddls/999999.cleanup.sql
 
 \echo >>> Running Athena seed data

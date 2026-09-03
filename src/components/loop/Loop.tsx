@@ -23,6 +23,12 @@ const LazyLoopTools = lazy(async () => {
   return { default: module.LoopTools };
 });
 
+const LazyLoopMemory = lazy(async () => {
+  const module = await import("@components/rag/LoopMemory.js");
+
+  return { default: module.LoopMemory };
+});
+
 const LazyLoopPersonas = lazy(async () => {
   const module = await import("./LoopPersonas");
 
@@ -112,6 +118,11 @@ export function Loop({ loopId, tab, editor, personaId, workgraphViewWorkgraphId,
       {tab === `details` ? (
         <Suspense fallback={<div>Loading details...</div>}>
           <LazyLoopDetails loopId={loopId} loopName={loop?.name ?? ``} loopDescription={loop?.description ?? ``} loopIterationCostLimitUsd={loop?.iterationCostLimitUsd ?? null} onFeedback={setFeedback} onSaved={reloadLoop} />
+        </Suspense>
+      ) : null}
+      {tab === `memory` ? (
+        <Suspense fallback={<div>Loading memory...</div>}>
+          <LazyLoopMemory loopId={loopId} />
         </Suspense>
       ) : null}
       {tab === `tools` ? (

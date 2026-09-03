@@ -1,354 +1,168 @@
-# RAG Index Implementation Plan
+# RAG Infrastructure and Loop Self-Memory Plan
 
 ## Objective
 
-Implement the RAG index abstraction defined in
-[rag-index.md](../definitions/rag-index.md) with a Markdown-file-collection adapter as
-the example source: a derived, semantic retrieval index over a corpus of Markdown files
-that index-enabled personas query through a lookup tool to bring relevant reference
-knowledge into their decisions.
+Build common RAG infrastructure that supports diverse index kinds, embedding contracts, and
+consumers. Deliver loop self-memory as the first
+specialization without encoding loop ownership or whole-entry behavior into the base index.
 
-MVP scope: a Markdown file collection, overlapping chunking with file-and-offset lineage,
-pull retrieval through a lookup tool, pure semantic ranking, a single fixed embedding
-model, Postgres with pgvector, strictly per-loop.
+Current status: Phase 0 migration enforcement is implemented, but its missing-extension and
+upgrade verification remain pending. Phase 1 is complete. Phase 2 is the active next phase.
 
-The Markdown index is implemented as the example instance of a general retrieval-index
-abstraction: an index is a first-class, standalone entity that owns its data source,
-embedding model, chunking, and ingestion, and a loop attaches the indexes it retrieves
-from. The MVP builds the abstraction plus exactly one source adapter, the Markdown file
-collection, attached only to the loop that enabled it. The index object is `ragIndex`
-(exposing `lookup` and `rebuild`), its entries live in a shared `ragEntry` table, and
-loop-to-index attachments live in `loopRagAttachment`.
+## Phase 0: PostgreSQL platform prerequisite
 
-## Scope
+PostgreSQL must provide the `vector` extension before Athena application migrations run.
+Athena migrations verify this prerequisite but do not install PostgreSQL extensions.
 
-In scope:
+Verification:
 
-- The retrieval-index abstraction (`ragIndex`, a shared `ragEntry` table, and
-  `loopRagAttachment`) backed by Postgres with pgvector.
-- A source-adapter contract, with the Markdown-file-collection adapter as the only
-  implementation.
-- A chunking-strategy contract, with a fixed-size overlapping window (`fixedOverlap`) as
-  the only implementation, producing file-path-and-character-offset lineage.
-- Embedding via an extension to the loop OpenAI API-compatible provider contract.
-- `rebuild`-based ingestion: walk the corpus, chunk, embed, idempotently upsert.
-- A per-index lookup tool, governed by the per-loop tool allow/deny list.
-- Config CRUD, rebuild, and audit.
+- Prove Athena migration fails before RAG DDL when `vector` is absent and succeeds after a
+  database administrator installs it.
+- Verify clean and upgraded databases contain `vector` and accept vector DDL.
 
-Out of scope (deferred):
+## Phase 1: Correct and establish the common index core
 
-- Task and conversation adapters (including loop-history memory) and task-timeline
-  as-of ordering.
-- Live file-watching and incremental supersession; the MVP rebuilds a snapshot.
-- Cross-loop attachment (sharing an index across loops) and its authorization.
-- Curated writes and any commit tool.
-- Query-time facets derived from chunk parameters.
-- Retention and compaction.
-- Multiple or variable embedding models and re-embedding migration beyond `rebuild`.
-- Alternative chunking strategies beyond the fixed-size overlapping window.
-- Non-semantic ranking (recency, kind weighting), and chunk merge or deduplication.
-- Deterministic context assembly at routing time (retrieval is pull-only).
+Status: complete as of 2026-08-30.
 
-## Decisions
+Refactor the current Phase 1 schema before committing further projection work:
 
-- Access is a tool, not a flag. Each attached index is exposed to a persona as a lookup
-  tool alongside its other tools, gated by the per-loop tool allow/deny list in
-  [tool-usage.md](../definitions/tool-usage.md). This is the whole of RAG access control;
-  there is no separate per-persona RAG flag.
-- Retrieval is pull-only and its result is snapshotted into the tool execution record, so
-  replay reuses it. The Markdown source carries no task-timeline position, so retrieval
-  applies no as-of filter (a future ordered source would).
-- Ingestion is out-of-band via `rebuild`; it is never fired from loop task handling and
-  cannot affect a task outcome. The Markdown corpus is a snapshot; `rebuild` is the
-  update path.
-- Ingestion is two-phase: chunk rows are persisted first with `embedding` NULL, then
-  embedded in a separate step that targets `embedding IS NULL`, so it is resumable and
-  degrades gracefully when no provider is available. The MVP runs both phases inline in the
-  admin-triggered `rebuild` command; because phase two is an idempotent job unit, the scale
-  path is a durable job queue — a Postgres-backed one (`pg-boss` or `graphile-worker`)
-  reusing the existing database, rather than a Redis-backed `BullMQ` or a new service.
-- Chunking is a pluggable strategy, independent of the source adapter. The MVP strategy is
-  a fixed-size overlapping window (`fixedOverlap`, parametrized by window size and overlap,
-  sized in tokens against the embedding input limit); backtrack offsets are stored in
-  characters. New strategies (structural, semantic, recursive) register against the same
-  contract without touching sources or retrieval.
-- Embeddings extend the loop OpenAI-compatible provider contract (a profile with an
-  `embeddingModel`, called at `/v1/embeddings`), so
-  [openai-api-connection.plan.md](./openai-api-connection.plan.md) grows an embeddings
-  capability. The provider is per-loop config, not a fixed vendor.
-- The MVP pins `text-embedding-3-small` (1536 dimensions), reachable over `/v1/embeddings`
-  via GitHub Models/Foundry or OpenRouter. The choice is reversible: each entry stores its
-  source `text` and the index is rebuildable, so switching models is a re-embed via
-  `rebuild` — a same-dimension swap is pure re-embed, a different dimension also needs a
-  column migration.
-- Build order: implement the provider contract with its embeddings extension first; stub
-  embeddings only in tests, not as a shipped shortcut.
+- `ragIndex`: common identity, kind, immutable source strategy/reference, segmentation and
+  embedding configuration, lifecycle, rebuild progress, and diagnostics; remove the direct
+  loop field. `loopActivity` stores its loop UUID as the generic source reference.
+- `ragEntry`: common segmented output with source timestamp and segment identity.
+- `loopActivityObservation`: loop-activity-specific transactional outbox.
+- Persist fixed loop-activity source and whole-entry segmentation descriptors. Use provider
+  embedding plus default retrieval and storage services.
+- Keep embedding, retrieval, and storage in separate modules.
+- Keep the Memory UI as a loop-self-memory specialization. It configures the immutable
+  self-memory index.
+- Replace configuration by deleting the old index before creating the new index, releasing
+  the old provider dependency.
+- Delete a loop-owned self-memory index with its source loop.
+- Block provider deletion or loop-provider removal while a current index depends on it.
 
-## Dependencies and assumptions
+Verification:
 
-1. Embeddings extend the provider contract in
-   [openai-api-connection.plan.md](./openai-api-connection.plan.md). OpenAI exposes
-   embeddings via a separate `POST /v1/embeddings` endpoint, distinct from chat
-   completions. Not every OpenAI API-compatible provider implements it, so embeddings are
-   an optional provider capability.
-2. A single embedding model is pinned for the MVP, fixing the schema's vector dimension.
-   The specific model and the reversibility of that choice are in
-   [Decisions](#decisions); automated migration tooling for model changes is out of
-   scope, and a dimension change is a `rebuild` plus a column migration.
-3. The Markdown corpus is a snapshot ingested and refreshed by `rebuild`; it is not
-   watched for live edits in the MVP.
-4. The MVP uses exact vector search, so live retrieval is deterministic for a fixed index
-   and query; the tool-execution snapshot still guards replay across rebuilds (see
-   [Determinism and replay](#determinism-and-replay)).
+- Fresh migration and idempotent replay verify direct loop source lookup and timestamped
+  segment identity.
+- UI E2E configures a dedicated embedding provider distinct from chat, persists the
+  self-memory index, verifies no eligible-provider state, and verifies member read-only
+  access.
+- UI E2E verifies immutable replacement, old-provider release, dependency guards, and loop
+  deletion cleanup.
+- Static architecture checks ensure loop identity uses the generic source reference and
+  pgvector SQL occurs only in the storage repository.
+- Production backend build, repository checks, lint, clean/idempotent migration replay, and
+  all focused RAG E2E scenarios passed.
 
-## Storage: Postgres and pgvector
+## Phase 2: Transactional observations and durable projection
 
-- Use the existing PostgreSQL 16 instance with the `pgvector` extension
-  (`CREATE EXTENSION IF NOT EXISTS vector`).
-- Packaging: switch the database image to one that ships the extension (for example
-  `pgvector/pgvector:pg16`) or bake it into the rock; update
-  [compose.yaml](../../../compose.yaml) accordingly.
-- All indexes share one `ragEntry` table; the `index` FK is the scoping key.
-- Primary access pattern: `WHERE index = ? ORDER BY embedding <=> :q LIMIT k`.
-- Btree on `index` enforces isolation (restricting to the loop's attached index ids),
-  producing the candidate set for a single index before the vector ordering.
-- MVP ranks with exact vector search over that candidate set and adds no global ANN index.
-  At per-loop corpus scale (hundreds to low thousands of chunks) exact KNN is inexpensive
-  and gives perfect recall, perfect isolation, and determinism.
-- A global HNSW or IVFFlat index is deliberately avoided: a global ANN search with a
-  selective `index = ?` post-filter can return few or zero rows from the target index
-  (recall collapse), which is both a correctness and an isolation risk.
-- Scale path (future, when one index outgrows exact search): per-index ANN via pgvector
-  iterative index scans, `pgvectorscale` label-filtered DiskANN, or hash-partitioning
-  `ragEntry` by `index`.
-- Rationale: vectors live beside their relational data, so semantic search runs inside the
-  mandatory index-scope filter in one transactional query, with no dual-write or second
-  store to keep consistent.
+- Write loop-activity observations in the same transaction as knowledge-bearing domain
+  mutations.
+- Rebuild from canonical tasks, messages, tool decisions/results, runner results, and curated
+  workgraph state.
+- Register index-scoped rebuild/project jobs and durable outbox reconciliation.
+- Project source records through the default projection and fixed provider embedding
+  implementation into the common entry repository.
+- Enforce one embedding contract/dimension per index and lifecycle guards on writes.
 
-## Data model
+Verification:
 
-`ragIndex` (the standalone index object; one row per index):
+- UI E2E creates history before enablement and observes `rebuilding -> ready`; later
+  activity projects asynchronously.
+- `test_inference` reversed batch responses verify response-index association.
+- `deterministic-embed-8` and `deterministic-embed-16` verify independent indexes and
+  variable dimensions.
+- Concurrent enable/retry, process restart, invalid credentials, repair, and retry verify
+  idempotency and durable recovery.
 
-- `id` (uuidv7).
-- `sourceType` (TEXT): the adapter type; MVP is `mdCollection`.
-- `source` (JSONB): source-specific configuration; for `mdCollection`, the file
-  collection to ingest.
-- Embedding config: `embeddingProviderRef`, `embeddingModel`, `embeddingModelVersion`
-  (the index owns its model).
-- Chunking config: `chunkingStrategy` (TEXT), the strategy discriminator (MVP
-  `fixedOverlap`), and `chunking` (JSONB), its parameters — for `fixedOverlap`, the window
-  `size` and `overlap` — mirroring the `sourceType`/`source` split.
-- Behavior: the index object exposes `lookup(query, limit)` (filtered semantic retrieval)
-  and `rebuild` (full re-projection of the source). Enumerate and projection are a
-  per-`sourceType` adapter strategy; splitting projected text into chunks is a separate
-  per-`chunkingStrategy` strategy; the index delegates to both.
-- MVP: created when an admin opts a loop in, sourcing that loop's Markdown collection.
+## Phase 3: Projection semantics and security
 
-`loopRagAttachment` (a loop's use of an index):
+- Complete loop-activity source adapters.
+- Keep messages additive; supersede mutable task/workgraph state by logical identity.
+- Redact before RAG persistence and apply the UTF-8-safe 8 KiB source-record bound before
+  `wholeEntry` segmentation.
+- Capture nothing while self-memory is disabled.
 
-- `loop` (UUID) and `index` (UUID, FK to `ragIndex`), primary key `(loop, index)`, both
-  `ON DELETE CASCADE`.
-- `enabled` (boolean).
-- Retrieval bound: `maxChunks` or token budget for a lookup result.
-- A loop retrieves only through its enabled attachments, and a persona reaches an index
-  only when granted its lookup tool by the per-loop tool allow/deny list. MVP: the
-  Markdown index is attached only to the loop it sources.
+Verification:
 
-`ragEntry` (shared table; one row per chunk, across all indexes):
+- E2E verifies additive messages and one active entry for repeated mutable-state edits.
+- Fake secrets and oversized text verify redaction/truncation without raw content leakage.
+- `test_inference` chat/tool calls verify assistant, approval, and tool-result observations.
 
-- `id` (uuidv7).
-- `index` (UUID): FK to `ragIndex`, `ON DELETE CASCADE`; the scoping key and the isolation
-  boundary.
-- `sourceRef` (TEXT): stable identifier of the chunk's source document. For `mdCollection`
-  this is the file path.
-- `chunkIndex` (INT): the chunk's ordinal within its source document.
-- `startOffset` / `endOffset` (INT): the character span of the source document this chunk
-  was cut from — the backtrack for citation and future supersession.
-- `provenance` (JSONB): source-specific metadata.
-- `contentHash` (TEXT): hash of the source document, so `rebuild` skips unchanged
-  documents.
-- `text` (TEXT): the chunk text that was embedded.
-- `embedding` (`vector(1536)`, nullable): the MVP model's dimension
-  (`text-embedding-3-small`). Chunk rows are written before embedding; a row is retrievable
-  only once embedded, so retrieval filters `embedding IS NOT NULL`.
-- Postgres indexes: btree `index` for isolation; no global ANN index (see
-  [Storage](#storage-postgres-and-pgvector)).
-- Uniqueness: `(index, sourceRef, chunkIndex)` for idempotent upsert.
+## Phase 4: Universal alias-based lookup
 
-Per-persona access is the tool allow/deny list in
-[tool-usage.md](../definitions/tool-usage.md): a persona reaches an index only when
-granted its lookup tool. There is no `ragAccess` column.
+- Add one universal `rag_lookup` tool with `{ index, query, limit? }`.
+- Resolve reserved alias `self` directly to the loop's self-memory index.
+- Delegate query embedding and ranking to the default retrieval and storage services.
+- Enforce loop alias scope, lifecycle, dimension, and tool policy in the
+  executor.
+- Persist normal tool-result snapshots for replay.
 
-Config changes (index config, attachments, tool grants) are audited with actor,
-timestamp, prior value, and new value.
+Verification:
 
-Conventions: new numbered DDL under `migrations/pg/ddls/`, entity-name FKs, types and Zod
-only in the component `schema.ts`, component at `src/components/rag/`.
+- Script `test_inference` to call `rag_lookup` with `index: "self"` and retrieve a known
+  semantic match.
+- E2E proves loop isolation, policy denial/success, variable-dimension isolation, stable
+  tie-breaking, and immutable old tool results after source supersession.
 
-## Embedding integration (provider extension)
+## Phase 5: Self-memory activation lifecycle and races
 
-- Add `embeddingModel` (optional) to the provider profile; a profile that declares it can
-  serve embeddings.
-- Embeddings call the profile `baseUrl` at the `/embeddings` path with
-  `{ input, model: embeddingModel }`.
-- Selection uses deterministic provider priority per
-  [llm-harness.md](../definitions/llm-harness.md), considering only embedding-capable
-  profiles.
-- If no embedding-capable provider is available, `rebuild` defers and retrieval proceeds
-  with no context.
+- Disable atomically deletes self-memory observations and entries while retaining immutable
+  configuration.
+- Re-enable/retry sets `rebuilding`, drops any partial derived data, and performs a full
+  rebuild of the same index; lookup stays unavailable until ready.
+- Serialize ordinary rebuild work per index. Do not add a rebuild revision in the current
+  scope; purge and re-create the index when compatibility or uncertain stale work requires
+  a new identity.
+- Enforce writable lifecycle and embedding dimension in entry writes; lookup
+  requires a ready index and matching query dimension.
 
-## Chunking
+Verification:
 
-Chunking is a pluggable strategy, independent of the source adapter and the embedding
-model. The strategy contract is a single method — `chunk(text): Chunk[]` — that takes a
-document's text and returns an ordered list of chunks, each a `{ text, startOffset,
-endOffset }`; the pipeline assigns `chunkIndex` by order and attaches the source lineage
-(`sourceRef`). Keeping it a separate strategy lets structural,
-semantic, or recursive splitters be added later without touching sources or retrieval. A
-strategy is selected by the `chunkingStrategy` discriminator with its params in `chunking`,
-mirroring the `sourceType`/`source` split; new strategies register against the same
-contract.
+- E2E verifies disable removes lookup/data and disabled-time activity creates no RAG rows.
+- Re-enable backfills all canonical history, including disabled-time activity.
+- Two-page disable-during-rebuild and replacement scenarios verify lifecycle guards and the
+  purge/re-create recovery path.
 
-- MVP strategy — `fixedOverlap`: a fixed-size sliding window over the document text.
-  Parameters: `size` (window length) and `overlap` (span shared with the neighbor), sized
-  in tokens against the embedding input limit; `overlap` keeps a passage that spans a
-  boundary whole in at least one chunk.
-- Offsets are recorded in characters even when windows are measured in tokens, so the
-  `startOffset`/`endOffset` backtrack maps to an exact source span. The projection is the
-  chunk's redacted text; no LLM summarization.
-- The strategy is deterministic: the same document and parameters always produce the same
-  chunks and offsets, so `rebuild` is reproducible and idempotent upsert is stable.
-- Because windows overlap, retrieval can return two adjacent chunks for one passage; the
-  MVP returns both and defers merge or deduplication.
+## Phase 6: Reusable index attachments
 
-## Ingestion (rebuild)
+Deferred until a second index kind exists; it will be implemented on the common core:
 
-Ingestion is out-of-band and owned by the index; it is never fired from loop task
-handling. It runs in two phases so chunking and embedding are decoupled:
+- Add loop attachments with a unique loop-local alias.
+- Keep attachment access lifecycle separate from index lifecycle/storage.
+- Add standalone discovery and authorization appropriate to the owning index kind.
+- Reuse the same `rag_lookup` tool and projection/repository pipeline.
 
-1. Chunk and persist. The adapter enumerates the source into documents, the chunking
-   strategy splits each into an ordered list of chunks, and the pipeline redacts and
-   upserts the chunk rows with `embedding` left NULL.
-2. Embed the missing. Each row with `embedding IS NULL` is put through the index's embedding
-   model and updated in place. A row becomes retrievable only once embedded.
+Verification:
 
-- `rebuild` walks the corpus, and for each document whose `contentHash` changed, re-chunks
-  and upserts its chunks (phase 1), then embeds any unembedded rows (phase 2); unchanged
-  documents are skipped.
-- Idempotency: the `(index, sourceRef, chunkIndex)` unique key prevents double-insert under
-  retry and concurrent runs, and phase 2 is naturally resumable — it only ever targets
-  `embedding IS NULL`.
-- Graceful degradation: if no embedding-capable provider is available, phase 1 still
-  persists the chunks and phase 2 fills them in on a later run; retrieval meanwhile returns
-  only already-embedded rows.
-- The corpus is a snapshot; live watching and incremental supersession are future. The MVP
-  runs both phases inline in `rebuild`; see [Decisions](#decisions) for the queue scale
-  path.
+- E2E attaches one reusable index under two different aliases in separate authorized loops,
+  verifies exact alias routing and isolation, and proves detaching does not delete shared
+  index data.
 
-## Retrieval (lookup tool)
+## Phase 7: Operations and release validation
 
-- Access: each attached index is exposed to a persona as a lookup tool, gated by the
-  per-loop tool allow/deny list. A persona with the tool may call it; one without it cannot
-  reach the index.
-- Query: the persona supplies the query text and an optional bound within the attachment's
-  `maxChunks`.
-- Filters (mandatory): `index` in the loop's enabled attached indexes, and
-  `embedding IS NOT NULL` (unembedded chunks are not yet retrievable). In the MVP the index
-  scope is the single Markdown index attached to the loop.
-- Ranking: pure semantic similarity, with a stable tie-break by `sourceRef` then
-  `chunkIndex`.
-- Output: a bounded, ordered list of chunk texts, each carrying its lineage (`filePath`,
-  character span) as citation.
-- Recording: the call and its returned chunks are recorded as a tool execution per
-  [tool-usage.md](../definitions/tool-usage.md), and the returned set is snapshotted so
-  replay reuses it verbatim.
+- Complete structured redacted logs, queue/runbook documentation, repository query plans,
+  and graceful producer/worker shutdown.
+- Add a second source or segmentation implementation in tests or a small production use case,
+  introducing an abstraction only when the concrete requirements are known.
 
-## Determinism and replay
+Verification:
 
-- The index is a derived projection, fully rebuildable from the source.
-- The MVP uses exact vector search (no ANN index), so live retrieval is deterministic for a
-  fixed index and query.
-- The returned chunk list is snapshotted on the tool execution so replay stays exact across
-  rebuilds or embedding-model changes, and so a future move to approximate search does not
-  change replayed decisions.
-- The Markdown source has no task-timeline position, so retrieval applies no as-of filter;
-  a future ordered source would reintroduce as-of.
+- Run focused lifecycle/isolation/projection suites, `npm run check`, `npm run lint`, full
+  `npm test`, and coverage-enabled CI validation.
+- Deployment smoke starts from a database that completed the PostgreSQL platform migration
+  and verifies fresh/upgraded Athena schemas plus web/worker restart recovery.
 
-## Security and isolation
+## Invariants
 
-- Every query is filtered to the loop's enabled attached index ids; add a
-  defense-in-depth check and an explicit no-cross-loop-leak test.
-- Redact secrets at ingestion per [tool-usage.md](../definitions/tool-usage.md).
-- Index content is re-injected into prompts and is therefore a prompt-injection vector;
-  treat indexed content as untrusted.
-- Embedding credentials resolve via `credentialRef` only and are never logged.
-
-## Configuration and lifecycle
-
-- `ragIndex` and `loopRagAttachment` CRUD with loop-admin authorization; index config lives
-  on the `ragIndex` record, the retrieval bound on the attachment, and the lookup-tool grant
-  on the per-loop tool allow/deny list.
-- Retrieval is opt-in: an admin enables a loop by creating its index over the Markdown
-  collection, attaching it, and granting the lookup tool. Enabling triggers a `rebuild`;
-  disabling detaches and removes the index and its entries.
-- The MVP fixes the embedding model, so no model-change re-index path is required beyond
-  `rebuild`; a rebuilding status applies to `rebuild`.
-- All config changes are audited.
-
-## Audit
-
-- Audit `rebuild` jobs, retrieval tool executions (query basis, returned chunk ids and
-  count), and config changes.
-
-## Testing
-
-Per [testing-standards.md](../../testing-standards.md):
-
-- Loop isolation: no cross-loop retrieval (security-critical).
-- Chunking strategy: the `fixedOverlap` window honors its `size`/`overlap` parameters, and
-  chunk lineage (`startOffset`/`endOffset`) round-trips to the exact source span, including
-  across overlaps.
-- Idempotent `rebuild` under retry and concurrent runs; unchanged documents skipped by
-  `contentHash`.
-- Snapshot equals replay (returned chunks reused verbatim from the tool execution record).
-- Graceful failure: embedding provider down yields no context and no ownership change.
-
-## Implementation steps
-
-1. Extend the provider profile with `embeddingModel` and an embeddings call path.
-2. Add the pgvector extension and `ragIndex` / `ragEntry` / `loopRagAttachment` migrations
-   (shared entry table, btree `index`, no global ANN index); update the database image and
-   compose.
-3. Define the component `schema.ts` (Zod and types), the source-adapter strategy, and
-   `ragIndex` / `loopRagAttachment` CRUD with loop-admin authorization; on opt-in, create
-   the Markdown index and attach it to the loop.
-4. Implement the Markdown adapter (enumerate and project the file collection) and the
-   `fixedOverlap` chunking strategy (windowed split with offset lineage) behind the
-   strategy contract, feeding the shared redact/embed/idempotent-upsert pipeline under
-   `rebuild`.
-5. Implement the lookup tool: mandatory index-scope filter, pure semantic ranking, bounded
-   chunk output with citation, and tool-execution recording and snapshot.
-6. Register the lookup tool per index and gate it on the per-loop tool allow/deny list.
-7. Add audit.
-8. Add tests for isolation, lineage, idempotent rebuild, snapshot replay, and failure paths.
-
-## Acceptance criteria
-
-1. Loop admins can enable and configure the index; enabling rebuilds from the Markdown
-   collection.
-2. A persona granted the lookup tool retrieves relevant chunks as a bounded list, each cited
-   by file path and character span.
-3. Replaying the tool execution reuses the snapshot and never re-queries.
-4. Retrieval never crosses loop boundaries.
-5. Embedding or provider unavailability degrades to no context without changing ownership or
-   closing tasks.
-6. `rebuild` is idempotent under retry and concurrent runs, skipping unchanged documents.
-
-## Related specs
-
-- [rag-index.md](../definitions/rag-index.md)
-- [theloop.md](../definitions/theloop.md)
-- [tool-usage.md](../definitions/tool-usage.md)
-- [llm-harness.md](../definitions/llm-harness.md)
-- [openai-api-connection.plan.md](./openai-api-connection.plan.md)
-- [nfr.md](../definitions/nfr.md)
+- Base index rows contain no source-kind ownership fields.
+- Kind-specific source/configuration lives in one-to-one relational tables.
+- Index configuration is immutable; rebuilds clear and repopulate the same index.
+- One index has one embedding provider/model/dimension.
+- Entries are source-neutral segments and include occurrence timestamp plus segment
+  identity.
+- Self-memory is resolved through reserved alias `self`; reusable indexes use attachments.
+- Attachment removal never deletes a standalone shared index.
+- Projection does not depend on the default storage service.
+- Job payloads contain index identity only, and lookup results are replay snapshots.

@@ -77,7 +77,7 @@ services:
       - traefik.http.services.dex.loadbalancer.server.port=5556
 
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: athena
       POSTGRES_USER: athena
@@ -107,6 +107,7 @@ services:
       - -c
       - |
         set -eu
+        psql -h postgres -U athena -d athena -c 'CREATE EXTENSION IF NOT EXISTS vector'
         psql -h postgres -U athena -d athena -v APP_ROLE_NAME=athena -f /migrations/pg/migrate.sql
         for f in /migrations/pg/seed.local/*.sql; do
           [ -e "$$f" ] || continue
