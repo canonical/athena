@@ -3,14 +3,24 @@ import { triggerTaskProcessor } from "@components/task/task.processor.js";
 import { queryAppendQueueItem } from "@components/task/task.service.js";
 import { delay } from "@components/utilities/timers.js";
 import { v7 as uuidv7 } from "uuid";
-import { CopilotAgentTaskIdMissingError, pollCopilotAgentTask, submitCopilotAgentTask } from "./runner.copilot.adapter.js";
-import { queryRunnerQueueClaimNext, queryRunnerQueueListClaimed, queryRunnerQueueMarkFailed, queryRunnerQueueSetExternalTaskId, queryRunnerQueueSubmitResult } from "./runner.queue.service.js";
+import { pollCopilotAgentTask, submitCopilotAgentTask } from "./runner.copilot.adapter.js";
+import { CopilotAgentTaskIdMissingError } from "./runner.errors.js";
+import {
+  queryRunnerQueueClaimNext,
+  queryRunnerQueueListClaimed,
+  queryRunnerQueueMarkFailed,
+  queryRunnerQueuePingClaims,
+  queryRunnerQueueReclaimStaleClaims,
+  queryRunnerQueueSetExternalTaskId,
+  queryRunnerQueueSubmitResult,
+} from "./runner.queue.service.js";
 import type { RunnerQueueItem } from "./runner.schema.js";
 import { queryRunnerDecryptCredential } from "./runner.service.js";
 
 let isConsuming = false;
 let consumerInterval: ReturnType<typeof setInterval> | null = null;
 const runnerQueueConsumerIntervalMs = 15_000;
+const runnerQueueHeartbeatIntervalMs = 5_000;
 const consumerId = uuidv7();
 
 export const startRunnerQueueConsumer = (): void => {
@@ -23,6 +33,9 @@ export const startRunnerQueueConsumer = (): void => {
 
   triggerRunnerQueueConsumer();
   consumerInterval = setInterval(triggerRunnerQueueConsumer, runnerQueueConsumerIntervalMs);
+  setInterval(() => {
+    void pingRunnerQueueClaims();
+  }, runnerQueueHeartbeatIntervalMs);
   log.info(`Runner queue consumer interval scheduled`, { consumerId, intervalMs: runnerQueueConsumerIntervalMs });
 };
 
@@ -57,6 +70,11 @@ const runConsumerCycle = async (): Promise<void> => {
 
 // Phase 1: poll GitHub for all items already claimed by this consumer.
 const checkClaimedItems = async (): Promise<void> => {
+  const reclaimedItems = await queryRunnerQueueReclaimStaleClaims(consumerId);
+  if (reclaimedItems.length > 0) {
+    console.log(`[runner-queue-consumer] reclaimed stale claims`, { consumerId, count: reclaimedItems.length });
+  }
+
   const claimedItems = await queryRunnerQueueListClaimed(consumerId);
 
   console.log(`[runner-queue-consumer] checking claimed items`, { consumerId, count: claimedItems.length });
@@ -103,6 +121,17 @@ const checkClaimedItems = async (): Promise<void> => {
   }
 };
 
+const pingRunnerQueueClaims = async (): Promise<void> => {
+  try {
+    await queryRunnerQueuePingClaims(consumerId);
+  } catch (error) {
+    log.error(`Runner queue heartbeat failed`, {
+      consumerId,
+      error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : { message: String(error) },
+    });
+  }
+};
+
 // Phase 2: claim the next pending item and submit it to GitHub.
 const claimAndSubmitNext = async (): Promise<void> => {
   const item = await queryRunnerQueueClaimNext(`github-copilot-cloud`, consumerId);
@@ -146,7 +175,11 @@ const claimAndSubmitNext = async (): Promise<void> => {
 };
 
 const failRunnerQueueItem = async (item: RunnerQueueItem, error: string, taskMessage: string): Promise<void> => {
-  await queryRunnerQueueMarkFailed(item.id, consumerId, error);
+  const failed = await queryRunnerQueueMarkFailed(item.id, consumerId, error);
+  if (!failed) {
+    return;
+  }
+
   await appendRunnerResultToTask(item.task, item.loop, taskMessage);
   triggerTaskProcessor();
 };

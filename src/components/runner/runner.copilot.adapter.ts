@@ -1,3 +1,5 @@
+import { CopilotAgentTaskIdMissingError } from "./runner.errors.js";
+
 const GITHUB_API_VERSION = `2026-03-10`;
 const GITHUB_API_BASE = `https://api.github.com`;
 
@@ -30,13 +32,6 @@ type CopilotTaskListResponse = {
   total_active_count?: number;
   total_archived_count?: number;
 };
-
-export class CopilotAgentTaskIdMissingError extends Error {
-  constructor() {
-    super(`GitHub agent task submission response did not include an id.`);
-    this.name = `CopilotAgentTaskIdMissingError`;
-  }
-}
 
 const githubHeaders = (apiKey: string): Record<string, string> => ({
   Accept: `application/vnd.github+json`,
