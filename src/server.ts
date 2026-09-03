@@ -12,6 +12,7 @@ import { startRunnerQueueConsumer } from "@components/runner/runner.queue.consum
 import { runnerRouter } from "@components/runner/runner.router.js";
 import { staticRouter } from "@components/static/static.router.js";
 import { statusRouter } from "@components/status/status.router.js";
+import { stepSequenceRouter } from "@components/stepSequence/stepSequence.router.js";
 import { startTaskProcessor } from "@components/task/task.processor.js";
 import { taskRouter } from "@components/task/task.router.js";
 import { startWebhookItemProcessor } from "@components/webhook/webhook.processor.js";
@@ -45,6 +46,7 @@ app.use(`${apiRoot}/runner`, runnerRouter);
 app.use(`${apiRoot}/provider`, providerRouter);
 app.use(`${apiRoot}/repository`, repositoryRouter);
 app.use(`${apiRoot}/workgraph`, workgraphRouter);
+app.use(`${apiRoot}/stepSequence`, stepSequenceRouter);
 app.use(`${apiRoot}/webhook`, webhookRouter);
 app.use(staticRouter);
 
