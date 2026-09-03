@@ -1,8 +1,6 @@
 import { getAuthenticatedUserId } from "@components/authentication/session.js";
 import { defineRoutes } from "@components/express/express.router.js";
-import { uuid } from "@components/utilities/zod.utilities.js";
 import { Router } from "express";
-import { z } from "zod";
 import {
   stepDefinitionCreate,
   stepDefinitionDelete,
@@ -19,53 +17,52 @@ import {
   taskSourceStepSequenceList,
   taskSourceStepSequenceUpsert,
 } from "./stepSequence.controller.js";
-import { stepDefinitionWritableSchema, stepSequenceWritableSchema, taskSourceStepSequenceWritableSchema } from "./stepSequence.schema.js";
+import {
+  stepDefinitionParamsSchema,
+  stepDefinitionReorderBodySchema,
+  stepDefinitionWritableSchema,
+  stepSequenceLoopParamsSchema,
+  stepSequenceParamsSchema,
+  stepSequenceWritableSchema,
+  taskSourceStepSequenceParamsSchema,
+  taskSourceStepSequenceWritableSchema,
+} from "./stepSequence.schema.js";
 
 export const stepSequenceRouter = Router();
 const route = defineRoutes(stepSequenceRouter);
 
-const loopParamsSchema = z.object({
-  loop: uuid(`loop must be a valid UUID.`),
-});
-
-const stepSequenceParamsSchema = z.object({
-  loop: uuid(`loop must be a valid UUID.`),
-  stepSequence: uuid(`stepSequence must be a valid UUID.`),
-});
-
-const stepDefinitionParamsSchema = stepSequenceParamsSchema.extend({
-  stepDefinition: uuid(`stepDefinition must be a valid UUID.`),
-});
-
-const stepDefinitionReorderBodySchema = z.object({
-  stepDefinitions: z.array(uuid(`each entry must be a valid UUID.`)).min(1),
-});
-
-const taskSourceParamsSchema = z.object({
-  loop: uuid(`loop must be a valid UUID.`),
-  taskSource: z.string().trim().min(1),
-});
-
+/**
+ * GET /loop/:loop/list
+ * List every step sequence defined for a loop.
+ */
 route({
   method: `get`,
   route: `/loop/:loop/list`,
-  validators: { params: loopParamsSchema },
+  validators: { params: stepSequenceLoopParamsSchema },
   handler: async ({ params, response, respond }) => {
     const stepSequences = await stepSequenceList(params.loop, getAuthenticatedUserId(response));
     respond({ status: 200, data: stepSequences });
   },
 });
 
+/**
+ * POST /loop/:loop
+ * Create a new named step sequence for a loop.
+ */
 route({
   method: `post`,
   route: `/loop/:loop`,
-  validators: { params: loopParamsSchema, body: stepSequenceWritableSchema },
+  validators: { params: stepSequenceLoopParamsSchema, body: stepSequenceWritableSchema },
   handler: async ({ params, body, response, respond }) => {
     const stepSequence = await stepSequenceCreate(params.loop, body, getAuthenticatedUserId(response));
     respond({ status: 201, data: stepSequence });
   },
 });
 
+/**
+ * GET /loop/:loop/:stepSequence
+ * Get a step sequence and its ordered step definitions.
+ */
 route({
   method: `get`,
   route: `/loop/:loop/:stepSequence`,
@@ -76,6 +73,10 @@ route({
   },
 });
 
+/**
+ * PUT /loop/:loop/:stepSequence
+ * Rename a step sequence or change its default flag.
+ */
 route({
   method: `put`,
   route: `/loop/:loop/:stepSequence`,
@@ -86,6 +87,10 @@ route({
   },
 });
 
+/**
+ * DELETE /loop/:loop/:stepSequence
+ * Delete a step sequence. Never cascades into existing task data.
+ */
 route({
   method: `delete`,
   route: `/loop/:loop/:stepSequence`,
@@ -96,6 +101,10 @@ route({
   },
 });
 
+/**
+ * GET /loop/:loop/:stepSequence/step
+ * List the ordered step definitions in a sequence.
+ */
 route({
   method: `get`,
   route: `/loop/:loop/:stepSequence/step`,
@@ -106,6 +115,10 @@ route({
   },
 });
 
+/**
+ * POST /loop/:loop/:stepSequence/step
+ * Add a new step definition to a sequence.
+ */
 route({
   method: `post`,
   route: `/loop/:loop/:stepSequence/step`,
@@ -116,6 +129,10 @@ route({
   },
 });
 
+/**
+ * PUT /loop/:loop/:stepSequence/step/reorder
+ * Reorder every step definition in a sequence atomically.
+ */
 route({
   method: `put`,
   route: `/loop/:loop/:stepSequence/step/reorder`,
@@ -126,6 +143,10 @@ route({
   },
 });
 
+/**
+ * PUT /loop/:loop/:stepSequence/step/:stepDefinition
+ * Update a single step definition's fields.
+ */
 route({
   method: `put`,
   route: `/loop/:loop/:stepSequence/step/:stepDefinition`,
@@ -136,6 +157,10 @@ route({
   },
 });
 
+/**
+ * DELETE /loop/:loop/:stepSequence/step/:stepDefinition
+ * Remove a step definition from a sequence.
+ */
 route({
   method: `delete`,
   route: `/loop/:loop/:stepSequence/step/:stepDefinition`,
@@ -146,40 +171,57 @@ route({
   },
 });
 
+/**
+ * GET /loop/:loop/mapping/list
+ * List every task-source-to-step-sequence mapping for a loop.
+ */
 route({
   method: `get`,
   route: `/loop/:loop/mapping/list`,
-  validators: { params: loopParamsSchema },
+  validators: { params: stepSequenceLoopParamsSchema },
   handler: async ({ params, response, respond }) => {
     const mappings = await taskSourceStepSequenceList(params.loop, getAuthenticatedUserId(response));
     respond({ status: 200, data: mappings });
   },
 });
 
+/**
+ * PUT /loop/:loop/mapping
+ * Create or replace the step sequence mapped to a task source.
+ */
 route({
   method: `put`,
   route: `/loop/:loop/mapping`,
-  validators: { params: loopParamsSchema, body: taskSourceStepSequenceWritableSchema },
+  validators: { params: stepSequenceLoopParamsSchema, body: taskSourceStepSequenceWritableSchema },
   handler: async ({ params, body, response, respond }) => {
     const mapping = await taskSourceStepSequenceUpsert(params.loop, body, getAuthenticatedUserId(response));
     respond({ status: 200, data: mapping });
   },
 });
 
+/**
+ * DELETE /loop/:loop/mapping/:taskSource
+ * Remove a task source's mapping, so it falls back to the loop default.
+ */
 route({
   method: `delete`,
   route: `/loop/:loop/mapping/:taskSource`,
-  validators: { params: taskSourceParamsSchema },
+  validators: { params: taskSourceStepSequenceParamsSchema },
   handler: async ({ params, response, respond }) => {
     await taskSourceStepSequenceDelete(params.loop, params.taskSource, getAuthenticatedUserId(response));
     respond({ status: 204 });
   },
 });
 
+/**
+ * GET /loop/:loop/resolve/:taskSource
+ * Resolve the step sequence that applies to new tasks for a task source:
+ * a specific mapping wins, otherwise the loop default is used.
+ */
 route({
   method: `get`,
   route: `/loop/:loop/resolve/:taskSource`,
-  validators: { params: taskSourceParamsSchema },
+  validators: { params: taskSourceStepSequenceParamsSchema },
   handler: async ({ params, respond }) => {
     const resolution = await stepSequenceResolveForTaskSource(params.loop, params.taskSource);
     respond({ status: 200, data: resolution });

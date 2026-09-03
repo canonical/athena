@@ -1,7 +1,7 @@
 import { queryLoopAdminMembership, queryLoopForUser } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
 import { StepSequenceForbiddenError, StepSequenceNotFoundError, StepSequenceValidationError } from "./stepSequence.errors.js";
-import type { StepDefinition, StepDefinitionWritable, StepSequence, StepSequenceWritable, TaskSourceStepSequence, TaskSourceStepSequenceWritable } from "./stepSequence.schema.js";
+import type { StepDefinition, StepDefinitionWritable, StepSequence, StepSequenceResolution, StepSequenceWithSteps, StepSequenceWritable, TaskSourceStepSequence, TaskSourceStepSequenceWritable } from "./stepSequence.schema.js";
 import {
   queryPersonaAssignedToLoop,
   queryProviderAssignedToLoop,
@@ -26,14 +26,6 @@ import {
   queryTaskSourceStepSequenceList,
   queryTaskSourceStepSequenceUpsert,
 } from "./stepSequence.service.js";
-
-export type StepSequenceWithSteps = StepSequence & { stepDefinitions: StepDefinition[] };
-
-export type StepSequenceResolution = {
-  stepSequence: StepSequence;
-  stepDefinitions: StepDefinition[];
-  resolvedBy: `mapping` | `default`;
-} | null;
 
 const validateLoopId = (loopId: string): void => {
   if (!isValidUuid(loopId)) {
