@@ -2,7 +2,7 @@ import { pgColumns } from "@components/postgres/pg.utilities.js";
 import { query } from "@components/postgres/postgres.js";
 import type { RunnerQueueItem } from "./runner.schema.js";
 
-const runnerQueueColumnNames = [`id`, `loop`, `task`, `runner`, `repository`, `prompt`, `plan`, `status`, `claimedBy`, `claimedAt`, `externalTaskId`, `result`, `error`, `createdAt`, `updatedAt`] as const;
+const runnerQueueColumnNames = [`id`, `loop`, `task`, `runner`, `repository`, `prompt`, `plan`, `status`, `claimedBy`, `claimedAt`, `consumerPingedAt`, `externalTaskId`, `result`, `error`, `createdAt`, `updatedAt`] as const;
 const runnerQueueColumns = pgColumns(runnerQueueColumnNames, `rq`);
 const runnerQueueColumnsUnscoped = pgColumns(runnerQueueColumnNames);
 
@@ -43,7 +43,8 @@ export const queryRunnerQueueClaimNext = async (runnerType: string, consumerId: 
       UPDATE "runnerQueue" rq
       SET "status" = 'claimed',
           "claimedBy" = $2,
-          "claimedAt" = NOW()
+          "claimedAt" = NOW(),
+          "consumerPingedAt" = NOW()
       FROM next_item
       WHERE rq."id" = next_item."id"
       RETURNING ${runnerQueueColumns}
@@ -69,6 +70,37 @@ export const queryRunnerQueueListClaimed = async (consumerId: string): Promise<R
       WHERE "status" = 'claimed'
         AND "claimedBy" = $1
       ORDER BY "claimedAt" ASC
+    `,
+    [consumerId],
+  );
+
+  return result.rows;
+};
+
+export const queryRunnerQueuePingClaims = async (consumerId: string): Promise<void> => {
+  await query(
+    `
+      UPDATE "runnerQueue"
+      SET "consumerPingedAt" = NOW()
+      WHERE "status" = 'claimed'
+        AND "claimedBy" = $1
+    `,
+    [consumerId],
+  );
+};
+
+export const queryRunnerQueueReclaimStaleClaims = async (consumerId: string): Promise<RunnerQueueItem[]> => {
+  const result = await query<RunnerQueueItem>(
+    `
+      UPDATE "runnerQueue"
+      SET "claimedBy" = $1,
+          "consumerPingedAt" = NOW()
+      WHERE "status" = 'claimed'
+        AND (
+          "consumerPingedAt" < NOW() - INTERVAL '5 minutes'
+          OR "consumerPingedAt" IS NULL
+        )
+      RETURNING ${runnerQueueColumns}
     `,
     [consumerId],
   );
