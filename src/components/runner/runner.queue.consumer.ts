@@ -1,9 +1,11 @@
 import { log } from "@components/logging/logging.service.js";
 import { triggerTaskProcessor } from "@components/task/task.processor.js";
 import { queryAppendQueueItem } from "@components/task/task.service.js";
+import { delay } from "@components/utilities/timers.js";
 import { v7 as uuidv7 } from "uuid";
-import { pollCopilotAgentTask, submitCopilotAgentTask } from "./runner.copilot.adapter.js";
+import { CopilotAgentTaskIdMissingError, pollCopilotAgentTask, submitCopilotAgentTask } from "./runner.copilot.adapter.js";
 import { queryRunnerQueueClaimNext, queryRunnerQueueListClaimed, queryRunnerQueueMarkFailed, queryRunnerQueueSetExternalTaskId, queryRunnerQueueSubmitResult } from "./runner.queue.service.js";
+import type { RunnerQueueItem } from "./runner.schema.js";
 import { queryRunnerDecryptCredential } from "./runner.service.js";
 
 let isConsuming = false;
@@ -61,16 +63,8 @@ const checkClaimedItems = async (): Promise<void> => {
 
   for (const item of claimedItems) {
     if (!item.externalTaskId) {
-      // Submission never completed — fail after 5 minutes to unblock the task.
-      const claimedAgeMs = Date.now() - new Date(item.claimedAt as string).getTime();
-      if (claimedAgeMs > 5 * 60 * 1000) {
-        console.log(`[runner-queue-consumer] claimed item has no externalTaskId after timeout — marking failed`, { id: item.id });
-        await queryRunnerQueueMarkFailed(item.id, consumerId, `submission-timeout`);
-        await appendRunnerResultToTask(item.task, item.loop, `Runner task submission timed out before reaching GitHub.`);
-        triggerTaskProcessor();
-      } else {
-        console.log(`[runner-queue-consumer] claimed item has no externalTaskId yet — skipping`, { id: item.id });
-      }
+      console.log(`[runner-queue-consumer] claimed item has no externalTaskId — marking failed`, { id: item.id });
+      await failRunnerQueueItem(item, `external-task-id-missing`, `Runner task did not provide an external task ID.`);
       continue;
     }
 
@@ -78,17 +72,17 @@ const checkClaimedItems = async (): Promise<void> => {
 
     if (!apiKey) {
       console.log(`[runner-queue-consumer] runner credential not found — marking failed`, { id: item.id, runnerId: item.runner });
-      await queryRunnerQueueMarkFailed(item.id, consumerId, `runner-credential-not-found`);
+      await failRunnerQueueItem(item, `runner-credential-not-found`, `Runner credential was not found.`);
       continue;
     }
 
     const { done, succeeded, result } = await (async () => {
       try {
-        return await pollCopilotAgentTask(apiKey, item.repository, item.externalTaskId as string);
+        return await runWithRetries(`poll`, () => pollCopilotAgentTask(apiKey, item.repository, item.externalTaskId as string));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.log(`[runner-queue-consumer] poll error`, { id: item.id, error: msg });
-        return { done: false, succeeded: false, result: `` };
+        return { done: true, succeeded: false, result: `Runner task polling failed. Details: ${msg}` };
       }
     })();
 
@@ -103,9 +97,7 @@ const checkClaimedItems = async (): Promise<void> => {
       triggerTaskProcessor();
       console.log(`[runner-queue-consumer] agent task completed — task resumed`, { id: item.id, externalTaskId: item.externalTaskId });
     } else {
-      await queryRunnerQueueMarkFailed(item.id, consumerId, result);
-      await appendRunnerResultToTask(item.task, item.loop, `Runner task failed or was cancelled. Details: ${result}`);
-      triggerTaskProcessor();
+      await failRunnerQueueItem(item, result, `Runner task failed or was cancelled. Details: ${result}`);
       console.log(`[runner-queue-consumer] agent task failed`, { id: item.id, externalTaskId: item.externalTaskId });
     }
   }
@@ -133,20 +125,51 @@ const claimAndSubmitNext = async (): Promise<void> => {
 
   if (!apiKey) {
     console.log(`[runner-queue-consumer] runner credential not found — marking failed`, { id: item.id });
-    await queryRunnerQueueMarkFailed(item.id, consumerId, `runner-credential-not-found`);
+    await failRunnerQueueItem(item, `runner-credential-not-found`, `Runner credential was not found.`);
     return;
   }
 
   try {
     const fullPrompt = [item.prompt, `Plan:\n${item.plan}`].join(`\n\n`);
-    const { externalTaskId } = await submitCopilotAgentTask(apiKey, item.repository, fullPrompt);
-    await queryRunnerQueueSetExternalTaskId(item.id, consumerId, externalTaskId);
+    const { externalTaskId } = await runWithRetries(`submit`, () => submitCopilotAgentTask(apiKey, item.repository, fullPrompt));
+    const persisted = await queryRunnerQueueSetExternalTaskId(item.id, consumerId, externalTaskId);
+    if (!persisted) {
+      await failRunnerQueueItem(item, `external-task-id-persist-failed`, `Runner task was submitted, but Athena could not persist its external task ID.`);
+      return;
+    }
     console.log(`[runner-queue-consumer] agent task submitted`, { id: item.id, externalTaskId, repository: item.repository });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.log(`[runner-queue-consumer] agent task submission failed`, { id: item.id, error: msg });
-    await queryRunnerQueueMarkFailed(item.id, consumerId, `submission-failed: ${msg}`);
+    await failRunnerQueueItem(item, `submission-failed: ${msg}`, `Runner task submission failed. Details: ${msg}`);
   }
+};
+
+const failRunnerQueueItem = async (item: RunnerQueueItem, error: string, taskMessage: string): Promise<void> => {
+  await queryRunnerQueueMarkFailed(item.id, consumerId, error);
+  await appendRunnerResultToTask(item.task, item.loop, taskMessage);
+  triggerTaskProcessor();
+};
+
+const runWithRetries = async <T>(operation: string, action: () => Promise<T>): Promise<T> => {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await action();
+    } catch (error) {
+      lastError = error;
+      if (error instanceof CopilotAgentTaskIdMissingError) {
+        throw error;
+      }
+      if (attempt < 3) {
+        console.log(`[runner-queue-consumer] runner API ${operation} failed — retrying`, { attempt, nextAttempt: attempt + 1 });
+        await delay(1_000);
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 };
 
 // Appends the runner result as a pending user message so the LLM can act on it.

@@ -31,6 +31,13 @@ type CopilotTaskListResponse = {
   total_archived_count?: number;
 };
 
+export class CopilotAgentTaskIdMissingError extends Error {
+  constructor() {
+    super(`GitHub agent task submission response did not include an id.`);
+    this.name = `CopilotAgentTaskIdMissingError`;
+  }
+}
+
 const githubHeaders = (apiKey: string): Record<string, string> => ({
   Accept: `application/vnd.github+json`,
   Authorization: `Bearer ${apiKey}`,
@@ -73,9 +80,14 @@ export const submitCopilotAgentTask = async (apiKey: string, repository: string,
   }
 
   const data = (await response.json()) as CopilotAgentTask;
+  const externalTaskId = typeof data.id === `string` ? data.id.trim() : ``;
 
-  console.log(`[copilot-adapter] agent task submitted`, { repository, externalTaskId: data.id, state: data.state });
-  return { externalTaskId: data.id };
+  if (!externalTaskId) {
+    throw new CopilotAgentTaskIdMissingError();
+  }
+
+  console.log(`[copilot-adapter] agent task submitted`, { repository, externalTaskId, state: data.state });
+  return { externalTaskId };
 };
 
 export const pollCopilotAgentTask = async (apiKey: string, repository: string, externalTaskId: string): Promise<{ done: boolean; succeeded: boolean; result: string }> => {
