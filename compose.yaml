@@ -114,6 +114,20 @@ services:
           psql -h postgres -U athena -d athena -v APP_ROLE_NAME=athena -f "$$f"
         done
 
+  prepare-background-jobs:
+    build:
+      context: .
+    depends_on:
+      prepare:
+        condition: service_completed_successfully
+    environment:
+      APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING: ${APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING:?APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING is required}
+      APP_ATHENA_INSTANCE_ID: migration
+    command:
+      - /bin/sh
+      - -ec
+      - npm run build:be && npm run migrate:background-jobs
+
   # Deterministic inference service used by Playwright specs.
   test-inference:
     profiles:
@@ -145,6 +159,8 @@ services:
         condition: service_healthy
       prepare:
         condition: service_completed_successfully
+      prepare-background-jobs:
+        condition: service_completed_successfully
     environment:
       APP_ATHENA_PORT: "8000"
       APP_ATHENA_NODE_ENV: development
@@ -159,6 +175,9 @@ services:
       APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY: ${APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY:?APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY is required}
       APP_ATHENA_SESSION_MAX_AGE: ${APP_ATHENA_SESSION_MAX_AGE:-86400000}
       APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING: ${APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING:?APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING is required}
+      APP_ATHENA_PG_POOL_MAX: ${APP_ATHENA_PG_POOL_MAX:-1}
+      APP_ATHENA_PG_POOL_IDLE_TIMEOUT_MS: ${APP_ATHENA_PG_POOL_IDLE_TIMEOUT_MS:-60000}
+      APP_ATHENA_PG_CONNECTION_TIMEOUT_MS: ${APP_ATHENA_PG_CONNECTION_TIMEOUT_MS:-10000}
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
       COVERAGE: ${COVERAGE:-}
     extra_hosts:
@@ -180,6 +199,27 @@ services:
       - traefik.http.routers.athena.rule=Host(`athena.localhost`) || Host(`${APP_ATHENA_PUBLIC_HOST:-athena.localhost}`)
       - traefik.http.routers.athena.entrypoints=web
       - traefik.http.services.athena.loadbalancer.server.port=8000
+
+  athena-worker:
+    build:
+      context: .
+    command: ["./scripts/start-athena-worker-container.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prepare-background-jobs:
+        condition: service_completed_successfully
+    environment:
+      APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING: ${APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING:?APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING is required}
+      APP_ATHENA_PG_POOL_MAX: ${APP_ATHENA_PG_POOL_MAX:-1}
+      APP_ATHENA_PG_POOL_IDLE_TIMEOUT_MS: ${APP_ATHENA_PG_POOL_IDLE_TIMEOUT_MS:-60000}
+      APP_ATHENA_PG_CONNECTION_TIMEOUT_MS: ${APP_ATHENA_PG_CONNECTION_TIMEOUT_MS:-10000}
+      APP_ATHENA_BACKGROUND_JOB_WORKER_CONCURRENCY: ${APP_ATHENA_BACKGROUND_JOB_WORKER_CONCURRENCY:-2}
+      APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS: ${APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS:-30000}
+      COVERAGE: ${COVERAGE:-}
+    volumes:
+      - ./src:/app/src
+      - ./tsconfig.server.json:/app/tsconfig.server.json:ro
 
   cloudflared:
     image: cloudflare/cloudflared:latest
