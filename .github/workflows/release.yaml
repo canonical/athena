@@ -96,7 +96,7 @@ jobs:
         run: ./scripts/stage-app.sh
 
       - name: Pack rock
-        uses: canonical/craft-actions/rockcraft/pack@cff22ebcc23e0aacd49a6a6bc7e1c6ba5b33d99c # main
+        uses: canonical/craft-actions/rockcraft/pack@b66c5f4b3c4454735c1814a1627fd0da24384b23 # main
         env:
           ROCKCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS: "true"
           VITE_API_BASE_URL: "/api"
@@ -144,7 +144,7 @@ jobs:
           name: updated-files
 
       - name: Pack charm
-        uses: canonical/craft-actions/charmcraft/pack@cff22ebcc23e0aacd49a6a6bc7e1c6ba5b33d99c # main
+        uses: canonical/craft-actions/charmcraft/pack@b66c5f4b3c4454735c1814a1627fd0da24384b23 # main
         with:
           path: charm
         env:
