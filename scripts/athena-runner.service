@@ -7,6 +7,8 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/athena
 ExecStart=/snap/bin/node --enable-source-maps /opt/athena/dist/runner.js
+StandardOutput=journal
+StandardError=journal
 Restart=on-failure
 RestartSec=5
 
