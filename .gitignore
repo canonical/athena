@@ -13,6 +13,7 @@ testing/results/
 .env
 .env.*
 !.example.env
+athena-runner.env
 scripts/dex-users.local.yaml
 
 # Local seed files with confidential data

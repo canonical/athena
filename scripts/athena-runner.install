@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+export DEBIAN_FRONTEND=noninteractive
+ATHENA_BRANCH=${1:-main}
+
+apt update
+apt full-upgrade -y
+apt install -y git snapd
+
+if [ -d /opt/athena/.git ]; then
+	git -C /opt/athena pull --ff-only
+else
+	git clone https://github.com/canonical/athena.git /opt/athena
+fi
+
+snap install lxd
+snap install --classic workshop
+snap install node --channel=24/stable --classic
+snap refresh
+
+cd /opt/athena
+git fetch origin "$ATHENA_BRANCH"
+git checkout "$ATHENA_BRANCH" || git checkout -b "$ATHENA_BRANCH" "origin/$ATHENA_BRANCH"
+npm ci
+npm run build:be
+
+install -m 0644 /opt/athena/scripts/athena-runner.service /etc/systemd/system/athena-runner.service
+systemctl daemon-reload
+systemctl enable athena-runner.service
+systemctl restart athena-runner.service
