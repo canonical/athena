@@ -6,12 +6,12 @@ ENV_FILE=/etc/athena-runner.env
 usage() {
   cat <<'EOF'
 Usage:
-  athenaconfigure --url URL [--branch BRANCH] [token]
+  athenaconfigure [--url URL] [--branch BRANCH] [--token TOKEN]
 
 Options:
-  --url URL          Set the Athena URL.
-  --branch BRANCH    Set the Git branch used by the runner.
-  token              Prompt for and set the runner token.
+  --url URL          Set the Athena URL. Prompts when omitted.
+  --branch BRANCH    Set the Git branch. Prompts with main as the default when omitted.
+  --token TOKEN      Set the runner token. Prompts when omitted.
 EOF
 }
 
@@ -23,27 +23,31 @@ fi
 url=
 branch=
 token=
-set_token=0
+url_set=0
+branch_set=0
+token_set=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --url)
       [ "$#" -ge 2 ] || { echo "--url requires a value." >&2; exit 1; }
       url=$2
+      url_set=1
       shift 2
       ;;
     --branch)
       [ "$#" -ge 2 ] || { echo "--branch requires a value." >&2; exit 1; }
       branch=$2
+      branch_set=1
+      shift 2
+      ;;
+    --token)
+      [ "$#" -ge 2 ] || { echo "--token requires a value." >&2; exit 1; }
+      token=$2
+      token_set=1
       shift 2
       ;;
     token)
-      printf 'Athena runner token: ' >&2
-      stty -echo
-      read -r token
-      stty echo
-      printf '\n' >&2
-      set_token=1
       shift
       ;;
     --help|-h)
@@ -58,14 +62,31 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+if [ "$url_set" -eq 0 ]; then
+  printf 'Athena URL: ' >&2
+  read -r url
+fi
+if [ "$branch_set" -eq 0 ]; then
+  printf 'Git branch [main]: ' >&2
+  read -r branch
+  [ -n "$branch" ] || branch=main
+fi
+if [ "$token_set" -eq 0 ]; then
+  printf 'Athena runner token: ' >&2
+  stty -echo
+  read -r token
+  stty echo
+  printf '\n' >&2
+fi
+
 [ -n "$url" ] && case "$url" in
   *[!A-Za-z0-9:/._-]*) echo "Invalid URL." >&2; exit 1 ;;
 esac
-[ -n "$url" ] || { echo "--url is required." >&2; usage >&2; exit 1; }
-[ -n "$branch" ] || branch=
+[ -n "$url" ] || { echo "URL is required." >&2; exit 1; }
 [ -n "$branch" ] && case "$branch" in
   -*|*[!A-Za-z0-9._/-]*) echo "Invalid branch name." >&2; exit 1 ;;
 esac
+[ -n "$token" ] || { echo "Token is required." >&2; exit 1; }
 
 mkdir -p "$(dirname "$ENV_FILE")"
 touch "$ENV_FILE"
@@ -73,13 +94,9 @@ chmod 0600 "$ENV_FILE"
 
 sed -i '/^ATHENA_URL=/d' "$ENV_FILE"
 printf 'ATHENA_URL=%s\n' "$url" >> "$ENV_FILE"
-if [ -n "$branch" ]; then
-  sed -i '/^ATHENA_RUNNER_BRANCH=/d' "$ENV_FILE"
-  printf 'ATHENA_RUNNER_BRANCH=%s\n' "$branch" >> "$ENV_FILE"
-fi
-if [ "$set_token" -eq 1 ]; then
-  sed -i '/^ATHENA_RUNNER_TOKEN=/d' "$ENV_FILE"
-  printf 'ATHENA_RUNNER_TOKEN=%s\n' "$token" >> "$ENV_FILE"
-fi
+sed -i '/^ATHENA_RUNNER_BRANCH=/d' "$ENV_FILE"
+printf 'ATHENA_RUNNER_BRANCH=%s\n' "$branch" >> "$ENV_FILE"
+sed -i '/^ATHENA_RUNNER_TOKEN=/d' "$ENV_FILE"
+printf 'ATHENA_RUNNER_TOKEN=%s\n' "$token" >> "$ENV_FILE"
 
 systemctl restart athena-runner.service

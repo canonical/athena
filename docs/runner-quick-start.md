@@ -38,8 +38,12 @@ Create an `Athena Workshop` runner in Athena, create a workforce token on its
 detail page, and write the connection settings inside the VM:
 
 ```bash
-sudo athenaconfigure --url http://192.168.1.57 --branch main token
+sudo athenaconfigure --url http://192.168.1.57
 ```
+
+The command prompts for the branch, defaulting to `main`, and then prompts for
+the runner token. Use `--branch BRANCH` or `--token TOKEN` to provide values
+non-interactively.
 
 `athenaconfigure` restarts the service after changing configuration. On every
 restart, the service fetches the configured branch, checks it out, installs
