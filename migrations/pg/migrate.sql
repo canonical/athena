@@ -43,8 +43,9 @@ $$;
 \ir ./ddls/002100.runnerQueue.sql
 \ir ./ddls/002200.loopRunnerRepository.sql
 \ir ./ddls/002500.ragIndex.sql
-\ir ./ddls/002700.loopActivityObservation.sql
+\ir ./ddls/002700.ragRecordSource.sql
 \ir ./ddls/002800.ragEntry.sql
+\ir ./ddls/002900.ragRecordProjection.sql
 \ir ./ddls/999999.cleanup.sql
 
 \echo >>> Running Athena seed data

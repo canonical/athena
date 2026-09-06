@@ -1,8 +1,9 @@
 import { queryLoopAdminMembership, queryLoopForUser } from "@components/loop/loop.service.js";
 import { RagForbiddenError, RagNotFoundError, RagValidationError } from "./rag.errors.js";
+import { enqueueRagIndexBuild } from "./rag.job.js";
 import type { RagIndex, RagIndexConfigure, RagIndexState } from "./rag.schema.js";
 import { queryRagEmbeddingProviderOptions, queryRagIndexByLoop } from "./rag.service.js";
-import { queryRagIndexConfigure } from "./rag.transaction.service.js";
+import { queryRagIndexConfigure, queryRagIndexRemove, queryRagIndexRepairStart } from "./rag.transaction.service.js";
 
 export const ragIndexStateGet = async (loopId: string, userId: string): Promise<RagIndexState> => {
   if (!(await queryLoopForUser(loopId, userId))) {
@@ -40,12 +41,24 @@ export const ragIndexConfigure = async (loopId: string, userId: string, input: R
   }
 
   if (result.status === `active`) {
-    throw new RagValidationError(`Memory configuration can only be replaced while the index is disabled.`);
+    throw new RagValidationError(`Remove memory before enabling it with a different provider or model.`);
   }
 
   if (result.status === `providerUnavailable`) {
     throw new RagValidationError(`The selected embedding provider and model are no longer available to this loop.`);
   }
 
+  if (result.buildRequired) await enqueueRagIndexBuild(result.index.id);
   return result.index;
+};
+
+export const ragIndexRemove = async (indexId: string, userId: string): Promise<void> => {
+  if (!(await queryRagIndexRemove(indexId, userId))) throw new RagNotFoundError(`RAG index not found.`);
+};
+
+export const ragIndexRepair = async (indexId: string, userId: string): Promise<RagIndex> => {
+  const index = await queryRagIndexRepairStart(indexId, userId);
+  if (!index) throw new RagNotFoundError(`RAG index not found.`);
+  await enqueueRagIndexBuild(index.id);
+  return index;
 };

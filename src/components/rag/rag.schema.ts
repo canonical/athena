@@ -1,8 +1,9 @@
 import type { QueryExecutor } from "@components/postgres/postgres.js";
+import type { TaskQueueItem } from "@components/task/task.schema.js";
 import { isoDateTime, requiredString, uuid } from "@components/utilities/zod.utilities.js";
 import { z } from "zod";
 
-export const ragIndexLifecycleStatuses = [`disabled`, `rebuilding`, `ready`, `failed`] as const;
+export const ragIndexLifecycleStatuses = [`rebuilding`, `ready`, `failed`] as const;
 
 export const ragIndexSchema = z.object({
   id: uuid(),
@@ -48,25 +49,28 @@ export type RagIndex = z.infer<typeof ragIndexSchema>;
 export type RagIndexState = z.infer<typeof ragIndexStateSchema>;
 export type RagEmbeddingProviderOption = z.infer<typeof ragEmbeddingProviderOptionSchema>;
 export type RagIndexConfigure = z.infer<typeof ragIndexConfigureSchema>;
-export type RagIndexConfigureResult = { status: `configured`; index: RagIndex } | { status: `active` } | { status: `providerUnavailable` } | { status: `notFound` } | { status: `forbidden` };
+export type RagIndexConfigureResult = { status: `configured`; index: RagIndex; buildRequired: boolean } | { status: `active` } | { status: `providerUnavailable` } | { status: `notFound` } | { status: `forbidden` };
 
 export type RagEntryWrite = {
   ragIndex: string;
+  ragRecordSource: string;
   sourceKind: string;
-  sourceRef: string;
+  sourceType: string;
+  sourceId: string;
   logicalRef: string | null;
   segmentKey: string;
   segmentOrdinal: number;
   text: string;
   provenance: Record<string, unknown>;
-  occurredAt: string;
+  occurredAt: string | Date;
   embedding: number[];
 };
 
 export type RagLookupHit = {
   id: string;
   sourceKind: string;
-  sourceRef: string;
+  sourceType: string;
+  sourceId: string;
   logicalRef: string | null;
   segmentKey: string;
   segmentOrdinal: number;
@@ -107,4 +111,58 @@ export type RagIndexResolution = {
   provider: string;
   embeddingModel: string;
   embeddingDimension: number | null;
+};
+
+export const ragRecordKinds = [`taskMessage`, `toolDecision`, `toolResult`, `runnerResult`] as const;
+export type RagRecordKind = (typeof ragRecordKinds)[number];
+export const ragRecordSourceTypes = [`taskQueueItem`, `toolCall`, `runnerCall`] as const;
+export type RagRecordSourceType = (typeof ragRecordSourceTypes)[number];
+
+export type RagRecordSourceWrite = {
+  loop: string;
+  sourceType: RagRecordSourceType;
+  sourceId: string;
+  recordKind: RagRecordKind;
+  logicalRef: null;
+  text: string;
+  provenance: Record<string, unknown>;
+  contentHash: string;
+  originalByteCount: number;
+  truncated: boolean;
+  occurredAt: string;
+};
+
+export type RagTaskQueueItemRenderInput = {
+  loop: string;
+  task: string;
+  taskTitle: string | null;
+  queueItem: TaskQueueItem;
+  kind?: RagRecordKind;
+};
+
+export type RagBuildSourceRecord = RagTaskQueueItemRenderInput & {
+  taskOrdinal: number;
+};
+
+export type RagRecordProjection = {
+  id: string;
+  ragIndex: string;
+  ragRecordSource: string;
+  status: `pending` | `projected` | `skipped` | `failed`;
+  error: string | null;
+  sourceKind: RagRecordKind;
+  sourceType: RagRecordSourceType;
+  sourceId: string;
+  logicalRef: string | null;
+  text: string;
+  provenance: Record<string, unknown>;
+  occurredAt: Date;
+};
+
+export type RagRecordProjectionReference = Pick<RagRecordProjection, `id` | `ragIndex` | `ragRecordSource`>;
+
+export type RagIndexEmbeddingTarget = {
+  loop: string;
+  provider: string;
+  embeddingModel: string;
 };

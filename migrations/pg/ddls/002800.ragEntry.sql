@@ -1,8 +1,10 @@
 CREATE TABLE IF NOT EXISTS "ragEntry" (
   "id" UUID PRIMARY KEY DEFAULT uuidv7(),
   "ragIndex" UUID NOT NULL REFERENCES "ragIndex"("id") ON DELETE CASCADE,
+  "ragRecordSource" UUID NOT NULL REFERENCES "ragRecordSource"("id") ON DELETE CASCADE,
   "sourceKind" TEXT NOT NULL,
-  "sourceRef" TEXT NOT NULL,
+  "sourceType" TEXT NOT NULL,
+  "sourceId" UUID NOT NULL,
   "logicalRef" TEXT,
   "segmentKey" TEXT NOT NULL,
   "segmentOrdinal" INTEGER NOT NULL CHECK ("segmentOrdinal" >= 0),
@@ -13,7 +15,7 @@ CREATE TABLE IF NOT EXISTS "ragEntry" (
   "supersededAt" TIMESTAMPTZ,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE ("ragIndex", "sourceRef", "occurredAt", "segmentKey")
+  UNIQUE ("ragIndex", "ragRecordSource", "segmentKey")
 );
 
 CREATE INDEX IF NOT EXISTS "idxRagEntryLookup" ON "ragEntry"("ragIndex", "supersededAt", "occurredAt");

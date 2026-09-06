@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS "ragIndex" (
   "provider" UUID NOT NULL REFERENCES "provider"("id"),
   "embeddingModel" TEXT NOT NULL,
   "embeddingDimension" INTEGER CHECK ("embeddingDimension" > 0),
-  "lifecycleStatus" TEXT NOT NULL DEFAULT 'disabled' CHECK ("lifecycleStatus" IN ('disabled', 'rebuilding', 'ready', 'failed')),
+  "lifecycleStatus" TEXT NOT NULL DEFAULT 'rebuilding' CHECK ("lifecycleStatus" IN ('rebuilding', 'ready', 'failed')),
   "sourceCount" INTEGER NOT NULL DEFAULT 0 CHECK ("sourceCount" >= 0),
   "pendingCount" INTEGER NOT NULL DEFAULT 0 CHECK ("pendingCount" >= 0),
   "projectedCount" INTEGER NOT NULL DEFAULT 0 CHECK ("projectedCount" >= 0),
@@ -15,10 +15,13 @@ CREATE TABLE IF NOT EXISTS "ragIndex" (
   "failedCount" INTEGER NOT NULL DEFAULT 0 CHECK ("failedCount" >= 0),
   "lastError" TEXT,
   "rebuildStartedAt" TIMESTAMPTZ,
+  "rebuildScannedAt" TIMESTAMPTZ,
   "rebuildCompletedAt" TIMESTAMPTZ,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE "ragIndex" ADD COLUMN IF NOT EXISTS "rebuildScannedAt" TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS "idxRagIndexLifecycleStatus" ON "ragIndex"("lifecycleStatus");
 CREATE INDEX IF NOT EXISTS "idxRagIndexProvider" ON "ragIndex"("provider");

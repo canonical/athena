@@ -179,26 +179,22 @@ export const queryRagIndexConfigure = async (loopId: string, userId: string, inp
 
     const current = existing.rows[0];
     if (current?.provider === input.provider && current.embeddingModel === input.embeddingModel) {
-      return { status: `configured`, index: current };
+      return { status: `configured`, index: current, buildRequired: false };
     }
 
-    if (current && current.lifecycleStatus !== `disabled`) {
+    if (current) {
       return { status: `active` };
     }
 
     const indexResult = await client.query<{ id: string }>(
-      `INSERT INTO "ragIndex" ("kind", "sourceStrategy", "sourceRef", "segmentationStrategy", "provider", "embeddingModel")
-       VALUES ('loopActivity', $1, $2, $3, $4, $5)
+      `INSERT INTO "ragIndex" ("kind", "sourceStrategy", "sourceRef", "segmentationStrategy", "provider", "embeddingModel", "lifecycleStatus", "rebuildStartedAt")
+       VALUES ('loopActivity', $1, $2, $3, $4, $5, 'rebuilding', NOW())
        RETURNING "id"`,
       [loopActivitySource, loopId, wholeEntrySegmentation, input.provider, input.embeddingModel],
     );
     const indexId = indexResult.rows[0]?.id;
     if (!indexId) {
       throw new Error(`Failed to create RAG index.`);
-    }
-
-    if (current) {
-      await client.query(`DELETE FROM "ragIndex" WHERE "id" = $1`, [current.id]);
     }
 
     const result = await client.query<RagIndex>(
@@ -212,5 +208,91 @@ export const queryRagIndexConfigure = async (loopId: string, userId: string, inp
     if (!index) {
       throw new Error(`Failed to read configured RAG index.`);
     }
-    return { status: `configured`, index };
+    return { status: `configured`, index, buildRequired: true };
+  });
+
+export const queryRagIndexRemove = async (indexId: string, userId: string): Promise<boolean> =>
+  runTransaction(async (client) => {
+    await lockTransactionKey(client, indexId);
+    const result = await client.query<{ sourceRef: string }>(
+      `DELETE FROM "ragIndex" ri
+       WHERE ri."id" = $1
+         AND ri."kind" = 'loopActivity'
+         AND EXISTS (SELECT 1 FROM "loopUser" lu WHERE lu."loop" = ri."sourceRef"::uuid AND lu."user" = $2 AND lu."isAdmin" = TRUE)
+       RETURNING ri."sourceRef"`,
+      [indexId, userId],
+    );
+    const sourceRef = result.rows[0]?.sourceRef;
+    if (!sourceRef) return false;
+    await client.query(`DELETE FROM "ragRecordSource" WHERE "loop" = $1`, [sourceRef]);
+    return true;
+  });
+
+export const queryRagIndexRepairStart = async (indexId: string, userId: string): Promise<RagIndex | null> =>
+  runTransaction(async (client) => {
+    await lockTransactionKey(client, indexId);
+    const target = await client.query<{ id: string }>(
+      `SELECT ri."id"
+       FROM "ragIndex" ri
+       WHERE ri."id" = $1
+         AND ri."kind" = 'loopActivity'
+         AND EXISTS (SELECT 1 FROM "loopUser" lu WHERE lu."loop" = ri."sourceRef"::uuid AND lu."user" = $2 AND lu."isAdmin" = TRUE)
+       FOR UPDATE`,
+      [indexId, userId],
+    );
+    const authorizedIndexId = target.rows[0]?.id;
+    if (!authorizedIndexId) return null;
+
+    await client.query(
+      `UPDATE "ragRecordProjection" projection
+       SET "status" = 'pending', "error" = NULL
+       WHERE projection."ragIndex" = $1
+         AND (
+           projection."status" = 'failed'
+           OR (
+             projection."status" = 'projected'
+             AND NOT EXISTS (
+               SELECT 1 FROM "ragEntry" entry
+               WHERE entry."ragIndex" = projection."ragIndex"
+                 AND entry."ragRecordSource" = projection."ragRecordSource"
+             )
+           )
+         )`,
+      [authorizedIndexId],
+    );
+
+    await client.query(
+      `WITH counts AS (
+         SELECT COUNT(*)::integer AS "sourceCount",
+                COUNT(*) FILTER (WHERE "status" = 'pending')::integer AS "pendingCount",
+                COUNT(*) FILTER (WHERE "status" = 'projected')::integer AS "projectedCount",
+                COUNT(*) FILTER (WHERE "status" = 'skipped')::integer AS "skippedCount",
+                COUNT(*) FILTER (WHERE "status" = 'failed')::integer AS "failedCount"
+         FROM "ragRecordProjection"
+         WHERE "ragIndex" = $1
+       )
+       UPDATE "ragIndex" ri
+       SET "lifecycleStatus" = 'rebuilding',
+           "sourceCount" = counts."sourceCount",
+           "pendingCount" = counts."pendingCount",
+           "projectedCount" = counts."projectedCount",
+           "skippedCount" = counts."skippedCount",
+           "failedCount" = counts."failedCount",
+           "lastError" = NULL,
+           "rebuildStartedAt" = NOW(),
+           "rebuildScannedAt" = NULL,
+           "rebuildCompletedAt" = NULL
+       FROM counts
+       WHERE ri."id" = $1`,
+      [authorizedIndexId],
+    );
+
+    const result = await client.query<RagIndex>(
+      `SELECT ${ragIndexColumns}
+       FROM "ragIndex" ri
+       ${ragIndexRelations}
+       WHERE ri."id" = $1`,
+      [authorizedIndexId],
+    );
+    return result.rows[0] ?? null;
   });

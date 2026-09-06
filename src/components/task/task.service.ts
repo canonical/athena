@@ -1,9 +1,14 @@
+import { log } from "@components/logging/logging.service.js";
 import { pgColumns } from "@components/postgres/pg.utilities.js";
-import { query } from "@components/postgres/postgres.js";
+import { getPool, query } from "@components/postgres/postgres.js";
+import { enqueueRagEntryAppend } from "@components/rag/rag.job.js";
+import { queryRagRecordSourceInsert } from "@components/rag/rag.record-source.service.js";
+import { renderRagTaskQueueItem } from "@components/rag/rag.render.service.js";
+import type { RagRecordKind, RagRecordProjectionReference } from "@components/rag/rag.schema.js";
 import { readWorkDoneLabelFromAssignmentConfig, readWorkInProgressLabelFromAssignmentConfig, readWorkOnLabelFromAssignmentConfig } from "@components/workgraph/workgraph.assignment-config.js";
 import { v7 as uuidv7 } from "uuid";
 import type { Task, TaskCreate, TaskQueueItemInput } from "./task.schema.js";
-import { taskCreateSchema } from "./task.schema.js";
+import { taskCreateSchema, taskQueueItemSchema } from "./task.schema.js";
 
 const taskColumnNames = [
   "id",
@@ -549,31 +554,59 @@ export const queryTaskUpdateObjectiveByUser = async (loopId: string, taskId: str
   return (result.rowCount ?? 0) > 0;
 };
 
-export const queryAppendQueueItem = async (taskId: string, processorId: string | null, queueItem: TaskQueueItemInput, requeueIfCompleted = false): Promise<boolean> => {
-  const itemWithId = { ...queueItem, id: uuidv7() };
-  const result = await query(
-    `
-      UPDATE "task" t
-      SET "queue" = t."queue" || CASE
-            WHEN COALESCE($3::jsonb #>> '{value,role}', '') <> 'user' THEN jsonb_build_array(
-              (
-                (
-                  $3::jsonb
-                  || jsonb_build_object('persona', to_jsonb(t."currentPersona"))
-                )
-                || jsonb_build_object('timestamp', to_jsonb(clock_timestamp()))
-              )
-            )
-            ELSE jsonb_build_array(($3::jsonb || jsonb_build_object('timestamp', to_jsonb(clock_timestamp()))))
-          END,
-          "status" = CASE WHEN $4::boolean AND t."status" = 'completed' THEN 'queued' ELSE t."status" END
-      WHERE t."id" = $1
-        AND ((t."processorUnit" IS NULL AND $2::uuid IS NULL) OR t."processorUnit" = $2::uuid)
-    `,
-    [taskId, processorId, JSON.stringify(itemWithId), requeueIfCompleted],
-  );
+export const queryAppendQueueItem = async (taskId: string, processorId: string | null, queueItem: TaskQueueItemInput, requeueIfCompleted = false, activityKind?: RagRecordKind): Promise<boolean> => {
+  const client = await getPool().connect();
+  let projections: RagRecordProjectionReference[] = [];
 
-  return (result.rowCount ?? 0) > 0;
+  try {
+    await client.query(`BEGIN`);
+    const taskResult = await client.query<{ loop: string; title: string | null; currentPersona: string | null; timestamp: Date }>(
+      `SELECT "loop", "title", "currentPersona", clock_timestamp() AS "timestamp" FROM "task" WHERE "id" = $1 AND (("processorUnit" IS NULL AND $2::uuid IS NULL) OR "processorUnit" = $2::uuid) FOR UPDATE`,
+      [taskId, processorId],
+    );
+    const task = taskResult.rows[0];
+    if (!task) {
+      await client.query(`ROLLBACK`);
+      return false;
+    }
+
+    const inferredActivityKind = activityKind ?? (queueItem.value.role === `tool` ? `toolResult` : queueItem.value.role === `assistant` && queueItem.value.tool_calls?.length ? `toolDecision` : `taskMessage`);
+    const completedQueueItem = taskQueueItemSchema.parse({
+      ...queueItem,
+      activityKind: inferredActivityKind,
+      id: uuidv7(),
+      timestamp: task.timestamp.toISOString(),
+      ...(queueItem.value.role !== `user` ? { persona: task.currentPersona } : {}),
+    });
+    const updated = await client.query(`UPDATE "task" SET "queue" = "queue" || jsonb_build_array($2::jsonb), "status" = CASE WHEN $3::boolean AND "status" = 'completed' THEN 'queued' ELSE "status" END WHERE "id" = $1`, [
+      taskId,
+      JSON.stringify(completedQueueItem),
+      requeueIfCompleted,
+    ]);
+    if ((updated.rowCount ?? 0) === 0) throw new Error(`Task queue item was not appended.`);
+
+    const rendered = renderRagTaskQueueItem({ loop: task.loop, task: taskId, taskTitle: task.title, queueItem: completedQueueItem, kind: activityKind });
+    if (rendered) projections = await queryRagRecordSourceInsert(client, rendered);
+    await client.query(`COMMIT`);
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  for (const projection of projections) {
+    try {
+      await enqueueRagEntryAppend(projection.id);
+    } catch (error) {
+      log.error(`RAG append job enqueue failed; pending projection will be reconciled`, {
+        ragIndex: projection.ragIndex,
+        projection: projection.id,
+        error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : { message: String(error) },
+      });
+    }
+  }
+  return true;
 };
 
 export const queryTaskQueueItemStatusUpdate = async (taskId: string, processorId: string, id: string, status: TaskQueueItemInput["status"]): Promise<boolean> => {

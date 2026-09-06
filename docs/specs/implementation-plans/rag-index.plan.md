@@ -7,7 +7,10 @@ consumers. Deliver loop self-memory as the first
 specialization without encoding loop ownership or whole-entry behavior into the base index.
 
 Current status: Phase 0 migration enforcement is implemented, but its missing-extension and
-upgrade verification remain pending. Phase 1 is complete. Phase 2 is the active next phase.
+upgrade verification remain pending. Phase 1 is complete. Phase 2 implements task queue
+messages through persisted source records, index-specific projections, and separate
+full-build and single-entry append jobs; the remaining source adapters and recovery
+verification are still in progress.
 
 ## Phase 0: PostgreSQL platform prerequisite
 
@@ -30,14 +33,17 @@ Refactor the current Phase 1 schema before committing further projection work:
   embedding configuration, lifecycle, rebuild progress, and diagnostics; remove the direct
   loop field. `loopActivity` stores its loop UUID as the generic source reference.
 - `ragEntry`: common segmented output with source timestamp and segment identity.
-- `loopActivityObservation`: loop-activity-specific transactional outbox.
+- `ragRecordSource`: append-only provider-independent rendered source registry.
+- `ragRecordProjection`: index-specific transactional projection outbox and status.
 - Persist fixed loop-activity source and whole-entry segmentation descriptors. Use provider
   embedding plus default retrieval and storage services.
 - Keep embedding, retrieval, and storage in separate modules.
-- Keep the Memory UI as a loop-self-memory specialization. It configures the immutable
-  self-memory index.
-- Replace configuration by deleting the old index before creating the new index, releasing
-  the old provider dependency.
+- Keep the Memory UI as a loop-self-memory specialization. Enabling creates the immutable
+  self-memory index and starts its build; users do not manage build lifecycle transitions.
+- Keep loop routes limited to self-memory discovery and enablement; address repair, removal,
+  and other index lifecycle operations through `/rag/:index/...` routes.
+- Replace configuration by removing the old index and enabling a new one, releasing the old
+  provider dependency.
 - Delete a loop-owned self-memory index with its source loop.
 - Block provider deletion or loop-provider removal while a current index depends on it.
 
@@ -55,13 +61,20 @@ Verification:
 - Production backend build, repository checks, lint, clean/idempotent migration replay, and
   all focused RAG E2E scenarios passed.
 
-## Phase 2: Transactional observations and durable projection
+## Phase 2: Transactional source records and durable projection
 
-- Write loop-activity observations in the same transaction as knowledge-bearing domain
-  mutations.
-- Rebuild from canonical tasks, messages, tool decisions/results, runner results, and curated
+The append-only task-message slice uses two jobs. `rag-index-build` pages over persisted
+source records, creates missing index projections, and enqueues one `rag-entry-append` job
+per pending projection. The same append job projects source records created after the build.
+Task queue item UUIDs provide stable source identity, and readable source-specific renderers
+convert message, tool, and runner records into bounded text before persistence and embedding.
+
+- Write source records and applicable projections in the same transaction as knowledge-bearing
+  domain mutations while an index exists.
+- Build from canonical tasks, messages, tool decisions/results, runner results, and curated
   workgraph state.
-- Register index-scoped rebuild/project jobs and durable outbox reconciliation.
+- Register index-scoped build/project jobs and an admin-triggered scan-and-repair command for
+  failed projections, missing entries, and transient enqueue gaps.
 - Project source records through the default projection and fixed provider embedding
   implementation into the common entry repository.
 - Enforce one embedding contract/dimension per index and lifecycle guards on writes.
@@ -73,7 +86,7 @@ Verification:
 - `test_inference` reversed batch responses verify response-index association.
 - `deterministic-embed-8` and `deterministic-embed-16` verify independent indexes and
   variable dimensions.
-- Concurrent enable/retry, process restart, invalid credentials, repair, and retry verify
+- Concurrent enable/repair, process restart, invalid credentials, and repair verify
   idempotency and durable recovery.
 
 ## Phase 3: Projection semantics and security
@@ -82,13 +95,14 @@ Verification:
 - Keep messages additive; supersede mutable task/workgraph state by logical identity.
 - Redact before RAG persistence and apply the UTF-8-safe 8 KiB source-record bound before
   `wholeEntry` segmentation.
-- Capture nothing while self-memory is disabled.
+- Persist source records and create live projections only while an index is rebuilding or
+  ready; reconstruct sources from canonical history when enabling or repairing.
 
 Verification:
 
 - E2E verifies additive messages and one active entry for repeated mutable-state edits.
 - Fake secrets and oversized text verify redaction/truncation without raw content leakage.
-- `test_inference` chat/tool calls verify assistant, approval, and tool-result observations.
+- `test_inference` chat/tool calls verify assistant, approval, and tool-result source records.
 
 ## Phase 4: Universal alias-based lookup
 
@@ -108,21 +122,21 @@ Verification:
 
 ## Phase 5: Self-memory activation lifecycle and races
 
-- Disable atomically deletes self-memory observations and entries while retaining immutable
-  configuration.
-- Re-enable/retry sets `rebuilding`, drops any partial derived data, and performs a full
-  rebuild of the same index; lookup stays unavailable until ready.
-- Serialize ordinary rebuild work per index. Do not add a rebuild revision in the current
-  scope; purge and re-create the index when compatibility or uncertain stale work requires
-  a new identity.
+- Enable creates an index in `rebuilding` and automatically starts its full build; lookup
+  stays unavailable until ready.
+- Remove atomically deletes the loop-owned index, projections, entries, and source records.
+- Give loop admins an icon-only scan-and-repair action that preserves valid entries, retries
+  failed or missing projections, recomputes progress, and queues a canonical source scan.
+- Serialize ordinary build work per index. Do not add a build revision in the current scope;
+  remove and re-enable when compatibility or uncertain stale work requires a new identity.
 - Enforce writable lifecycle and embedding dimension in entry writes; lookup
   requires a ready index and matching query dimension.
 
 Verification:
 
-- E2E verifies disable removes lookup/data and disabled-time activity creates no RAG rows.
-- Re-enable backfills all canonical history, including disabled-time activity.
-- Two-page disable-during-rebuild and replacement scenarios verify lifecycle guards and the
+- E2E verifies remove deletes lookup/data and activity without an index creates no RAG rows.
+- Re-enable backfills all canonical history, including activity created while no index existed.
+- Two-page remove-during-build and replacement scenarios verify lifecycle guards and the
   purge/re-create recovery path.
 
 ## Phase 6: Reusable index attachments

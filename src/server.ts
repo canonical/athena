@@ -1,5 +1,6 @@
 import { authenticationRouter } from "@components/authentication/authentication.router.js";
 import { requireAuthentication } from "@components/authentication/authentication-middleware.js";
+import { backgroundJobStartProducer, backgroundJobStopProducer } from "@components/background-job/background-job.service.js";
 import { defineMiddlewares } from "@components/base/define-middlewares.js";
 import { config } from "@components/config/config.js";
 import { defineLoggingErrorHandler } from "@components/logging/logging.middleware.js";
@@ -25,6 +26,8 @@ import express, { type Request, type Response } from "express";
 const app = express();
 const port = config.application.port;
 const apiRoot = `/api`;
+
+await backgroundJobStartProducer();
 
 app.set(`trust proxy`, 1);
 defineMiddlewares(app);
@@ -79,6 +82,7 @@ const stop = async (signal: NodeJS.Signals): Promise<void> => {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
     });
+    await backgroundJobStopProducer();
     await closePG();
     log.info(`Athena server stopped`, { signal });
   } catch (error) {

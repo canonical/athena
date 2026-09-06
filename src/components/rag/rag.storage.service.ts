@@ -15,19 +15,19 @@ export const ragEntryUpsert = async (executor: QueryExecutor, entries: RagEntryW
     const result = await executor.query<{ id: string }>(
       `WITH writableIndex AS (
          UPDATE "ragIndex"
-         SET "embeddingDimension" = COALESCE("embeddingDimension", vector_dims($10::vector))
+         SET "embeddingDimension" = COALESCE("embeddingDimension", vector_dims($12::vector))
          WHERE "id" = $1
            AND "lifecycleStatus" IN ('rebuilding', 'ready')
-           AND ("embeddingDimension" IS NULL OR "embeddingDimension" = vector_dims($10::vector))
+           AND ("embeddingDimension" IS NULL OR "embeddingDimension" = vector_dims($12::vector))
          RETURNING "id"
        )
        INSERT INTO "ragEntry" (
-         "ragIndex", "sourceKind", "sourceRef", "logicalRef",
+         "ragIndex", "ragRecordSource", "sourceKind", "sourceType", "sourceId", "logicalRef",
          "segmentKey", "segmentOrdinal", "text", "provenance", "occurredAt", "embedding"
        )
-       SELECT $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::vector
+       SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12::vector
        FROM writableIndex
-       ON CONFLICT ("ragIndex", "sourceRef", "occurredAt", "segmentKey") DO UPDATE
+       ON CONFLICT ("ragIndex", "ragRecordSource", "segmentKey") DO UPDATE
        SET "sourceKind" = EXCLUDED."sourceKind",
            "logicalRef" = EXCLUDED."logicalRef",
            "segmentOrdinal" = EXCLUDED."segmentOrdinal",
@@ -36,7 +36,20 @@ export const ragEntryUpsert = async (executor: QueryExecutor, entries: RagEntryW
            "embedding" = EXCLUDED."embedding",
            "supersededAt" = NULL
        RETURNING "id"`,
-      [entry.ragIndex, entry.sourceKind, entry.sourceRef, entry.logicalRef, entry.segmentKey, entry.segmentOrdinal, entry.text, JSON.stringify(entry.provenance), entry.occurredAt, vectorLiteral(entry.embedding)],
+      [
+        entry.ragIndex,
+        entry.ragRecordSource,
+        entry.sourceKind,
+        entry.sourceType,
+        entry.sourceId,
+        entry.logicalRef,
+        entry.segmentKey,
+        entry.segmentOrdinal,
+        entry.text,
+        JSON.stringify(entry.provenance),
+        entry.occurredAt,
+        vectorLiteral(entry.embedding),
+      ],
     );
 
     if (!result.rows[0]) {
@@ -56,13 +69,13 @@ export const ragEntryLookup = async (input: RagEntryLookup): Promise<RagLookupHi
          AND "embeddingDimension" = vector_dims($2::vector)
      )
      SELECT
-       entry."id", entry."sourceKind", entry."sourceRef", entry."logicalRef", entry."segmentKey", entry."segmentOrdinal",
+       entry."id", entry."sourceKind", entry."sourceType", entry."sourceId", entry."logicalRef", entry."segmentKey", entry."segmentOrdinal",
        entry."text", entry."provenance", entry."occurredAt", 1 - (entry."embedding" <=> $2::vector) AS "similarity"
      FROM "ragEntry" entry
      JOIN readableIndex ON readableIndex."id" = entry."ragIndex"
      WHERE entry."embedding" IS NOT NULL
        AND entry."supersededAt" IS NULL
-     ORDER BY entry."embedding" <=> $2::vector, entry."sourceRef", entry."segmentOrdinal", entry."id"
+     ORDER BY entry."embedding" <=> $2::vector, entry."sourceType", entry."sourceId", entry."segmentOrdinal", entry."id"
      LIMIT $3`,
     [input.ragIndex, vectorLiteral(input.embedding), limit],
   );

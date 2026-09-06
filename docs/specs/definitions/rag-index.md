@@ -27,13 +27,14 @@ This prevents loop self-memory from defining the shape of future standalone inde
 `ragIndex.sourceRef` is the source projection's immutable top-level locator. For
 `loopActivity` it is the source loop UUID; a future HTTP API source could store its URL.
 For loop activity, server transactions validate the loop source and serialize configuration
-by loop. This value is distinct from `ragEntry.sourceRef`, which identifies one projected
-record within the source.
+by loop. This value is distinct from the `sourceType` and `sourceId` identity stored by a
+`ragRecordSource` and copied to its projected entry.
 
-Configuration is immutable in the current scope. Changing source, segmentation, embedding,
-provider, or model creates a replacement index. Rebuilding does not create another entity:
-it clears and repopulates the same immutable index. Replacement atomically deletes the old
-index and its derived data before attaching the new index, releasing the old provider.
+Configuration is immutable in the current scope. Enabling memory creates an index and
+immediately starts its background build. Users do not manage routine build transitions, but
+loop admins may request an idempotent scan and repair when work is missing or failed.
+Changing source, segmentation, embedding provider, or model requires removing the existing
+index and enabling a new one.
 
 ## Index kinds and ownership
 
@@ -44,14 +45,20 @@ The first kind is `loopActivity`:
 - It is loop-owned and non-detachable.
 - Deleting its source loop explicitly deletes its self-memory `ragIndex` in the same
    transaction.
-- Disabling it deletes its derived observations and entries while retaining configuration
-   identity.
+- Removing it deletes the index, its entries and projections, and the loop's RAG source
+   records.
 
 Future standalone indexes may add owner-scoped kind tables when their ownership model
 requires them and may be attached to loops.
 Standalone discovery, sharing authorization, and attachment CRUD are deferred, but the base
 schema must not prevent them. Deleting a loop removes those attachments but does not delete
 the reusable indexes.
+
+Loop-scoped API routes only resolve or enable the loop's self-memory attachment. Once an
+index exists, lifecycle operations address the index resource by `ragIndex.id`, for example
+`/rag/:index/repair`, and authorize according to that index kind's ownership model. Index
+repair, removal, and future index operations must not use a loop identifier as the resource
+identity.
 
 A provider cannot be deleted while any `ragIndex` references it. Provider deletion reports
 the IDs of loops whose indexes use it. A provider assignment cannot be removed from a loop
@@ -102,31 +109,33 @@ The storage boundary accepts writes only while the index is `rebuilding` or `rea
 first vector establishes `embeddingDimension`; later vectors must match it. Lookup requires
 a `ready` index and a query vector with the same dimension.
 
-Phase 2 will implement observation projection where the background worker reads pending
-loop-activity observations. It will map each observation into the common entry shape and
-preserve it as one bounded segment with key `whole` and ordinal `0` before embedding and
-storage. Cross-kind source-reference namespacing and projection dispatch are deferred until
-a second source kind demonstrates the required identity rules.
+Phase 2 maps canonical loop activity to provider-independent `ragRecordSource` records while
+an index exists. Enabling an index scans canonical history to create sources; later activity
+creates sources transactionally. Each source receives a `ragRecordProjection` row, and the
+background worker maps pending projections into the common entry shape. It preserves each
+source record as one bounded segment with key `whole` and ordinal `0` before embedding and
+storage.
 
 ## Rebuilds and entries
 
 `ragIndex` owns its embedding contract, rebuild lifecycle, progress, and failure
 diagnostics. There is no generation entity or retained copy of derived data.
 
-Starting or retrying a rebuild is one transaction:
-
-1. Set the index lifecycle to `rebuilding` and reset progress and diagnostics.
-2. Delete all entries and kind-specific observations for the index.
-
-The background rebuild then projects canonical source state into the empty index. Only a
-`ready` index participates in lookup. Rebuild work is serialized per index, and workers
-must verify the expected lifecycle before every write. A rebuild never mixes embedding
-contracts because changing provider, model, source, or segmentation creates a replacement
-index.
+Enabling creates an index in `rebuilding` and queues its build in the same application
+operation. The background build maps canonical source state into source records, projections,
+and entries. Only a `ready` index participates in lookup. Build work is serialized per index,
+and workers must verify the expected lifecycle before every write. A build never mixes
+embedding contracts because changing provider, model, source, or segmentation requires
+removing the old index and enabling a new one.
 
 The current temporary compatibility policy deliberately has no rebuild revision. If a
 deployment cannot trust an existing index format or rebuild state, it purges and re-creates
 the index so subsequent work targets a new index identity.
+
+`ragRecordSource` is the append-only, provider-independent source of indexable records. Its
+source identity is stored as separate `sourceType` and `sourceId` fields and is unique across
+the source registry. `ragRecordProjection` owns the status and diagnostics for projecting one
+source record into one index; its index/source pair is unique.
 
 `ragEntry` is source-neutral segmented output:
 
@@ -137,8 +146,8 @@ the index so subsequent work targets a new index identity.
 - Optional logical identity and supersession state.
 - Vector storage owned by the repository implementation.
 
-Entry identity includes index, source reference, occurrence timestamp, and segment identity.
-Repeated content at different times is valid.
+Entry identity includes index, source record, and segment identity. Repeated content from
+different source entities is valid.
 
 ## Loop activity specialization
 
@@ -147,27 +156,30 @@ results, and curated workgraph state. Operational processor/routing churn and ra
 payloads are excluded.
 
 Messages are additive. Mutable task/workgraph state uses logical identity and supersession.
-Before persistence, observations are redacted and bounded to one UTF-8-safe 8 KiB source
+Before persistence, source records are redacted and bounded to one UTF-8-safe 8 KiB source
 record. `wholeEntry` then preserves that record as one entry without further splitting.
 
-Observation insertion is transactional with canonical domain mutation. Versioned background
-jobs perform rebuild and projection. Job payloads contain only index identity, never content
-or credentials.
+Source-record and live-projection insertion is transactional with canonical domain mutation.
+Source records are persisted only while the loop has an index. Enabling or repairing an index
+scans canonical task history to reconstruct missing source records and projections. Versioned
+background jobs perform build and projection. Job payloads contain only index or projection
+identity, never content or credentials. Loop admins may explicitly queue a scan and repair to
+retry failed projections and recover transient enqueue gaps.
 
 ## Lifecycle
 
-The self-memory lifecycle is `disabled | rebuilding | ready | failed`:
+The self-memory lifecycle is `rebuilding | ready | failed`:
 
-- `disabled`: no lookup, observations, or entries; immutable configuration remains.
-- `rebuilding`: previous derived data has been deleted and canonical history is being
-   projected; lookup is unavailable.
-- `ready`: the index is queryable and live observations continue projecting.
-- `failed`: diagnostics remain; retry drops any partial derived data and rebuilds the same
-   index.
+- `rebuilding`: canonical history is being scanned and pending content is being projected;
+   lookup is unavailable.
+- `ready`: the index is queryable and live source records continue projecting.
+- `failed`: diagnostics remain; an admin scan and repair retries failed or missing work.
 
-Disabling deletes all self-memory derived data. Re-enabling performs a full rebuild,
-including canonical activity created while disabled. Jobs verify index lifecycle before
-every write, and only one rebuild may run for an index at a time.
+Removing memory deletes the index, projections, entries, and loop RAG source records.
+Re-enabling reconstructs canonical history under a new index identity. Scan and repair keeps
+valid entries, resets failed projections and projections missing entries, recomputes progress,
+and queues a canonical source scan. Jobs verify index lifecycle before every write, and
+singleton queue keys prevent duplicate work for an index or projection.
 
 ## Security and replay
 
