@@ -41,9 +41,11 @@ detail page, and write the connection settings inside the VM:
 sudo athenaconfigure --url http://192.168.1.57
 ```
 
-The command prompts for the branch, defaulting to `main`, and then prompts for
-the runner token. Use `--branch BRANCH` or `--token TOKEN` to provide values
-non-interactively.
+The command prompts for the branch, defaulting to the currently saved branch
+or `main` when none is saved, then prompts for the runner name and token. Use
+`--branch BRANCH`, `--name NAME`, or `--token TOKEN` to provide values
+non-interactively. Press Enter at any prompt to keep the saved value; an
+initial configuration still requires each value.
 
 `athenaconfigure` restarts the service after changing configuration. On every
 restart, the service fetches the configured branch, checks it out, installs

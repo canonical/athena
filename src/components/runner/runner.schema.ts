@@ -155,6 +155,7 @@ export const runnerAgentConnectSchema = z.object({
 
 export const runnerAgentHeartbeatSchema = runnerAgentConnectSchema.pick({
   instanceId: true,
+  name: true,
   agentVersion: true,
   contractVersion: true,
   capabilities: true,

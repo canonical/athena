@@ -1,5 +1,4 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import os from "node:os";
 import { v7 as uuidv7 } from "uuid";
 
 const athenaUrl = process.env.ATHENA_URL?.replace(/\/$/, ``);
@@ -33,7 +32,7 @@ const main = async (): Promise<void> => {
   const instanceId = await getInstanceId();
   const identity = {
     instanceId,
-    name: process.env.ATHENA_RUNNER_NAME ?? os.hostname(),
+    name: process.env.ATHENA_RUNNER_NAME ?? instanceId,
     agentVersion,
     contractVersion,
     capabilities: { os: process.platform, architecture: process.arch, harnesses: [`athena-workshop`] },

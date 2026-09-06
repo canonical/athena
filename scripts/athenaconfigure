@@ -6,11 +6,12 @@ ENV_FILE=/etc/athena-runner.env
 usage() {
   cat <<'EOF'
 Usage:
-  athenaconfigure [--url URL] [--branch BRANCH] [--token TOKEN]
+  athenaconfigure [--url URL] [--branch BRANCH] [--name NAME] [--token TOKEN]
 
 Options:
   --url URL          Set the Athena URL. Prompts when omitted.
   --branch BRANCH    Set the Git branch. Prompts with main as the default when omitted.
+  --name NAME        Set the runner instance name. Prompts when omitted.
   --token TOKEN      Set the runner token. Prompts when omitted.
 EOF
 }
@@ -22,9 +23,15 @@ fi
 
 url=
 branch=
+name=
 token=
+saved_url=
+saved_branch=
+saved_name=
+saved_token=
 url_set=0
 branch_set=0
+name_set=0
 token_set=0
 
 while [ "$#" -gt 0 ]; do
@@ -39,6 +46,12 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || { echo "--branch requires a value." >&2; exit 1; }
       branch=$2
       branch_set=1
+      shift 2
+      ;;
+    --name)
+      [ "$#" -ge 2 ] || { echo "--name requires a value." >&2; exit 1; }
+      name=$2
+      name_set=1
       shift 2
       ;;
     --token)
@@ -62,21 +75,38 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+if [ -f "$ENV_FILE" ]; then
+  saved_url=$(sed -n 's/^ATHENA_URL=//p' "$ENV_FILE" | tail -n 1)
+  saved_branch=$(sed -n 's/^ATHENA_RUNNER_BRANCH=//p' "$ENV_FILE" | tail -n 1)
+  saved_name=$(sed -n 's/^ATHENA_RUNNER_NAME=//p' "$ENV_FILE" | tail -n 1)
+  saved_token=$(sed -n 's/^ATHENA_RUNNER_TOKEN=//p' "$ENV_FILE" | tail -n 1)
+fi
+
 if [ "$url_set" -eq 0 ]; then
-  printf 'Athena URL: ' >&2
+  url_default=$saved_url
+  printf 'Athena URL [%s]: ' "$url_default" >&2
   read -r url
+  [ -n "$url" ] || url=$url_default
 fi
 if [ "$branch_set" -eq 0 ]; then
-  printf 'Git branch [main]: ' >&2
+  branch_default=${saved_branch:-main}
+  printf 'Git branch [%s]: ' "$branch_default" >&2
   read -r branch
-  [ -n "$branch" ] || branch=main
+  [ -n "$branch" ] || branch=$branch_default
+fi
+if [ "$name_set" -eq 0 ]; then
+  name_default=${saved_name:-$(cat /var/lib/athena-runner/instance-id 2>/dev/null || hostname)}
+  printf 'Runner name [%s]: ' "$name_default" >&2
+  read -r name
+  [ -n "$name" ] || name=$name_default
 fi
 if [ "$token_set" -eq 0 ]; then
-  printf 'Athena runner token: ' >&2
+  printf 'Athena runner token [current]: ' >&2
   stty -echo
   read -r token
   stty echo
   printf '\n' >&2
+  [ -n "$token" ] || token=$saved_token
 fi
 
 [ -n "$url" ] && case "$url" in
@@ -86,6 +116,10 @@ esac
 [ -n "$branch" ] && case "$branch" in
   -*|*[!A-Za-z0-9._/-]*) echo "Invalid branch name." >&2; exit 1 ;;
 esac
+[ -n "$name" ] && case "$name" in
+  -*|*[!A-Za-z0-9._/-]*) echo "Invalid runner name." >&2; exit 1 ;;
+esac
+[ -n "$name" ] || { echo "Runner name is required." >&2; exit 1; }
 [ -n "$token" ] || { echo "Token is required." >&2; exit 1; }
 
 mkdir -p "$(dirname "$ENV_FILE")"
@@ -96,6 +130,8 @@ sed -i '/^ATHENA_URL=/d' "$ENV_FILE"
 printf 'ATHENA_URL=%s\n' "$url" >> "$ENV_FILE"
 sed -i '/^ATHENA_RUNNER_BRANCH=/d' "$ENV_FILE"
 printf 'ATHENA_RUNNER_BRANCH=%s\n' "$branch" >> "$ENV_FILE"
+sed -i '/^ATHENA_RUNNER_NAME=/d' "$ENV_FILE"
+printf 'ATHENA_RUNNER_NAME=%s\n' "$name" >> "$ENV_FILE"
 sed -i '/^ATHENA_RUNNER_TOKEN=/d' "$ENV_FILE"
 printf 'ATHENA_RUNNER_TOKEN=%s\n' "$token" >> "$ENV_FILE"
 

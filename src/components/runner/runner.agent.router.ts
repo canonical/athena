@@ -29,10 +29,7 @@ route({
   route: `/heartbeat`,
   validators: { body: runnerAgentHeartbeatSchema },
   handler: async ({ body, request, respond }) => {
-    const instance = await runnerAgentConnect(getBearerToken(request.header(`authorization`)), {
-      ...body,
-      name: body.instanceId,
-    });
+    const instance = await runnerAgentConnect(getBearerToken(request.header(`authorization`)), body);
     if (!instance) throw new RunnerAuthenticationError();
     respond({ status: 200, data: instance });
   },
