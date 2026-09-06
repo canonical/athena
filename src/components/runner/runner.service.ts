@@ -367,10 +367,9 @@ export const queryRunnerAgentConnect = async (token: string, input: RunnerAgentC
 };
 
 export const queryRunnerInstanceUpsert = async (runnerId: string, input: RunnerAgentConnect | RunnerAgentHeartbeat): Promise<RunnerInstance> => {
-  const name = `name` in input ? input.name : input.instanceId;
   const result = await query<RunnerInstance>(
     `INSERT INTO "runnerInstance" ("id", "runner", "name", "agentVersion", "contractVersion", "capabilities", "capacity") VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb) ON CONFLICT ("id") DO UPDATE SET "runner" = EXCLUDED."runner", "name" = EXCLUDED."name", "agentVersion" = EXCLUDED."agentVersion", "contractVersion" = EXCLUDED."contractVersion", "capabilities" = EXCLUDED."capabilities", "capacity" = EXCLUDED."capacity", "lastSeenAt" = NOW() RETURNING "id", "runner", "name", "agentVersion", "contractVersion", "capabilities", "capacity", "lastSeenAt", "connectedAt", "createdAt", "updatedAt"`,
-    [input.instanceId, runnerId, name, input.agentVersion, input.contractVersion, JSON.stringify(input.capabilities), JSON.stringify(input.capacity)],
+    [input.instanceId, runnerId, input.name, input.agentVersion, input.contractVersion, JSON.stringify(input.capabilities), JSON.stringify(input.capacity)],
   );
   return result.rows[0] as RunnerInstance;
 };
