@@ -2,13 +2,52 @@
 set -eu
 
 export DEBIAN_FRONTEND=noninteractive
+
+branch=main
+branch_set=0
+
+usage() {
+	cat <<'EOF'
+Usage:
+  athena-runner.install [--branch BRANCH]
+
+Options:
+  --branch BRANCH    Git branch to install and run.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--branch)
+			[ "$#" -ge 2 ] || { echo "--branch requires a value." >&2; exit 1; }
+			branch=$2
+			branch_set=1
+			shift 2
+			;;
+		--help|-h)
+			usage
+			exit 0
+			;;
+		*)
+			echo "Unknown argument: $1" >&2
+			usage >&2
+			exit 1
+			;;
+	esac
+done
+
+case "$branch" in
+	-*|*[!A-Za-z0-9._/-]*)
+		echo "Invalid branch name: $branch" >&2
+		exit 1
+		;;
+esac
+
 apt update
 apt full-upgrade -y
 apt install -y git snapd
 
-if [ -d /opt/athena/.git ]; then
-	git -C /opt/athena pull --ff-only
-else
+if [ ! -d /opt/athena/.git ]; then
 	git clone https://github.com/canonical/athena.git /opt/athena
 fi
 
@@ -18,15 +57,19 @@ snap install node --channel=24/stable --classic
 snap refresh
 
 cd /opt/athena
-git fetch origin main
-git checkout main
-git reset --hard origin/main
+git fetch origin "$branch"
+git checkout "$branch" 2>/dev/null || git checkout -b "$branch" "origin/$branch"
+git reset --hard "origin/$branch"
 
 install -m 0644 /opt/athena/scripts/athena-runner.service /etc/systemd/system/athena-runner.service
 install -m 0755 /opt/athena/scripts/athenaconfigure /usr/local/bin/athenaconfigure
 install -m 0755 /opt/athena/scripts/athena-runner.prepare /usr/local/sbin/athena-runner-prepare
 if [ ! -e /etc/athena-runner.env ]; then
 	install -m 0600 /dev/null /etc/athena-runner.env
+fi
+if [ "$branch_set" -eq 1 ]; then
+	sed -i '/^ATHENA_RUNNER_BRANCH=/d' /etc/athena-runner.env
+	printf 'ATHENA_RUNNER_BRANCH=%s\n' "$branch" >> /etc/athena-runner.env
 fi
 systemctl daemon-reload
 systemctl enable athena-runner.service

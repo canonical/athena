@@ -19,8 +19,15 @@ Run this command inside the Ubuntu VM:
 curl -fsSL https://raw.githubusercontent.com/canonical/athena/main/scripts/athena-runner.install | sudo sh
 ```
 
-The installer always bootstraps the `main` branch. Branch selection is managed
-after installation with `athenaconfigure`.
+To install a development branch, use the branch in both the script URL and the
+installer argument, for example:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/canonical/athena/feat/athena-workshop-runner/scripts/athena-runner.install | sudo sh -s -- --branch feat/athena-workshop-runner
+```
+
+Branch selection can also be changed after installation with
+`athenaconfigure`.
 
 The installer updates Ubuntu, installs LXD, Canonical Workshop, and Node.js 24
 from the `24/stable` Snap channel, then starts the runner's systemd service.
