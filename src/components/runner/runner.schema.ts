@@ -1,14 +1,14 @@
-import { isoDateTime, requiredString, uuid } from "@components/utilities/zod.utilities.js";
+import { isoDateTime, optionalString, requiredString, uuid } from "@components/utilities/zod.utilities.js";
 import { z } from "zod";
 
-export const runnerTypes = [`github-copilot-cloud`, `juju-vm`] as const;
+export const runnerTypes = [`github-copilot-cloud`, `athena-workshop`] as const;
 export const lifecycleStatuses = [`active`, `deprecated`, `archived`] as const;
 
 export const runnerSchema = z.object({
   id: uuid(),
   owner: uuid(),
-  displayName: requiredString(`displayName is required.`),
-  runnerType: z.enum(runnerTypes),
+  name: requiredString(`name is required.`),
+  type: z.enum(runnerTypes),
   lifecycleStatus: z.enum(lifecycleStatuses).default(`active`),
   hasCredential: z.boolean(),
   createdAt: isoDateTime,
@@ -16,17 +16,22 @@ export const runnerSchema = z.object({
 });
 
 const runnerMutableSchema = runnerSchema.pick({
-  displayName: true,
-  runnerType: true,
+  name: true,
+  type: true,
   lifecycleStatus: true,
 });
 
-export const runnerInsertSchema = runnerMutableSchema.extend({
-  apiKey: requiredString(`apiKey is required.`),
-});
+export const runnerInsertSchema = runnerMutableSchema
+  .extend({
+    apiKey: optionalString,
+  })
+  .refine((input) => input.type !== `github-copilot-cloud` || Boolean(input.apiKey), {
+    message: `apiKey is required for github-copilot-cloud.`,
+    path: [`apiKey`],
+  });
 
-export const runnerUpdateSchema = runnerInsertSchema.pick({ displayName: true, lifecycleStatus: true }).extend({
-  apiKey: requiredString(`apiKey is required.`).optional(),
+export const runnerUpdateSchema = runnerMutableSchema.pick({ name: true, lifecycleStatus: true }).extend({
+  apiKey: optionalString,
 });
 
 export const loopRunnerInsertSchema = z.object({
@@ -48,7 +53,7 @@ export const loopRunnerAdminUpdateSchema = z.object({
   healthStatus: z.enum([`unknown`, `healthy`, `failing`]).optional(),
 });
 
-export const loopRunnerSchema = runnerSchema.pick({ displayName: true, runnerType: true }).extend({
+export const loopRunnerSchema = runnerSchema.pick({ name: true, type: true }).extend({
   loop: uuid(),
   runner: uuid(),
   priority: z.number(),
@@ -109,6 +114,53 @@ export const runnerQueueItemSchema = z.object({
   updatedAt: isoDateTime,
 });
 
+export const runnerTokenCreateSchema = z.object({
+  name: requiredString(`name is required.`),
+});
+
+export const runnerTokenSchema = z.object({
+  id: uuid(),
+  runner: uuid(),
+  name: requiredString(`name is required.`),
+  expiresAt: isoDateTime.nullable(),
+  lastUsedAt: isoDateTime.nullable(),
+  revokedAt: isoDateTime.nullable(),
+  createdAt: isoDateTime,
+});
+
+export const runnerTokenCreatedSchema = runnerTokenSchema.extend({ token: requiredString(`token is required.`) });
+
+export const runnerInstanceSchema = z.object({
+  id: uuid(),
+  runner: uuid(),
+  name: requiredString(`name is required.`),
+  agentVersion: requiredString(`agentVersion is required.`),
+  contractVersion: requiredString(`contractVersion is required.`),
+  capabilities: z.record(z.string(), z.unknown()),
+  capacity: z.record(z.string(), z.unknown()),
+  lastSeenAt: isoDateTime,
+  connectedAt: isoDateTime,
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+});
+
+export const runnerAgentConnectSchema = z.object({
+  instanceId: uuid(),
+  name: requiredString(`name is required.`),
+  agentVersion: requiredString(`agentVersion is required.`),
+  contractVersion: requiredString(`contractVersion is required.`),
+  capabilities: z.record(z.string(), z.unknown()).default({}),
+  capacity: z.record(z.string(), z.unknown()).default({}),
+});
+
+export const runnerAgentHeartbeatSchema = runnerAgentConnectSchema.pick({
+  instanceId: true,
+  agentVersion: true,
+  contractVersion: true,
+  capabilities: true,
+  capacity: true,
+});
+
 // Runner types whose queue Athena consumes internally (no external polling needed).
 export const athenaConsumedRunnerTypes = [`github-copilot-cloud`] as const;
 
@@ -123,3 +175,9 @@ export type LoopRunner = z.infer<typeof loopRunnerSchema>;
 export type LoopRunnerRepository = z.infer<typeof loopRunnerRepositorySchema>;
 export type LoopRunnerRepositoryUpdate = z.infer<typeof loopRunnerRepositoryUpdateSchema>;
 export type RunnerQueueItem = z.infer<typeof runnerQueueItemSchema>;
+export type RunnerTokenCreate = z.infer<typeof runnerTokenCreateSchema>;
+export type RunnerToken = z.infer<typeof runnerTokenSchema>;
+export type RunnerTokenCreated = z.infer<typeof runnerTokenCreatedSchema>;
+export type RunnerInstance = z.infer<typeof runnerInstanceSchema>;
+export type RunnerAgentConnect = z.infer<typeof runnerAgentConnectSchema>;
+export type RunnerAgentHeartbeat = z.infer<typeof runnerAgentHeartbeatSchema>;

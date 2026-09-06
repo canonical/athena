@@ -20,7 +20,7 @@ export function LoopRunnerRepositories({ loopId, runnerId }: LoopRunnerRepositor
   const [feedback, setFeedback] = useState<{ severity: (typeof NotificationSeverity)[keyof typeof NotificationSeverity]; title: string; message: string } | null>(null);
 
   const repositories = repositoryState.status === `success` ? repositoryState.repositories : [];
-  const runnerName = runnerState.status === `success` ? runnerState.runner.displayName : `Runner`;
+  const runnerName = runnerState.status === `success` ? runnerState.runner.name : `Runner`;
 
   useEffect(() => {
     if (repositoryState.status !== `success`) {

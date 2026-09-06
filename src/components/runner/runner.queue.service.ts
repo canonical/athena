@@ -35,7 +35,7 @@ export const queryRunnerQueueClaimNext = async (runnerType: string, consumerId: 
         FROM "runnerQueue" rq
         JOIN "runner" r ON r."id" = rq."runner"
         WHERE rq."status" = 'pending'
-          AND r."runnerType" = $1
+          AND r."type" = $1
         ORDER BY rq."createdAt" ASC
         LIMIT 1
         FOR UPDATE SKIP LOCKED

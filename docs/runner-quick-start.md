@@ -19,17 +19,27 @@ Run this command inside the Ubuntu VM:
 curl -fsSL https://raw.githubusercontent.com/canonical/athena/main/scripts/athena-runner.install | sudo sh
 ```
 
-To install another branch, replace the placeholder in this command:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/canonical/athena/main/scripts/athena-runner.install | sudo sh -s -- '<branch-name>'
-```
-
-When no branch is provided, the installer uses `main`.
+The installer always bootstraps the `main` branch. Branch selection is managed
+after installation with `athenaconfigure`.
 
 The installer updates Ubuntu, installs LXD, Canonical Workshop, and Node.js 24
-from the `24/stable` Snap channel, builds the runner, and starts its systemd
-service.
+from the `24/stable` Snap channel, then starts the runner's systemd service.
+
+## Configure a runner workforce
+
+Create an `Athena Workshop` runner in Athena, create a workforce token on its
+detail page, and write the connection settings inside the VM:
+
+```bash
+sudo athenaconfigure --url http://192.168.1.57 --branch main token
+```
+
+`athenaconfigure` restarts the service after changing configuration. On every
+restart, the service fetches the configured branch, checks it out, installs
+dependencies, and rebuilds the runner before starting it.
+
+Multiple runner units may use the same token. Each unit registers its own
+instance identity and appears separately under the Athena runner workforce.
 
 ## Connect to local Athena
 

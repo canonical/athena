@@ -6,12 +6,15 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/athena
+EnvironmentFile=-/etc/athena-runner.env
+ExecStartPre=/usr/local/sbin/athena-runner-prepare
 ExecStart=/snap/node/current/bin/node --enable-source-maps /opt/athena/dist/runner.js
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=athena-runner
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=0
 
 [Install]
 WantedBy=multi-user.target

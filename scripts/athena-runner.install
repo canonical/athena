@@ -2,8 +2,6 @@
 set -eu
 
 export DEBIAN_FRONTEND=noninteractive
-ATHENA_BRANCH=${1:-main}
-
 apt update
 apt full-upgrade -y
 apt install -y git snapd
@@ -20,12 +18,16 @@ snap install node --channel=24/stable --classic
 snap refresh
 
 cd /opt/athena
-git fetch origin "$ATHENA_BRANCH"
-git checkout "$ATHENA_BRANCH" || git checkout -b "$ATHENA_BRANCH" "origin/$ATHENA_BRANCH"
-npm ci
-npm run build:be
+git fetch origin main
+git checkout main
+git reset --hard origin/main
 
 install -m 0644 /opt/athena/scripts/athena-runner.service /etc/systemd/system/athena-runner.service
+install -m 0755 /opt/athena/scripts/athenaconfigure /usr/local/bin/athenaconfigure
+install -m 0755 /opt/athena/scripts/athena-runner.prepare /usr/local/sbin/athena-runner-prepare
+if [ ! -e /etc/athena-runner.env ]; then
+	install -m 0600 /dev/null /etc/athena-runner.env
+fi
 systemctl daemon-reload
 systemctl enable athena-runner.service
 systemctl restart athena-runner.service

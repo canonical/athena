@@ -8,6 +8,7 @@ import { loopRouter } from "@components/loop/loop.router.js";
 import { personaRouter } from "@components/persona/persona.router.js";
 import { providerRouter } from "@components/provider/provider.router.js";
 import { repositoryRouter } from "@components/repository/repository.router.js";
+import { runnerAgentRouter } from "@components/runner/runner.agent.router.js";
 import { startRunnerQueueConsumer } from "@components/runner/runner.queue.consumer.js";
 import { runnerRouter } from "@components/runner/runner.router.js";
 import { staticRouter } from "@components/static/static.router.js";
@@ -31,6 +32,7 @@ defineMiddlewares(app);
 app.use(`${apiRoot}/authentication`, authenticationRouter);
 app.use(statusRouter);
 app.use(`${apiRoot}/webhook`, webhookPublicRouter);
+app.use(`${apiRoot}/runner-agent`, runnerAgentRouter);
 
 if (process.env.COVERAGE) {
   app.get(`${apiRoot}/__coverage__`, (_request: Request, response: Response) => {

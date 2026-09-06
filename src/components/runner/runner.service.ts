@@ -1,13 +1,29 @@
+import { createHash, randomBytes } from "node:crypto";
 import { query } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
-import type { LoopRunner, LoopRunnerAdminUpdate, LoopRunnerRepository, Runner, RunnerInsert, RunnerUpdate } from "./runner.schema.js";
+import { v7 as uuidv7 } from "uuid";
+import type {
+  LoopRunner,
+  LoopRunnerAdminUpdate,
+  LoopRunnerRepository,
+  Runner,
+  RunnerAgentConnect,
+  RunnerAgentHeartbeat,
+  RunnerInsert,
+  RunnerInstance,
+  RunnerToken,
+  RunnerTokenCreate,
+  RunnerTokenCreated,
+  RunnerUpdate,
+} from "./runner.schema.js";
 
-const runnerColumns = `"id", "owner", "displayName", "runnerType", "lifecycleStatus", "createdAt", "updatedAt"`;
+const runnerColumns = `"id", "owner", "name", "type", "lifecycleStatus", "createdAt", "updatedAt"`;
+const runnerCredentialColumn = `("credentialCiphertext" IS NOT NULL) AS "hasCredential"`;
 
 export const queryRunnerListByOwner = async (ownerId: string): Promise<Runner[]> => {
   const result = await query<Runner>(
     `
-      SELECT ${runnerColumns}, TRUE AS "hasCredential"
+      SELECT ${runnerColumns}, ${runnerCredentialColumn}
       FROM "runner"
       WHERE "owner" = $1
       ORDER BY "createdAt" ASC, "id" ASC
@@ -21,7 +37,7 @@ export const queryRunnerListByOwner = async (ownerId: string): Promise<Runner[]>
 export const queryRunnerByIdForOwner = async (runnerId: string, ownerId: string): Promise<Runner | undefined> => {
   const result = await query<Runner>(
     `
-      SELECT ${runnerColumns}, TRUE AS "hasCredential"
+      SELECT ${runnerColumns}, ${runnerCredentialColumn}
       FROM "runner"
       WHERE "id" = $1
         AND "owner" = $2
@@ -33,14 +49,14 @@ export const queryRunnerByIdForOwner = async (runnerId: string, ownerId: string)
 };
 
 export const queryRunnerCreate = async (input: RunnerInsert, ownerId: string): Promise<Runner> => {
-  const envelope = encryptSecret(input.apiKey);
+  const envelope = input.apiKey ? encryptSecret(input.apiKey) : undefined;
 
   const result = await query<Runner>(
     `
       INSERT INTO "runner" (
         "owner",
-        "displayName",
-        "runnerType",
+        "name",
+        "type",
         "credentialCiphertext",
         "credentialIv",
         "credentialAuthTag",
@@ -48,9 +64,9 @@ export const queryRunnerCreate = async (input: RunnerInsert, ownerId: string): P
         "lifecycleStatus"
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING ${runnerColumns}, TRUE AS "hasCredential"
+      RETURNING ${runnerColumns}, ${runnerCredentialColumn}
     `,
-    [ownerId, input.displayName, input.runnerType, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, input.lifecycleStatus],
+    [ownerId, input.name, input.type, envelope?.ciphertext ?? null, envelope?.iv ?? null, envelope?.authTag ?? null, envelope?.keyVersion ?? `v1`, input.lifecycleStatus],
   );
 
   const runner = result.rows[0];
@@ -69,7 +85,7 @@ export const queryRunnerUpdate = async (runnerId: string, ownerId: string, input
       `
         UPDATE "runner"
         SET
-          "displayName" = $1,
+          "name" = $1,
           "lifecycleStatus" = $2,
           "credentialCiphertext" = $3,
           "credentialIv" = $4,
@@ -77,9 +93,9 @@ export const queryRunnerUpdate = async (runnerId: string, ownerId: string, input
           "credentialKeyVersion" = $6
         WHERE "id" = $7
           AND "owner" = $8
-        RETURNING ${runnerColumns}, TRUE AS "hasCredential"
+        RETURNING ${runnerColumns}, ${runnerCredentialColumn}
       `,
-      [input.displayName, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, runnerId, ownerId],
+      [input.name, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, runnerId, ownerId],
     );
 
     return result.rows[0];
@@ -89,13 +105,13 @@ export const queryRunnerUpdate = async (runnerId: string, ownerId: string, input
     `
       UPDATE "runner"
       SET
-        "displayName" = $1,
+        "name" = $1,
         "lifecycleStatus" = $2
       WHERE "id" = $3
         AND "owner" = $4
-      RETURNING ${runnerColumns}, TRUE AS "hasCredential"
+      RETURNING ${runnerColumns}, ${runnerCredentialColumn}
     `,
-    [input.displayName, input.lifecycleStatus, runnerId, ownerId],
+    [input.name, input.lifecycleStatus, runnerId, ownerId],
   );
 
   return result.rows[0];
@@ -129,8 +145,8 @@ export const queryLoopRunnerList = async (loopId: string): Promise<LoopRunner[]>
         lh."failureCount",
         lh."createdAt",
         lh."updatedAt",
-        h."displayName",
-        h."runnerType"
+        h."name",
+        h."type"
       FROM "loopRunner" lh
       JOIN "runner" h ON h."id" = lh."runner"
       WHERE lh."loop" = $1
@@ -218,7 +234,7 @@ export const queryLoopRunnerRepositoryList = async (loopId: string, runnerId: st
         (lrr."repository" IS NOT NULL) AS "assigned",
         COALESCE(lrr."enabled", FALSE) AS "enabled",
         lr."enabled" AS "repositoryEnabled",
-        r."displayName",
+        r."name",
         r."repositoryType",
         r."repositoryOwner",
         r."repositoryName",
@@ -306,7 +322,65 @@ export const queryRunnerDecryptCredential = async (runnerId: string): Promise<st
     return null;
   }
 
+  if (!row.ciphertext || !row.iv || !row.authTag) {
+    return null;
+  }
+
   return decryptSecret({ ciphertext: row.ciphertext, iv: row.iv, authTag: row.authTag, keyVersion: row.keyVersion });
+};
+
+const hashToken = (token: string): string => createHash(`sha256`).update(token).digest(`hex`);
+
+export const queryRunnerTokenList = async (runnerId: string): Promise<RunnerToken[]> => {
+  const result = await query<RunnerToken>(`SELECT "id", "runner", "name", "expiresAt", "lastUsedAt", "revokedAt", "createdAt" FROM "runnerToken" WHERE "runner" = $1 ORDER BY "createdAt" ASC`, [runnerId]);
+  return result.rows;
+};
+
+export const queryRunnerTokenCreate = async (runnerId: string, input: RunnerTokenCreate): Promise<RunnerTokenCreated> => {
+  const id = uuidv7();
+  const token = `athena_runner_${id}_${randomBytes(32).toString(`hex`)}`;
+  const result = await query<RunnerToken>(`INSERT INTO "runnerToken" ("id", "runner", "name", "secretHash") VALUES ($1, $2, $3, $4) RETURNING "id", "runner", "name", "expiresAt", "lastUsedAt", "revokedAt", "createdAt"`, [
+    id,
+    runnerId,
+    input.name,
+    hashToken(token),
+  ]);
+  const metadata = result.rows[0];
+  if (!metadata) throw new Error(`Runner token was not created.`);
+  return { ...metadata, token };
+};
+
+export const queryRunnerTokenRevoke = async (runnerId: string, tokenId: string): Promise<boolean> => {
+  const result = await query(`UPDATE "runnerToken" SET "revokedAt" = COALESCE("revokedAt", NOW()), "secretHash" = NULL WHERE "id" = $1 AND "runner" = $2`, [tokenId, runnerId]);
+  return Boolean(result.rowCount);
+};
+
+export const queryRunnerAgentConnect = async (token: string, input: RunnerAgentConnect): Promise<RunnerInstance | undefined> => {
+  const result = await query<{ runner: string; secretHash: string }>(
+    `SELECT t."runner", t."secretHash" FROM "runnerToken" t JOIN "runner" r ON r."id" = t."runner" WHERE t."revokedAt" IS NULL AND (t."expiresAt" IS NULL OR t."expiresAt" > NOW()) AND r."type" = 'athena-workshop' AND r."lifecycleStatus" = 'active' AND t."secretHash" = $1`,
+    [hashToken(token)],
+  );
+  const tokenRow = result.rows[0];
+  if (!tokenRow) return undefined;
+  await query(`UPDATE "runnerToken" SET "lastUsedAt" = NOW() WHERE "secretHash" = $1`, [tokenRow.secretHash]);
+  return queryRunnerInstanceUpsert(tokenRow.runner, input);
+};
+
+export const queryRunnerInstanceUpsert = async (runnerId: string, input: RunnerAgentConnect | RunnerAgentHeartbeat): Promise<RunnerInstance> => {
+  const name = `name` in input ? input.name : input.instanceId;
+  const result = await query<RunnerInstance>(
+    `INSERT INTO "runnerInstance" ("id", "runner", "name", "agentVersion", "contractVersion", "capabilities", "capacity") VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb) ON CONFLICT ("id") DO UPDATE SET "runner" = EXCLUDED."runner", "name" = EXCLUDED."name", "agentVersion" = EXCLUDED."agentVersion", "contractVersion" = EXCLUDED."contractVersion", "capabilities" = EXCLUDED."capabilities", "capacity" = EXCLUDED."capacity", "lastSeenAt" = NOW() RETURNING "id", "runner", "name", "agentVersion", "contractVersion", "capabilities", "capacity", "lastSeenAt", "connectedAt", "createdAt", "updatedAt"`,
+    [input.instanceId, runnerId, name, input.agentVersion, input.contractVersion, JSON.stringify(input.capabilities), JSON.stringify(input.capacity)],
+  );
+  return result.rows[0] as RunnerInstance;
+};
+
+export const queryRunnerInstanceList = async (runnerId: string): Promise<RunnerInstance[]> => {
+  const result = await query<RunnerInstance>(
+    `SELECT "id", "runner", "name", "agentVersion", "contractVersion", "capabilities", "capacity", "lastSeenAt", "connectedAt", "createdAt", "updatedAt" FROM "runnerInstance" WHERE "runner" = $1 ORDER BY "lastSeenAt" DESC`,
+    [runnerId],
+  );
+  return result.rows;
 };
 
 export type LoopRunnerCandidateRow = {
@@ -330,7 +404,7 @@ export type LoopRunnerCandidateRow = {
   credentialIv: string;
   credentialAuthTag: string;
   credentialKeyVersion: string;
-  runnerType: string;
+  type: string;
   displayName: string;
 };
 
@@ -358,8 +432,8 @@ export const queryLoopRunnerCandidates = async (loopId: string, repositoryId?: s
         h."credentialIv",
         h."credentialAuthTag",
         h."credentialKeyVersion",
-        h."runnerType",
-        h."displayName"
+        h."type",
+        h."name"
       FROM "loopRunner" lh
       JOIN "runner" h ON h."id" = lh."runner"
       WHERE lh."loop" = $1
@@ -404,8 +478,8 @@ export const queryLoopRunnersForRepository = async (loopId: string, repositoryId
         lh."failureCount",
         lh."createdAt",
         lh."updatedAt",
-        h."displayName",
-        h."runnerType"
+        h."name",
+        h."type"
       FROM "loopRunner" lh
       JOIN "runner" h ON h."id" = lh."runner"
       JOIN "loopRunnerRepository" lrr
