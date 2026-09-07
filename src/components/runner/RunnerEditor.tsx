@@ -3,7 +3,7 @@ import { useFormik } from "formik";
 import { toFormikValidate } from "zod-formik-adapter";
 import { createRunner, updateRunner } from "./runner.client.js";
 import type { Runner } from "./runner.schema.js";
-import { lifecycleStatuses, runnerInsertSchema, type runnerTypes, runnerUpdateSchema } from "./runner.schema.js";
+import { lifecycleStatuses, runnerInsertSchema, runnerTypes, runnerUpdateSchema } from "./runner.schema.js";
 
 type RunnerEditorProps = {
   runner?: Runner;
@@ -85,8 +85,11 @@ export function RunnerEditor({ runner, onSuccess }: RunnerEditorProps) {
       {formik.touched.name && formik.errors.name ? <p className="p-form-validation is-error">{formik.errors.name}</p> : null}
       <label htmlFor="runner-editor-runner-type">Runner</label>
       <select disabled={isEdit} id="runner-editor-runner-type" name="type" onBlur={formik.handleBlur} onChange={formik.handleChange} value={formik.values.type}>
-        <option value="github-copilot-cloud">GitHub Copilot Cloud</option>
-        <option value="athena-workshop">Athena Workshop</option>
+        {runnerTypes.map((runnerType) => (
+          <option key={runnerType} value={runnerType}>
+            {runnerType === `github-copilot-cloud` ? `GitHub Copilot Cloud` : `Athena Workshop`}
+          </option>
+        ))}
       </select>
       {formik.values.type === `github-copilot-cloud` ? (
         <>

@@ -19,7 +19,7 @@ export function Runner({ runnerId }: RunnerDetailProps) {
   const { state: instanceState } = useRunnerInstances(runnerId);
   const [tokenName, setTokenName] = useState(``);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
-  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<{ title: string; message: string } | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
 
   if (state.status === `loading`) {
@@ -43,7 +43,7 @@ export function Runner({ runnerId }: RunnerDetailProps) {
       setTokenName(``);
       reloadTokens();
     } catch (error) {
-      setTokenError(error instanceof Error ? error.message : String(error));
+      setTokenError({ title: `Unable to create token`, message: error instanceof Error ? error.message : String(error) });
     }
   };
 
@@ -54,7 +54,7 @@ export function Runner({ runnerId }: RunnerDetailProps) {
       await revokeRunnerToken(runnerId, tokenId);
       reloadTokens();
     } catch (error) {
-      setTokenError(error instanceof Error ? error.message : String(error));
+      setTokenError({ title: `Unable to revoke token`, message: error instanceof Error ? error.message : String(error) });
     } finally {
       setRevokingTokenId(null);
     }
@@ -90,8 +90,8 @@ export function Runner({ runnerId }: RunnerDetailProps) {
             </>
           ) : null}
           {tokenError ? (
-            <Notification severity={NotificationSeverity.NEGATIVE} title="Unable to create token">
-              {tokenError}
+            <Notification severity={NotificationSeverity.NEGATIVE} title={tokenError.title}>
+              {tokenError.message}
             </Notification>
           ) : null}
           <h3 className="p-heading--5">Tokens</h3>

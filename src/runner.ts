@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { parse as parseUuid, stringify as stringifyUuid, v7 as uuidv7, validate as validateUuid } from "uuid";
 
 const athenaUrl = process.env.ATHENA_URL?.replace(/\/$/, ``);
@@ -16,7 +17,7 @@ const getInstanceId = async (): Promise<string> => {
   } catch {}
 
   const instanceId = uuidv7();
-  await mkdir(instancePath.substring(0, instancePath.lastIndexOf(`/`)), { recursive: true });
+  await mkdir(dirname(instancePath), { recursive: true });
   await writeFile(instancePath, instanceId, { mode: 0o600 });
   return instanceId;
 };
@@ -35,7 +36,6 @@ const send = async (path: string, body: Record<string, unknown>, instanceId: str
   });
   if (!response.ok) throw new Error(`Athena runner request failed with status ${response.status}.`);
 };
-
 const main = async (): Promise<void> => {
   const instanceId = await getInstanceId();
   const identity = {
@@ -50,12 +50,17 @@ const main = async (): Promise<void> => {
   await send(`connect`, identity, instanceId);
   console.log(`Athena Workshop runner connected as ${instanceId}`);
 
+  let heartbeatInFlight = false;
   const heartbeat = async () => {
+    if (heartbeatInFlight) return;
+    heartbeatInFlight = true;
     try {
       await send(`heartbeat`, identity, instanceId);
       console.log(`Athena Workshop runner heartbeat ${new Date().toISOString()}`);
     } catch (error) {
       console.error(`Athena Workshop runner heartbeat failed`, error);
+    } finally {
+      heartbeatInFlight = false;
     }
   };
 
