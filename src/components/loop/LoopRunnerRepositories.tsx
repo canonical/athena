@@ -154,7 +154,7 @@ export function LoopRunnerRepositories({ loopId, runnerId }: LoopRunnerRepositor
                     />
                   ),
                 },
-                { content: repository.displayName },
+                { content: repository.name },
                 { content: `${repository.repositoryOwner}/${repository.repositoryName}` },
                 { content: repository.repositoryType },
                 { content: repository.lifecycleStatus },
