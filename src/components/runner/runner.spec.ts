@@ -10,6 +10,7 @@ const createRunnerViaUi = async (page: Page, displayName: string) => {
 
   await page.getByRole(`button`, { name: `Create runner` }).first().click();
   await page.getByLabel(`Display name`).fill(displayName);
+  await page.getByLabel(`Runner`).selectOption(`github-copilot-cloud`);
   await page.getByLabel(`API key`).fill(`copilot-${Date.now()}`);
   await page.locator(`form`).first().getByRole(`button`, { name: `Create runner` }).click();
 
