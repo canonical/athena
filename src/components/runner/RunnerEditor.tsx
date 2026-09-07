@@ -80,7 +80,7 @@ export function RunnerEditor({ runner, onSuccess }: RunnerEditorProps) {
 
   return (
     <form onSubmit={formik.handleSubmit}>
-      <label htmlFor="runner-editor-display-name">Display name</label>
+      <label htmlFor="runner-editor-name">Display name</label>
       <input id="runner-editor-name" name="name" onBlur={formik.handleBlur} onChange={formik.handleChange} required type="text" value={formik.values.name} />
       {formik.touched.name && formik.errors.name ? <p className="p-form-validation is-error">{formik.errors.name}</p> : null}
       <label htmlFor="runner-editor-runner-type">Runner</label>
