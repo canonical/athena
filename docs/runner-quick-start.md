@@ -42,10 +42,16 @@ sudo athenaconfigure --url http://192.168.1.57
 ```
 
 The command prompts for the branch, defaulting to the currently saved branch
-or `main` when none is saved, then prompts for the runner name and token. Use
-`--branch BRANCH`, `--name NAME`, or `--token TOKEN` to provide values
+or `main` when none is saved, then prompts for the runner name, optional HTTP
+Host header, and token. When using an IP URL with Traefik, set the Host header
+to a configured route such as `athena.localhost`. Use `--branch BRANCH`,
+`--name NAME`, `--host HOST`, or `--token TOKEN` to provide values
 non-interactively. Press Enter at any prompt to keep the saved value; an
-initial configuration still requires each value.
+initial configuration still requires URL, name, and token.
+
+The optional Host header is generally useful when developing with the Athena
+runner inside a VM: the runner can connect to the host machine through its IP
+while Traefik still routes the request using the local development hostname.
 
 `athenaconfigure` restarts the service after changing configuration. On every
 restart, the service fetches the configured branch, checks it out, installs
