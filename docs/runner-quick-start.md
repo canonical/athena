@@ -42,16 +42,15 @@ sudo athenaconfigure --url http://192.168.1.57
 ```
 
 The command prompts for the branch, defaulting to the currently saved branch
-or `main` when none is saved, then prompts for the runner name, optional HTTP
-Host header, and token. When using an IP URL with Traefik, set the Host header
-to a configured route such as `athena.localhost`. Use `--branch BRANCH`,
-`--name NAME`, `--host HOST`, or `--token TOKEN` to provide values
-non-interactively. Press Enter at any prompt to keep the saved value; an
-initial configuration still requires URL, name, and token.
-
-The optional Host header is generally useful when developing with the Athena
-runner inside a VM: the runner can connect to the host machine through its IP
-while Traefik still routes the request using the local development hostname.
+or `main` when none is saved, then prompts for the runner name, optional
+hostname, and token. When using an IP URL with Traefik, set the hostname to a
+configured route such as `athena.localhost`. `athenaconfigure` adds the
+hostname and URL address to `/etc/hosts` and stores the URL using that
+hostname, so the runner connects to the IP while `fetch()` sends the expected
+Host value. Use `--branch BRANCH`, `--name NAME`, `--host HOST`, or
+`--token TOKEN` to provide values non-interactively. Press Enter at any prompt
+to keep the saved value; an initial configuration still requires URL, name,
+and token.
 
 `athenaconfigure` restarts the service after changing configuration. On every
 restart, the service fetches the configured branch, checks it out, installs
@@ -62,13 +61,14 @@ instance identity and appears separately under the Athena runner workforce.
 
 ## Connect to local Athena
 
-The runner must call Athena through the host address reachable from the VM,
+The runner must reach Athena through the host address reachable from the VM,
 not `localhost`. For example, if the host is reachable at `192.168.1.57` and
-Traefik is exposed on port `80`, configure the runner to use:
+Traefik is exposed on port `80`, provide that address and the Traefik hostname
+to `athenaconfigure`:
 
-```text
-http://192.168.1.57
+```bash
+sudo athenaconfigure --url http://192.168.1.57 --host athena.localhost
 ```
 
-Ensure the request uses a hostname that matches an Athena Traefik route when
-host-based routing is required.
+The command writes `192.168.1.57 athena.localhost` to `/etc/hosts` and stores
+`http://athena.localhost` as the runner URL.

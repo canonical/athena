@@ -2,6 +2,8 @@
 set -eu
 
 ENV_FILE=/etc/athena-runner.env
+HOSTS_FILE=/etc/hosts
+HOSTS_MARKER="# athena-runner"
 
 usage() {
   cat <<'EOF'
@@ -12,7 +14,7 @@ Options:
   --url URL          Set the Athena URL. Prompts when omitted.
   --branch BRANCH    Set the Git branch. Prompts with main as the default when omitted.
   --name NAME        Set the runner instance name. Prompts when omitted.
-  --host HOST        Set the HTTP Host header used for Traefik routing, useful for VM development. Prompts when omitted.
+  --host HOST        Set the hostname used for Traefik routing and /etc/hosts. Prompts when omitted.
   --token TOKEN      Set the runner token. Prompts when omitted.
 EOF
 }
@@ -113,7 +115,7 @@ if [ "$name_set" -eq 0 ]; then
 fi
 if [ "$host_set" -eq 0 ]; then
   host_default=$saved_host
-  printf 'HTTP Host header (optional; useful with a runner VM during development; use athena.localhost when URL is an IP) [%s]: ' "$host_default" >&2
+  printf 'Hostname (optional; use athena.localhost when URL is an IP) [%s]: ' "$host_default" >&2
   read -r host
   [ -n "$host" ] || host=$host_default
 fi
@@ -142,16 +144,34 @@ esac
 esac
 [ -n "$name" ] || { echo "Runner name is required." >&2; exit 1; }
 [ -n "$host" ] && case "$host" in
-  *[!A-Za-z0-9.:-]*) echo "Invalid HTTP Host header." >&2; exit 1 ;;
+  *[!A-Za-z0-9.-]*) echo "Invalid hostname." >&2; exit 1 ;;
 esac
 [ -n "$token" ] || { echo "Token is required." >&2; exit 1; }
+
+configured_url=$url
+if [ -n "$host" ]; then
+  url_without_scheme=${url#*://}
+  url_authority=${url_without_scheme%%/*}
+  url_hostname=${url_authority%%:*}
+  url_suffix=${url_without_scheme#"$url_authority"}
+  if [ "$url_hostname" != "$host" ]; then
+    [ -n "$url_hostname" ] || { echo "URL hostname is required when --host is set." >&2; exit 1; }
+    printf '%s\n' "$url_hostname" | grep -Eq '^[0-9]+(\.[0-9]+){3}$' || {
+      echo "The URL hostname must be an IPv4 address when --host is set." >&2
+      exit 1
+    }
+    configured_url="${url%%://*}://${host}${url_suffix}"
+    sed -i "\|$HOSTS_MARKER$|d" "$HOSTS_FILE"
+    printf '%s %s %s\n' "$url_hostname" "$host" "$HOSTS_MARKER" >> "$HOSTS_FILE"
+  fi
+fi
 
 mkdir -p "$(dirname "$ENV_FILE")"
 touch "$ENV_FILE"
 chmod 0600 "$ENV_FILE"
 
 sed -i '/^ATHENA_URL=/d' "$ENV_FILE"
-printf 'ATHENA_URL=%s\n' "$url" >> "$ENV_FILE"
+printf 'ATHENA_URL=%s\n' "$configured_url" >> "$ENV_FILE"
 sed -i '/^ATHENA_RUNNER_BRANCH=/d' "$ENV_FILE"
 printf 'ATHENA_RUNNER_BRANCH=%s\n' "$branch" >> "$ENV_FILE"
 sed -i '/^ATHENA_RUNNER_NAME=/d' "$ENV_FILE"

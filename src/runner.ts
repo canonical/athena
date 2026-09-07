@@ -3,7 +3,6 @@ import { v7 as uuidv7 } from "uuid";
 
 const athenaUrl = process.env.ATHENA_URL?.replace(/\/$/, ``);
 const runnerToken = process.env.ATHENA_RUNNER_TOKEN;
-const runnerHost = process.env.ATHENA_RUNNER_HOST;
 const instancePath = process.env.ATHENA_RUNNER_INSTANCE_PATH ?? `/var/lib/athena-runner/instance-id`;
 const agentVersion = process.env.ATHENA_RUNNER_AGENT_VERSION ?? `development`;
 const contractVersion = process.env.ATHENA_RUNNER_CONTRACT_VERSION ?? `v1`;
@@ -21,15 +20,15 @@ const getInstanceId = async (): Promise<string> => {
 
 const send = async (path: string, body: Record<string, unknown>, instanceId: string): Promise<void> => {
   if (!athenaUrl || !runnerToken) throw new Error(`ATHENA_URL and ATHENA_RUNNER_TOKEN are required.`);
+  const requestBody = JSON.stringify({ ...body, instanceId });
   const response = await fetch(`${athenaUrl}/api/runner-agent/${path}`, {
     method: `POST`,
     headers: {
       Accept: `application/json`,
       Authorization: `Bearer ${runnerToken}`,
       "Content-Type": `application/json`,
-      ...(runnerHost ? { Host: runnerHost } : {}),
     },
-    body: JSON.stringify({ ...body, instanceId }),
+    body: requestBody,
   });
   if (!response.ok) throw new Error(`Athena runner request failed with status ${response.status}.`);
 };
