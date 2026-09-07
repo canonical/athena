@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { v7 as uuidv7 } from "uuid";
+import { parse as parseUuid, stringify as stringifyUuid, v7 as uuidv7, validate as validateUuid } from "uuid";
 
 const athenaUrl = process.env.ATHENA_URL?.replace(/\/$/, ``);
 const runnerToken = process.env.ATHENA_RUNNER_TOKEN;
@@ -9,13 +9,16 @@ const contractVersion = process.env.ATHENA_RUNNER_CONTRACT_VERSION ?? `v1`;
 
 const getInstanceId = async (): Promise<string> => {
   try {
-    return (await readFile(instancePath, `utf8`)).trim();
-  } catch {
-    const instanceId = uuidv7();
-    await mkdir(instancePath.substring(0, instancePath.lastIndexOf(`/`)), { recursive: true });
-    await writeFile(instancePath, instanceId, { mode: 0o600 });
-    return instanceId;
-  }
+    const savedInstanceId = (await readFile(instancePath, `utf8`)).trim();
+    if (validateUuid(savedInstanceId)) {
+      return stringifyUuid(parseUuid(savedInstanceId));
+    }
+  } catch {}
+
+  const instanceId = uuidv7();
+  await mkdir(instancePath.substring(0, instancePath.lastIndexOf(`/`)), { recursive: true });
+  await writeFile(instancePath, instanceId, { mode: 0o600 });
+  return instanceId;
 };
 
 const send = async (path: string, body: Record<string, unknown>, instanceId: string): Promise<void> => {
