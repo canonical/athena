@@ -234,7 +234,7 @@ export const queryLoopRunnerRepositoryList = async (loopId: string, runnerId: st
         (lrr."repository" IS NOT NULL) AS "assigned",
         COALESCE(lrr."enabled", FALSE) AS "enabled",
         lr."enabled" AS "repositoryEnabled",
-        r."name",
+        r."displayName",
         r."repositoryType",
         r."repositoryOwner",
         r."repositoryName",

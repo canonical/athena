@@ -81,7 +81,7 @@ export const loopRunnerRepositorySchema = z.object({
   assigned: z.boolean(),
   enabled: z.boolean(),
   repositoryEnabled: z.boolean(),
-  name: requiredString(`name is required.`),
+  displayName: requiredString(`displayName is required.`),
   repositoryType: z.string().min(1),
   repositoryOwner: requiredString(`repositoryOwner is required.`),
   repositoryName: requiredString(`repositoryName is required.`),
