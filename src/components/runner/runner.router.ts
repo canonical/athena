@@ -14,11 +14,15 @@ import {
   runnerCreate,
   runnerDelete,
   runnerGet,
+  runnerInstanceList,
   runnerList,
   runnerSessions,
+  runnerTokenCreate,
+  runnerTokenList,
+  runnerTokenRevoke,
   runnerUpdate,
 } from "./runner.controller.js";
-import { loopRunnerAdminUpdateSchema, loopRunnerRepositoryUpdateSchema, runnerInsertSchema, runnerUpdateSchema } from "./runner.schema.js";
+import { loopRunnerAdminUpdateSchema, loopRunnerRepositoryUpdateSchema, runnerInsertSchema, runnerTokenCreateSchema, runnerUpdateSchema } from "./runner.schema.js";
 
 export const runnerRouter = Router();
 const route = defineRoutes(runnerRouter);
@@ -26,6 +30,8 @@ const route = defineRoutes(runnerRouter);
 const runnerParamsSchema = z.object({
   runner: uuid(`runner must be a valid UUID.`),
 });
+
+const runnerTokenParamsSchema = runnerParamsSchema.extend({ token: uuid(`token must be a valid UUID.`) });
 
 const loopParamsSchema = z.object({
   loop: uuid(`loop must be a valid UUID.`),
@@ -114,6 +120,37 @@ route({
     const runner = await runnerUpdate(params.runner, getAuthenticatedUserId(response), body);
     respond({ status: 200, data: runner });
   },
+});
+
+route({
+  method: `get`,
+  route: `/:runner/tokens`,
+  validators: { params: runnerParamsSchema },
+  handler: async ({ params, response, respond }) => respond({ status: 200, data: await runnerTokenList(params.runner, getAuthenticatedUserId(response)) }),
+});
+
+route({
+  method: `post`,
+  route: `/:runner/tokens`,
+  validators: { params: runnerParamsSchema, body: runnerTokenCreateSchema },
+  handler: async ({ params, body, response, respond }) => respond({ status: 201, data: await runnerTokenCreate(params.runner, getAuthenticatedUserId(response), body) }),
+});
+
+route({
+  method: `delete`,
+  route: `/:runner/tokens/:token`,
+  validators: { params: runnerTokenParamsSchema },
+  handler: async ({ params, response, respond }) => {
+    await runnerTokenRevoke(params.runner, params.token, getAuthenticatedUserId(response));
+    respond({ status: 204 });
+  },
+});
+
+route({
+  method: `get`,
+  route: `/:runner/instances`,
+  validators: { params: runnerParamsSchema },
+  handler: async ({ params, response, respond }) => respond({ status: 200, data: await runnerInstanceList(params.runner, getAuthenticatedUserId(response)) }),
 });
 
 route({

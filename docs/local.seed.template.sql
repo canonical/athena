@@ -136,10 +136,10 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (
-    SELECT 1 FROM "runner" WHERE "owner" = v_user_id AND "displayName" = v_runner_display_name
+    SELECT 1 FROM "runner" WHERE "owner" = v_user_id AND "name" = v_runner_display_name
   ) THEN
     INSERT INTO "runner" (
-      "id", "owner", "displayName", "runnerType",
+      "id", "owner", "name", "type",
       "credentialCiphertext", "credentialIv", "credentialAuthTag", "credentialKeyVersion"
     )
     VALUES (

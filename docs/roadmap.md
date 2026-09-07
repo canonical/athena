@@ -39,8 +39,8 @@
 | -                       | -                                  | - Generic OpenAI API Provider   | 🚧     | [openai-api-connection.plan.md][openai-plan] |
 | -                       | -                                  | Runner                          | 🚧     | [runner-harness.md][runner-harness] |
 | -                       | -                                  | - GitHub Copilot Cloud          | ✅     | [runner-harness.md][runner-harness] |
-| -                       | -                                  | - Athena Workshop Runner       | 🚧     | [workshop-runner.md][workshop-runner] |
-| -                       | -                                  | - Juju Athena Machine Charm    | ⏳     | [juju-athena-machine-charm.md][juju-athena-machine-charm] |
+| -                       | -                                  | - Athena Workshop Runner        | 🚧     | [workshop-runner.md][workshop-runner] |
+| -                       | -                                  | - Juju Athena Machine Charm     | ⏳     | [juju-athena-machine-charm.md][juju-athena-machine-charm] |
 | -                       | -                                  | - Other Proprietary Runners     | ⏳     | [runner-harness.md][runner-harness] |
 | -                       | -                                  | MCP Connections                 | ⏳     |      |
 | -                       | -                                  | - Gatekeeping                   | ⏳     |      |

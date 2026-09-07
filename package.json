@@ -75,6 +75,7 @@
     "remark-gfm": "4.0.1",
     "uuid": "14.0.1",
     "vanilla-framework": "4.55.1",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "zod-formik-adapter": "2.0.0"
   }
 }
