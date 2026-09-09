@@ -4,6 +4,11 @@ This index is the entry point for implementation planning artifacts.
 
 ## Consolidated Task List
 
+### Deployment architecture
+
+- [x] Extract background processing into an independently scalable charm. Detailed plan:
+  [background-worker-charm.plan.md](./background-worker-charm.plan.md)
+
 ### Persona Definition Capability (Foundation)
 
 - [ ] Define persona schema, lifecycle, and capability model (IC, CR, EM, PM, QA, UX personas and their execution roles within loop orchestration). Detailed plan: [persona-management.plan.md](./persona-management.plan.md)

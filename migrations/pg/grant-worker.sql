@@ -1,0 +1,54 @@
+\if :{?WORKER_ROLE_NAME}
+\else
+  \echo 'WORKER_ROLE_NAME is required'
+  \quit 1
+\endif
+
+SELECT true AS pgboss_exists
+WHERE EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'pgboss')
+\gset
+\if :{?pgboss_exists}
+\else
+  \echo 'pgboss schema must be migrated before granting worker access'
+  \quit 1
+\endif
+
+SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'WORKER_ROLE_NAME')
+\gexec
+SELECT format(
+  'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %I',
+  :'WORKER_ROLE_NAME'
+)
+\gexec
+SELECT format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', :'WORKER_ROLE_NAME')
+\gexec
+SELECT format(
+  'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I',
+  :'WORKER_ROLE_NAME'
+)
+\gexec
+SELECT format(
+  'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO %I',
+  :'WORKER_ROLE_NAME'
+)
+\gexec
+
+SELECT format('GRANT USAGE ON SCHEMA pgboss TO %I', :'WORKER_ROLE_NAME')
+\gexec
+SELECT format(
+  'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgboss TO %I',
+  :'WORKER_ROLE_NAME'
+)
+\gexec
+SELECT format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA pgboss TO %I', :'WORKER_ROLE_NAME')
+\gexec
+SELECT format(
+  'ALTER DEFAULT PRIVILEGES IN SCHEMA pgboss GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I',
+  :'WORKER_ROLE_NAME'
+)
+\gexec
+SELECT format(
+  'ALTER DEFAULT PRIVILEGES IN SCHEMA pgboss GRANT USAGE, SELECT ON SEQUENCES TO %I',
+  :'WORKER_ROLE_NAME'
+)
+\gexec

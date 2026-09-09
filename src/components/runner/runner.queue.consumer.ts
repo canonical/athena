@@ -1,5 +1,4 @@
 import { log } from "@components/logging/logging.service.js";
-import { triggerTaskProcessor } from "@components/task/task.processor.js";
 import { queryAppendQueueItem } from "@components/task/task.service.js";
 import { delay } from "@components/utilities/timers.js";
 import { v7 as uuidv7 } from "uuid";
@@ -19,6 +18,7 @@ import { queryRunnerDecryptCredential } from "./runner.service.js";
 
 let isConsuming = false;
 let consumerInterval: ReturnType<typeof setInterval> | null = null;
+let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 const runnerQueueConsumerIntervalMs = 15_000;
 const runnerQueueHeartbeatIntervalMs = 5_000;
 const consumerId = uuidv7();
@@ -33,10 +33,24 @@ export const startRunnerQueueConsumer = (): void => {
 
   triggerRunnerQueueConsumer();
   consumerInterval = setInterval(triggerRunnerQueueConsumer, runnerQueueConsumerIntervalMs);
-  setInterval(() => {
+  heartbeatInterval = setInterval(() => {
     void pingRunnerQueueClaims();
   }, runnerQueueHeartbeatIntervalMs);
   log.info(`Runner queue consumer interval scheduled`, { consumerId, intervalMs: runnerQueueConsumerIntervalMs });
+};
+
+export const stopRunnerQueueConsumer = (): void => {
+  if (consumerInterval) {
+    clearInterval(consumerInterval);
+    consumerInterval = null;
+  }
+
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+
+  log.info(`Runner queue consumer stopped`, { consumerId });
 };
 
 export const triggerRunnerQueueConsumer = (): void => {
@@ -112,7 +126,6 @@ const checkClaimedItems = async (): Promise<void> => {
     if (succeeded) {
       await queryRunnerQueueSubmitResult(item.id, consumerId, result);
       await appendRunnerResultToTask(item.task, item.loop, result);
-      triggerTaskProcessor();
       console.log(`[runner-queue-consumer] agent task completed — task resumed`, { id: item.id, externalTaskId: item.externalTaskId });
     } else {
       await failRunnerQueueItem(item, result, `Runner task failed or was cancelled. Details: ${result}`);
@@ -181,7 +194,6 @@ const failRunnerQueueItem = async (item: RunnerQueueItem, error: string, taskMes
   }
 
   await appendRunnerResultToTask(item.task, item.loop, taskMessage);
-  triggerTaskProcessor();
 };
 
 const runWithRetries = async <T>(operation: string, action: () => Promise<T>): Promise<T> => {

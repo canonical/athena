@@ -43,6 +43,10 @@ requires:
     optional: false
     limit: 1
 
+provides:
+  workers:
+    interface: athena_worker
+
 config:
   options:
     run-migrations-on-startup:
@@ -80,16 +84,6 @@ config:
       description: PostgreSQL connection timeout in milliseconds
       type: int
       default: 10000
-      required: false
-    background-job-worker-concurrency:
-      description: Local background job concurrency per unit
-      type: int
-      default: 2
-      required: false
-    background-job-shutdown-timeout-ms:
-      description: Graceful background worker shutdown timeout in milliseconds
-      type: int
-      default: 30000
       required: false
     frontend-base-url:
       type: string

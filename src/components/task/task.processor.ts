@@ -27,6 +27,15 @@ export const startTaskProcessor = (): void => {
   log.info(`Task processor interval scheduled`, { processorId, processorIntervalMs: taskProcessorIntervalMs });
 };
 
+export const stopTaskProcessor = (): void => {
+  if (processorInterval) {
+    clearInterval(processorInterval);
+    processorInterval = null;
+  }
+
+  log.info(`Task processor stopped`, { processorId });
+};
+
 export const triggerTaskProcessor = (): void => {
   if (isProcessing) {
     log.info(`Task processor trigger skipped`, { processorId, reason: `already-processing` });
