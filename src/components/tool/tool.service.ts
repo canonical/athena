@@ -1,6 +1,7 @@
 import * as athenaExecutors from "./tool.athena.service.js";
 import { providerToolInputSchemas } from "./tool.catalog.js";
 import * as githubExecutors from "./tool.github.service.js";
+import * as ragExecutors from "./tool.rag.service.js";
 import * as runnerExecutors from "./tool.runner.service.js";
 import type { ProviderToolBatchResult, ProviderToolExecutionContext, ProviderToolRequest, ProviderToolResult } from "./tool.schema.js";
 import * as workgraphExecutors from "./tool.workgraph.service.js";
@@ -27,6 +28,7 @@ const validateToolInput = (request: ProviderToolRequest): string[] => {
 };
 
 const providerToolExecutors: Record<string, ProviderToolExecutor> = {
+  rag_lookup: async (context, input) => ragExecutors.executeRagLookup(context, input),
   task_repositories: async (context) => githubExecutors.executeTaskRepositories(context),
   task_runners: async (context, input) => runnerExecutors.executeTaskRunners(context, input),
   task_workgraphs: async (context) => workgraphExecutors.executeTaskWorkgraphs(context),

@@ -28,6 +28,7 @@ const loopListEditRoutePath = `loops/edit/$loopEditorId`;
 const loopTaskListRoutePath = `${loopDetailRoutePath}/task/list`;
 const loopTaskDetailRoutePath = `${loopDetailRoutePath}/task/$taskId`;
 const loopDetailsRoutePath = `${loopDetailRoutePath}/details`;
+const loopMemoryRoutePath = `${loopDetailRoutePath}/memory`;
 const loopToolsRoutePath = `${loopDetailRoutePath}/tools`;
 const loopMembersRoutePath = `${loopDetailRoutePath}/members`;
 const loopPersonasRoutePath = `${loopDetailRoutePath}/personas`;
@@ -383,6 +384,12 @@ function LoopDetailsRouteView() {
   const { loopId } = loopDetailsRoute.useParams();
 
   return <LoopViewRoute loopId={loopId} tab="details" />;
+}
+
+function LoopMemoryRouteView() {
+  const { loopId } = loopMemoryRoute.useParams();
+
+  return <LoopViewRoute loopId={loopId} tab="memory" />;
 }
 
 function LoopToolsRouteView() {
@@ -939,6 +946,12 @@ const loopRepositoriesRoute = createRoute({
   component: LoopRepositoriesRouteView,
 });
 
+const loopMemoryRoute = createRoute({
+  getParentRoute: () => loopLayoutRoute,
+  path: loopMemoryRoutePath,
+  component: LoopMemoryRouteView,
+});
+
 const connectionRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: connectionBasePath,
@@ -1141,6 +1154,7 @@ const routeTree = rootRoute.addChildren([
       loopTaskListRoute,
       loopTaskDetailRoute,
       loopDetailsRoute,
+      loopMemoryRoute,
       loopToolsRoute,
       loopMembersRoute,
       loopPersonasRoute,

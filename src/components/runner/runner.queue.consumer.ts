@@ -225,6 +225,6 @@ const appendRunnerResultToTask = async (taskId: string, loopId: string, result: 
     value: { role: `user` as const, content: `Runner task completed. Result:\n${result}` },
   };
 
-  await queryAppendQueueItem(taskId, null, queueItem, true);
+  await queryAppendQueueItem(taskId, null, queueItem, true, `runnerResult`);
   console.log(`[runner-queue-consumer] result appended to task`, { taskId, loopId });
 };

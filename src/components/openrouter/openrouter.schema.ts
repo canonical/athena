@@ -102,8 +102,38 @@ export const openRouterChatCompletionRequestSchema = z.object({
   logger: z.custom<AppLogger>().optional(),
 });
 
+export const openRouterEmbeddingPayloadSchema = z.object({
+  object: z.literal(`list`),
+  model: z.string(),
+  data: z.array(
+    z.object({
+      object: z.literal(`embedding`),
+      index: z.int().nonnegative(),
+      embedding: z.array(z.number()),
+    }),
+  ),
+  usage: z
+    .object({
+      prompt_tokens: z.number().optional(),
+      total_tokens: z.number().optional(),
+    })
+    .optional(),
+});
+
+export const openRouterEmbeddingRequestSchema = z.object({
+  model: z.string().trim().min(1),
+  input: z.union([z.string(), z.array(z.string()).min(1)]),
+  idempotencyKey: z.string().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  operation: z.string(),
+  context: z.record(z.string(), z.unknown()).optional(),
+  logger: z.custom<AppLogger>().optional(),
+});
+
 export type OpenRouterConnection = z.infer<typeof openRouterConnectionSchema>;
 export type OpenRouterMessage = z.infer<typeof openRouterMessageSchema>;
 export type OpenRouterTool = z.infer<typeof openRouterToolSchema>;
 export type OpenRouterChatCompletionPayload = z.infer<typeof openRouterChatCompletionPayloadSchema>;
 export type OpenRouterChatCompletionRequest = z.infer<typeof openRouterChatCompletionRequestSchema>;
+export type OpenRouterEmbeddingPayload = z.infer<typeof openRouterEmbeddingPayloadSchema>;
+export type OpenRouterEmbeddingRequest = z.infer<typeof openRouterEmbeddingRequestSchema>;

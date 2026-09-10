@@ -4,6 +4,7 @@ import { z } from "zod";
 
 export const taskQueueItemInputSchema = z.object({
   type: z.literal(`message`),
+  activityKind: z.enum([`taskMessage`, `toolDecision`, `toolResult`, `runnerResult`]).optional(),
   id: uuid().optional(),
   status: z.enum([`pending`, `awaiting-approval`, `approved`, `completed`]).default(`pending`),
   persona: uuid().nullable().optional(),

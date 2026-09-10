@@ -72,7 +72,7 @@ export const iterateTaskAssignCurrentProvider = async (task: Task, processorId: 
     return createPrimaryIterationOutcome(false);
   }
 
-  const providerResolution = await resolveLoopSelection(task.loop, `provider`);
+  const providerResolution = await resolveLoopSelection(task.loop, `provider`, { capability: `chat` });
 
   if (!providerResolution.selected) {
     return createPrimaryIterationOutcome(false);

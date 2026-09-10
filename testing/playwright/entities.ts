@@ -29,8 +29,10 @@ export const createProviderViaUi = async (page: Page, displayName: string, apiKe
   await expect(page.getByRole(`gridcell`, { name: displayName, exact: true }).first()).toBeVisible();
 };
 
-export const configureProviderModelsViaUi = async (page: Page, displayName: string, modelId: string) => {
+export const configureProviderModelsViaUi = async (page: Page, displayName: string, capability: `chat` | `embedding`, modelId: string) => {
+  await page.goto(`http://athena.localhost/provider/list`);
   const href = await page.getByRole(`link`, { name: displayName, exact: true }).first().getAttribute(`href`);
+  const capabilityLabel = capability === `chat` ? `Chat` : `Embedding`;
 
   // A page-level `on` handler would outlive this helper and interfere with later dialogs.
   page.once(`dialog`, (dialog) => void dialog.accept());
@@ -38,11 +40,16 @@ export const configureProviderModelsViaUi = async (page: Page, displayName: stri
 
   await expect(page.getByRole(`button`, { name: `Fetch models` })).toBeVisible({ timeout: 5000 });
   await page.getByRole(`button`, { name: `Fetch models` }).click();
-  await expect(page.locator(`#provider-enabled-model-${modelId}`)).toBeVisible();
+  await expect(page.locator(`#provider-${capability}-enabled-model-${modelId}`)).toBeVisible();
 
-  await page.getByRole(`button`, { name: `Clear all` }).click();
-  await page.locator(`#provider-enabled-model-${modelId}`).check();
-  await page.getByLabel(`Default model`).selectOption(modelId);
+  const clearButton = page.getByRole(`button`, { name: `Clear all ${capabilityLabel} models` });
+
+  if (await clearButton.isEnabled()) {
+    await clearButton.click();
+  }
+
+  await page.locator(`#provider-${capability}-enabled-model-${modelId}`).check();
+  await page.locator(`#provider-${capability}-default-model`).selectOption(modelId);
   await page.getByRole(`button`, { name: `Save model settings` }).click();
 
   await expect(page.getByText(`Provider model settings have been updated.`)).toBeVisible({ timeout: 20_000 });

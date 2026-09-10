@@ -1,4 +1,5 @@
 import { getPool } from "@components/postgres/postgres.js";
+import type { ProviderCapability } from "@components/provider/provider.schema.js";
 import { decryptSecret } from "@components/utilities/secret-envelope.js";
 import type { PoolClient } from "pg";
 import type { ProviderSelectionPolicy } from "./loop.schema.js";
@@ -25,8 +26,10 @@ type SelectionCandidate = {
   credentialKeyVersion: string;
   definitionType: string;
   baseUrl: string | null;
-  defaultModel: string | null;
-  enabledModels: string[];
+  chatDefaultModel: string | null;
+  chatEnabledModels: string[];
+  embeddingDefaultModel: string | null;
+  embeddingEnabledModels: string[];
 };
 
 type SelectionAudit = {
@@ -48,6 +51,7 @@ export type SelectionResolution = {
     algorithm: string;
     definitionType: string;
     baseUrl: string | null;
+    capability: ProviderCapability | null;
     defaultModel: string | null;
     enabledModels: string[];
   } | null;
@@ -233,8 +237,10 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
           h."credentialKeyVersion",
           h."runnerType" AS "definitionType",
           NULL::text AS "baseUrl",
-          NULL::text AS "defaultModel",
-          ARRAY[]::text[] AS "enabledModels"
+          NULL::text AS "chatDefaultModel",
+          ARRAY[]::text[] AS "chatEnabledModels",
+          NULL::text AS "embeddingDefaultModel",
+          ARRAY[]::text[] AS "embeddingEnabledModels"
         FROM "loopRunner" lh
         JOIN "runner" h ON h."id" = lh."runner"
         WHERE lh."loop" = $1
@@ -279,8 +285,10 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
         p."credentialKeyVersion",
         p."providerType" AS "definitionType",
         p."baseUrl",
-        p."defaultModel",
-        p."enabledModels"
+        p."chatDefaultModel",
+        COALESCE(p."chatEnabledModels", ARRAY[]::text[]) AS "chatEnabledModels",
+        p."embeddingDefaultModel",
+        COALESCE(p."embeddingEnabledModels", ARRAY[]::text[]) AS "embeddingEnabledModels"
       FROM "loopProvider" lp
       JOIN "provider" p ON p."id" = lp."provider"
       WHERE lp."loop" = $1
@@ -375,7 +383,15 @@ const evaluateSelection = (algorithm: string, candidates: SelectionCandidate[], 
   };
 };
 
-export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolType, options?: { repositoryId?: string }): Promise<SelectionResolution> => {
+const getProviderModelConfig = (candidate: SelectionCandidate, capability: ProviderCapability): { defaultModel: string | null; enabledModels: string[] } =>
+  capability === `chat` ? { defaultModel: candidate.chatDefaultModel, enabledModels: candidate.chatEnabledModels } : { defaultModel: candidate.embeddingDefaultModel, enabledModels: candidate.embeddingEnabledModels };
+
+type SelectionArguments = [`provider`, { capability: ProviderCapability }] | [`runner`, { repositoryId?: string }?];
+
+export const resolveLoopSelection = async (loopId: string, ...selectionArguments: SelectionArguments): Promise<SelectionResolution> => {
+  const [pool, options] = selectionArguments;
+  const capability = pool === `provider` ? options.capability : null;
+  const repositoryId = pool === `runner` ? options?.repositoryId : undefined;
   const client = await getPool().connect();
 
   try {
@@ -398,7 +414,7 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
 
     const algorithmRequested = pool === `runner` ? policy.runnerSelectionAlgorithm : policy.providerSelectionAlgorithm;
     const cursor = pool === `runner` ? policy.runnerSelectionCursor : policy.providerSelectionCursor;
-    const candidates = await getCandidates(client, loopId, pool, pool === `runner` ? options?.repositoryId : undefined);
+    const candidates = await getCandidates(client, loopId, pool, repositoryId);
 
     const skipped: Array<{ assignmentId: string; reason: string }> = [];
     const eligible = candidates.filter((candidate) => {
@@ -414,6 +430,11 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
 
       if (pool === `provider` && candidate.definitionType !== `openrouter`) {
         skipped.push({ assignmentId: candidate.assignmentId, reason: `non-openrouter-provider` });
+        return false;
+      }
+
+      if (pool === `provider` && (capability === null || getProviderModelConfig(candidate, capability).enabledModels.length === 0)) {
+        skipped.push({ assignmentId: candidate.assignmentId, reason: `${capability ?? `provider`}-capability-unavailable` });
         return false;
       }
 
@@ -444,6 +465,8 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
 
     await client.query(`COMMIT`);
 
+    const modelConfig = capability ? getProviderModelConfig(selection.selected, capability) : { defaultModel: null, enabledModels: [] };
+
     return {
       selected: {
         assignmentId: selection.selected.assignmentId,
@@ -456,8 +479,9 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
         algorithm: selection.algorithmUsed,
         definitionType: selection.selected.definitionType,
         baseUrl: selection.selected.baseUrl,
-        defaultModel: selection.selected.defaultModel,
-        enabledModels: selection.selected.enabledModels,
+        capability,
+        defaultModel: modelConfig.defaultModel,
+        enabledModels: modelConfig.enabledModels,
       },
       audit: {
         algorithmRequested,
@@ -474,7 +498,12 @@ export const resolveLoopSelection = async (loopId: string, pool: SelectionPoolTy
   }
 };
 
-export const resolveLoopSelectionByAssignment = async (loopId: string, pool: SelectionPoolType, assignmentId: string, options?: { repositoryId?: string }): Promise<SelectionResolution> => {
+type SelectionByAssignmentArguments = [`provider`, string, { capability: ProviderCapability }] | [`runner`, string, { repositoryId?: string }?];
+
+export const resolveLoopSelectionByAssignment = async (loopId: string, ...selectionArguments: SelectionByAssignmentArguments): Promise<SelectionResolution> => {
+  const [pool, assignmentId, options] = selectionArguments;
+  const capability = pool === `provider` ? options.capability : null;
+  const repositoryId = pool === `runner` ? options?.repositoryId : undefined;
   const client = await getPool().connect();
 
   try {
@@ -496,7 +525,7 @@ export const resolveLoopSelectionByAssignment = async (loopId: string, pool: Sel
     }
 
     const algorithmRequested = pool === `runner` ? policy.runnerSelectionAlgorithm : policy.providerSelectionAlgorithm;
-    const candidates = await getCandidates(client, loopId, pool, pool === `runner` ? options?.repositoryId : undefined);
+    const candidates = await getCandidates(client, loopId, pool, repositoryId);
 
     const skipped: Array<{ assignmentId: string; reason: string }> = [];
     const selected = candidates.find((candidate) => candidate.assignmentId === assignmentId);
@@ -526,6 +555,10 @@ export const resolveLoopSelectionByAssignment = async (loopId: string, pool: Sel
       skipped.push({ assignmentId: selected.assignmentId, reason: `non-openrouter-provider` });
     }
 
+    if (pool === `provider` && (capability === null || getProviderModelConfig(selected, capability).enabledModels.length === 0)) {
+      skipped.push({ assignmentId: selected.assignmentId, reason: `${capability ?? `provider`}-capability-unavailable` });
+    }
+
     if (skipped.length > 0) {
       await client.query(`COMMIT`);
       return {
@@ -542,6 +575,8 @@ export const resolveLoopSelectionByAssignment = async (loopId: string, pool: Sel
     await touchLastUsed(client, loopId, pool, selected.assignmentId);
     await client.query(`COMMIT`);
 
+    const modelConfig = capability ? getProviderModelConfig(selected, capability) : { defaultModel: null, enabledModels: [] };
+
     return {
       selected: {
         assignmentId: selected.assignmentId,
@@ -554,8 +589,9 @@ export const resolveLoopSelectionByAssignment = async (loopId: string, pool: Sel
         algorithm: `sticky-assignment`,
         definitionType: selected.definitionType,
         baseUrl: selected.baseUrl,
-        defaultModel: selected.defaultModel,
-        enabledModels: selected.enabledModels,
+        capability,
+        defaultModel: modelConfig.defaultModel,
+        enabledModels: modelConfig.enabledModels,
       },
       audit: {
         algorithmRequested,

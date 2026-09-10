@@ -39,6 +39,7 @@ const createBoss = (role: BackgroundJobClientRole): PgBoss => {
 
 let producer: PgBoss | undefined;
 let producerStart: Promise<void> | undefined;
+let workerClient: PgBoss | undefined;
 
 const verifyInstalledSchema = async (boss: PgBoss): Promise<void> => {
   if (!(await boss.isInstalled())) {
@@ -103,13 +104,14 @@ export const backgroundJobStopProducer = async (): Promise<void> => {
 };
 
 export const backgroundJobEnqueue = async <TPayload extends Record<string, unknown>>(definition: BackgroundJobDefinition<TPayload>, payload: TPayload, options: BackgroundJobEnqueueOptions = {}): Promise<BackgroundJobEnqueueResult> => {
-  if (!producer) {
-    throw new BackgroundJobUnavailableError(`Background job producer has not started.`);
+  const client = producer ?? workerClient;
+  if (!client) {
+    throw new BackgroundJobUnavailableError(`Background job client has not started.`);
   }
 
   const validatedPayload = definition.payloadSchema.parse(payload);
   const envelope: BackgroundJobPayloadEnvelope = { version: definition.version, payload: validatedPayload };
-  const jobId = await producer.send(definition.name, envelope, options);
+  const jobId = await client.send(definition.name, envelope, options);
 
   return jobId ? { accepted: true, jobId } : { accepted: false, jobId: null };
 };
@@ -156,6 +158,7 @@ export const backgroundJobCreateWorker = async (): Promise<PgBoss> => {
     await worker.start();
     await verifyInstalledSchema(worker);
     await ensureQueues(worker, definitions);
+    workerClient = worker;
 
     for (const definition of definitions) {
       const workerOptions = {
@@ -176,7 +179,10 @@ export const backgroundJobCreateWorker = async (): Promise<PgBoss> => {
               }
 
               const payload = definition.payloadSchema.parse(envelope.payload);
-              const output = await definition.handler({ job, payload });
+              const output = await definition.handler({
+                job,
+                payload,
+              });
               log.info(`Background job completed`, { attempt: job.retryCount + 1, jobId: job.id, jobName: definition.name });
               return { id: job.id, status: `completed` as const, output };
             } catch (error) {
@@ -196,6 +202,7 @@ export const backgroundJobCreateWorker = async (): Promise<PgBoss> => {
       );
     }
   } catch (error) {
+    if (workerClient === worker) workerClient = undefined;
     await stopAfterStartupFailure(worker);
     throw error;
   }
