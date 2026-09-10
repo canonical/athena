@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   assignProviderToLoopViaUi,
   authenticate,
@@ -9,6 +10,8 @@ import {
   dexEmail,
   dexLoopMemberEmail,
   expect,
+  type Page,
+  prepareRunnableLoop,
   replies,
   scenario,
   sendTaskMessage,
@@ -17,6 +20,26 @@ import {
   testInferenceEmbeddingModel,
   turnTimeout,
 } from "../../../testing/playwright/index.js";
+
+const enableLoopMemoryViaUi = async (page: Page, loopId: string, providerName: string) => {
+  await createProviderViaUi(page, providerName);
+  await configureProviderModelsViaUi(page, providerName, `embedding`, testInferenceEmbeddingModel);
+  await assignProviderToLoopViaUi(page, loopId, providerName);
+  await page.goto(`http://athena.localhost/loop/${loopId}/memory`);
+  await page.getByLabel(`Embedding provider`).selectOption({ label: providerName });
+  await page.getByRole(`button`, { name: `Enable memory` }).click();
+  await expect
+    .poll(async () => {
+      await page.reload();
+      return page.locator(`#rag-index-status`).textContent();
+    })
+    .toBe(`ready`);
+};
+
+const openToolResponseDetails = async (page: Page) => {
+  await page.getByRole(`button`, { name: `Show tool response details` }).click();
+  await expect(page.getByRole(`heading`, { name: `Tool response details` })).toBeVisible();
+};
 
 test(`a persona retrieves attributable evidence from loop memory`, async ({ page, runnableLoop }) => {
   const fact = `The Borealis launch authorization phrase is violet-cascade-47.`;
@@ -343,4 +366,120 @@ test(`demoted loop admin cannot submit memory configuration from a stale page`, 
   } finally {
     await memberContext.close();
   }
+});
+
+test(`loop memory lookup never reaches another loop's index`, async ({ page, runnableLoop, testInference }) => {
+  const secret = `The Meridian vault combination is amber-thistle-12.`;
+  const acknowledgement = `I have recorded the Meridian vault combination.`;
+  const question = `What is the Meridian vault combination? Search loop memory before answering.`;
+  const answer = `Loop memory holds no record of a Meridian vault combination.`;
+
+  await runnableLoop.inference.mock(scenario().answers(secret, replies(acknowledgement)));
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, secret);
+  await expect(page.getByText(acknowledgement)).toBeVisible({ timeout: turnTimeout });
+  await enableLoopMemoryViaUi(page, runnableLoop.loop.id, `Isolation source provider ${randomUUID()}`);
+
+  const neighbourLoop = await prepareRunnableLoop(page, testInference);
+  // The query must not carry the secret phrase: the tool echoes the query back, which would
+  // put the phrase in the response regardless of what the index returned.
+  await neighbourLoop.inference.mock(scenario().answers(question, callsTool(`rag_lookup`, { index: `self`, query: `Meridian vault combination`, limit: 5 }), replies(answer)));
+  await enableLoopMemoryViaUi(page, neighbourLoop.loop.id, `Isolation neighbour provider ${randomUUID()}`);
+
+  await createTaskViaUi(page, neighbourLoop.loop.id);
+  await sendTaskMessage(page, question);
+  // The tool label proves the lookup ran, so an empty result set cannot pass this test vacuously.
+  // Asserting on the matches themselves would race the background projection of this loop's own
+  // messages, which may not be indexed yet when the lookup executes.
+  await expect(page.getByText(`Search Loop Index`).first()).toBeVisible({ timeout: turnTimeout });
+  await expect(page.getByText(answer)).toBeVisible({ timeout: turnTimeout });
+  await openToolResponseDetails(page);
+
+  // The phrase exists only in the other loop's memory and must reach none of this loop's matches.
+  await expect(page.locator(`.string-value`).filter({ hasText: `amber-thistle-12` })).toHaveCount(0);
+});
+
+test(`a loop admin disabling rag_lookup denies the call`, async ({ page, runnableLoop }) => {
+  const fact = `The Kestrel maintenance window opens at 03:00 UTC.`;
+  const acknowledgement = `I have recorded the Kestrel maintenance window.`;
+  const question = `When does the Kestrel maintenance window open? Search loop memory before answering.`;
+  const answer = `I could not search loop memory for the Kestrel maintenance window.`;
+
+  await runnableLoop.inference.mock(
+    scenario()
+      .answers(fact, replies(acknowledgement))
+      .answers(question, callsTool(`rag_lookup`, { index: `self`, query: `Kestrel maintenance window`, limit: 3 }), replies(answer)),
+  );
+
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, fact);
+  await expect(page.getByText(acknowledgement)).toBeVisible({ timeout: turnTimeout });
+  await enableLoopMemoryViaUi(page, runnableLoop.loop.id, `Policy denial provider ${randomUUID()}`);
+
+  await page.goto(`http://athena.localhost/loop/${runnableLoop.loop.id}/tools`);
+  await page
+    .getByRole(`row`, { name: /rag_lookup/u })
+    .getByRole(`button`, { name: `Disable` })
+    .click();
+  await expect(page.getByText(`rag_lookup has been disabled for this loop.`)).toBeVisible();
+
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, question);
+  await expect(page.getByText(answer)).toBeVisible({ timeout: turnTimeout });
+  await openToolResponseDetails(page);
+
+  await expect(page.locator(`.string-value`).filter({ hasText: `rag_lookup is disabled for this loop.` })).toBeVisible();
+  await expect(page.locator(`.string-value`).filter({ hasText: `03:00 UTC` })).toHaveCount(0);
+});
+
+test(`equally similar matches return in a deterministic order`, async ({ page, runnableLoop }) => {
+  const fact = `The Halcyon relay uses channel seventeen.`;
+  const acknowledgement = `Noted the Halcyon relay channel.`;
+  const question = `Which channel does the Halcyon relay use? Search loop memory before answering.`;
+  const answer = `The Halcyon relay uses channel seventeen.`;
+
+  await runnableLoop.inference.mock(
+    scenario()
+      .answers(fact, replies(acknowledgement))
+      // Two matches only: the tied pair outranks everything else in the loop, so the result set is
+      // exactly the tie and the ordering assertion below is not diluted by unrelated entries.
+      .answers(question, callsTool(`rag_lookup`, { index: `self`, query: `Halcyon relay channel seventeen`, limit: 2 }), replies(answer)),
+  );
+
+  // The same sentence from the same participant in the same task renders to identical source text,
+  // so both entries embed identically and tie on similarity.
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, fact);
+  await expect(page.getByText(acknowledgement).first()).toBeVisible({ timeout: turnTimeout });
+  await sendTaskMessage(page, fact);
+  await expect(page.getByText(acknowledgement)).toHaveCount(2, { timeout: turnTimeout });
+
+  await enableLoopMemoryViaUi(page, runnableLoop.loop.id, `Tie breaking provider ${randomUUID()}`);
+
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, question);
+  await expect(page.getByText(answer).first()).toBeVisible({ timeout: turnTimeout });
+  await openToolResponseDetails(page);
+
+  // `id` appears once per match, under `source`. Scoping to those rows keeps the loop, task and
+  // queue item ids in `provenance` out of the comparison.
+  const sourceIdRows = page
+    .locator(`.variable-row`)
+    .filter({ has: page.getByText(`"id"`, { exact: true }) })
+    .locator(`.string-value`);
+  await expect(sourceIdRows).toHaveCount(2);
+
+  // Identical match text is what makes the similarities equal; without it there is no tie to break.
+  const matchTexts = await page
+    .locator(`.variable-row`)
+    .filter({ has: page.getByText(`"text"`, { exact: true }) })
+    .locator(`.string-value`)
+    .allInnerTexts();
+  expect(matchTexts).toHaveLength(2);
+  expect(matchTexts[0]).toEqual(matchTexts[1]);
+
+  // Tied entries are broken by source id, and task queue item ids are uuidv7, so the
+  // rendered match order must be ascending by id.
+  const sourceIds = (await sourceIdRows.allInnerTexts()).map((value) => value.replaceAll(`"`, ``));
+  expect([...sourceIds].sort()).toEqual(sourceIds);
 });
