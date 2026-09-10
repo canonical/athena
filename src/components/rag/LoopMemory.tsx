@@ -118,8 +118,6 @@ export function LoopMemory({ loopId }: { loopId: string }) {
         <dd id="rag-index-source-count">{index?.sourceCount ?? 0}</dd>
         <dt>Pending</dt>
         <dd id="rag-index-pending-count">{index?.pendingCount ?? 0}</dd>
-        <dt>Projected</dt>
-        <dd id="rag-index-projected-count">{index?.projectedCount ?? 0}</dd>
         <dt>Skipped</dt>
         <dd id="rag-index-skipped-count">{index?.skippedCount ?? 0}</dd>
         <dt>Failed</dt>

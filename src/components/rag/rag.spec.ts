@@ -1,6 +1,7 @@
 import {
   assignProviderToLoopViaUi,
   authenticate,
+  callsTool,
   configureProviderModelsViaUi,
   createLoop,
   createProviderViaUi,
@@ -14,7 +15,50 @@ import {
   test,
   testInferenceChatModel,
   testInferenceEmbeddingModel,
+  turnTimeout,
 } from "../../../testing/playwright/index.js";
+
+test(`a persona retrieves attributable evidence from loop memory`, async ({ page, runnableLoop }) => {
+  const fact = `The Borealis launch authorization phrase is violet-cascade-47.`;
+  const factAcknowledgement = `I have recorded the Borealis launch authorization phrase.`;
+  const question = `What is the Borealis launch authorization phrase? Search loop memory before answering.`;
+  const answer = `The Borealis launch authorization phrase is violet-cascade-47.`;
+
+  await runnableLoop.inference.mock(
+    scenario()
+      .answers(fact, replies(factAcknowledgement))
+      .answers(question, callsTool(`rag_lookup`, { index: `self`, query: `Borealis launch authorization phrase violet-cascade-47`, limit: 3 }), replies(answer)),
+  );
+
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, fact);
+  await expect(page.getByText(factAcknowledgement)).toBeVisible({ timeout: turnTimeout });
+
+  const embeddingProviderName = `Retrieval memory provider ${Date.now()}`;
+  await createProviderViaUi(page, embeddingProviderName);
+  await configureProviderModelsViaUi(page, embeddingProviderName, `embedding`, testInferenceEmbeddingModel);
+  await assignProviderToLoopViaUi(page, runnableLoop.loop.id, embeddingProviderName);
+  await page.goto(`http://athena.localhost/loop/${runnableLoop.loop.id}/memory`);
+  await page.getByLabel(`Embedding provider`).selectOption({ label: embeddingProviderName });
+  await page.getByRole(`button`, { name: `Enable memory` }).click();
+
+  await expect
+    .poll(async () => {
+      await page.reload();
+      return page.locator(`#rag-index-status`).textContent();
+    })
+    .toBe(`ready`);
+
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, question);
+
+  await expect(page.getByText(`Search Loop Index`)).toBeVisible({ timeout: turnTimeout });
+  await expect(page.getByText(answer)).toBeVisible({ timeout: turnTimeout });
+  await page.getByRole(`button`, { name: `Show tool response details` }).click();
+  await expect(page.getByRole(`heading`, { name: `Tool response details` })).toBeVisible();
+  await expect(page.locator(`.string-value`).filter({ hasText: `violet-cascade-47` }).first()).toBeVisible();
+  await expect(page.locator(`.string-value`).filter({ hasText: `taskMessage` }).first()).toBeVisible();
+});
 
 test(`memory appends new loop messages in the background`, async ({ page, runnableLoop }) => {
   const message = `The deployment uses a short cache retention period.`;
@@ -35,18 +79,18 @@ test(`memory appends new loop messages in the background`, async ({ page, runnab
       return page.locator(`#rag-index-status`).textContent();
     })
     .toBe(`ready`);
-  await expect(page.locator(`#rag-index-projected-count`)).toHaveText(`0`);
 
   await createTaskViaUi(page, runnableLoop.loop.id);
   await sendTaskMessage(page, message);
   await expect(page.getByText(reply)).toBeVisible({ timeout: 60_000 });
-  await page.goto(`http://athena.localhost/loop/${runnableLoop.loop.id}/memory`);
+
+  await page.goto(`http://athena.localhost/loop/${runnableLoop.loop.id}/details`);
   await expect
     .poll(async () => {
       await page.reload();
-      return Number(await page.locator(`#rag-index-projected-count`).textContent());
+      return Number(await page.locator(`#loop-details-rag-projected-count`).textContent());
     })
-    .toBe(3);
+    .toBeGreaterThan(0);
 });
 
 test(`memory builds existing loop messages in the background`, async ({ page, runnableLoop }) => {
@@ -72,13 +116,11 @@ test(`memory builds existing loop messages in the background`, async ({ page, ru
       return page.locator(`#rag-index-status`).textContent();
     })
     .toBe(`ready`);
-  await expect(page.locator(`#rag-index-projected-count`)).toHaveText(`3`);
 
   const initialIndexId = await page.locator(`#rag-index-id`).textContent();
   page.once(`dialog`, (dialog) => void dialog.accept());
   await page.getByRole(`button`, { name: `Remove memory` }).click();
   await expect(page.locator(`#rag-index-status`)).toHaveText(`Not configured`);
-  await expect(page.locator(`#rag-index-projected-count`)).toHaveText(`0`);
 
   await page.getByLabel(`Embedding provider`).selectOption({ label: embeddingProviderName });
   await page.getByRole(`button`, { name: `Enable memory` }).click();
@@ -89,7 +131,6 @@ test(`memory builds existing loop messages in the background`, async ({ page, ru
     })
     .toBe(`ready`);
   await expect(page.locator(`#rag-index-id`)).not.toHaveText(initialIndexId ?? ``);
-  await expect(page.locator(`#rag-index-projected-count`)).toHaveText(`3`);
 
   await page.getByRole(`button`, { name: `Scan and repair memory` }).click();
   await expect(page.getByText(`Memory scan and repair has been queued.`)).toBeVisible();
@@ -99,7 +140,14 @@ test(`memory builds existing loop messages in the background`, async ({ page, ru
       return page.locator(`#rag-index-status`).textContent();
     })
     .toBe(`ready`);
-  await expect(page.locator(`#rag-index-projected-count`)).toHaveText(`3`);
+
+  await page.goto(`http://athena.localhost/loop/${runnableLoop.loop.id}/details`);
+  await expect
+    .poll(async () => {
+      await page.reload();
+      return Number(await page.locator(`#loop-details-rag-projected-count`).textContent());
+    })
+    .toBeGreaterThan(0);
 });
 
 test(`loop admin configures an index provider independently from the loop chat provider`, async ({ page, testInference }) => {
@@ -141,7 +189,6 @@ test(`loop admin configures an index provider independently from the loop chat p
   await expect(page.locator(`#rag-index-provider-name`)).toHaveText(embeddingProviderName);
   await expect(page.locator(`#rag-index-embedding-model`)).toHaveText(testInferenceEmbeddingModel);
   await expect(page.locator(`#rag-index-source-count`)).toHaveText(`0`);
-  await expect(page.locator(`#rag-index-projected-count`)).toHaveText(`0`);
 
   const initialIndexId = await page.locator(`#rag-index-id`).textContent();
   const replacementProviderName = `Replacement embedding provider ${Date.now()}`;

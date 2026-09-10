@@ -19,13 +19,13 @@ implementation slice; the later items remain part of delivery and are not deferr
 because the first demo path works.
 
 - [x] Reconcile the RAG implementation with the separate web/worker deployment topology.
-- [ ] Expose one universal `rag_lookup` tool with `{ index, query, limit? }`, resolving the
+- [x] Expose one universal `rag_lookup` tool with `{ index, query, limit? }`, resolving the
   reserved `self` alias within the active loop.
-- [ ] Connect lookup to provider query embedding and exact vector ranking, with ready-state,
+- [x] Connect lookup to provider query embedding and exact vector ranking, with ready-state,
   embedding-dimension, loop-scope, result-bound, and tool-policy enforcement.
-- [ ] Return attributable source metadata and persist the ordinary tool-result snapshot so
+- [x] Return attributable source metadata and persist the ordinary tool-result snapshot so
   replay never re-queries a changed index.
-- [ ] Add a UI-driven E2E demonstration in which `test_inference` invokes `rag_lookup`, recalls
+- [x] Add a UI-driven E2E demonstration in which `test_inference` invokes `rag_lookup`, recalls
   a known fact from earlier loop activity, and uses the retrieved evidence in its answer.
 - [ ] Add lookup coverage for cross-loop isolation, policy denial, variable embedding
   dimensions, deterministic tie-breaking, and replay after source supersession.

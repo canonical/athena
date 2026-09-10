@@ -5,6 +5,13 @@ import { z } from "zod";
 
 export const ragIndexLifecycleStatuses = [`rebuilding`, `ready`, `failed`] as const;
 
+export const ragIndexAliasSchema = z
+  .string()
+  .trim()
+  .min(1, `index must be a non-empty loop-local alias.`)
+  .max(64, `index alias must be at most 64 characters.`)
+  .regex(/^[a-z][a-z0-9-]*$/u, `index alias must start with a letter and contain only lowercase letters, numbers, and hyphens.`);
+
 export const ragIndexSchema = z.object({
   id: uuid(),
   provider: uuid(),
