@@ -2,7 +2,6 @@ import { HttpError } from "@components/express/express.errors.js";
 import { LoopNotFoundError } from "@components/loop/loop.errors.js";
 import { queryLoopById, queryLoopForUser } from "@components/loop/loop.service.js";
 import { queryLoopWorkgraphItemByIdInLoop } from "@components/workgraph/workgraph.pg.service.js";
-import { triggerTaskProcessor } from "./task.processor.js";
 import type { Task, TaskAppendUserMessage, TaskCreate, TaskQueueItemInput, TaskToolCallApproval } from "./task.schema.js";
 import {
   queryAppendQueueItem,
@@ -17,12 +16,6 @@ import {
   queryTaskUpdateObjectiveByUser,
   queryTaskUpdateTitleByUser,
 } from "./task.service.js";
-
-const triggerTaskProcessorAsync = (): void => {
-  queueMicrotask(() => {
-    triggerTaskProcessor();
-  });
-};
 
 const requireLoopAccess = async (loopId: string, userId: string): Promise<void> => {
   const loop = await queryLoopForUser(loopId, userId);
@@ -74,12 +67,10 @@ export const taskCreate = async (input: TaskCreate, userId?: string): Promise<Ta
       return null;
     }
 
-    triggerTaskProcessorAsync();
     return createdTask;
   }
 
   const createdTask = await queryTaskCreate(input);
-  triggerTaskProcessorAsync();
   return createdTask;
 };
 
@@ -109,7 +100,6 @@ export const taskAppendUserMessage = async (user: { id: string; name: string }, 
     throw new HttpError({ status: 409, message: `Task queue update conflict.` });
   }
 
-  triggerTaskProcessorAsync();
   return { appended };
 };
 
@@ -132,10 +122,6 @@ export const taskApproveToolCall = async (user: { id: string; name: string }, in
       };
       await queryAppendQueueItem(task.id, task.processorUnit, messageQueueItem, true);
     }
-  }
-
-  if (approved) {
-    triggerTaskProcessorAsync();
   }
 
   return { approved };
@@ -168,10 +154,6 @@ export const taskAssignWorkgraphItem = async (userId: string, loopId: string, ta
 
   const assigned = await queryTaskAssignWorkgraphItem(loopId, taskId, item.id, item.title ?? null);
 
-  if (assigned) {
-    triggerTaskProcessorAsync();
-  }
-
   return { assigned };
 };
 
@@ -193,10 +175,6 @@ export const taskRejectToolCall = async (user: { id: string; name: string }, inp
       };
       await queryAppendQueueItem(task.id, task.processorUnit, messageQueueItem, true);
     }
-  }
-
-  if (rejected) {
-    triggerTaskProcessorAsync();
   }
 
   return { rejected };

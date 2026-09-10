@@ -12,6 +12,36 @@ messages through persisted source records, index-specific projections, and separ
 full-build and single-entry append jobs; the remaining source adapters and recovery
 verification are still in progress.
 
+## Remaining delivery task list
+
+Complete the remaining work in this order. The universal lookup tool is the next active
+implementation slice; the later items remain part of delivery and are not deferred merely
+because the first demo path works.
+
+- [x] Reconcile the RAG implementation with the separate web/worker deployment topology.
+- [ ] Expose one universal `rag_lookup` tool with `{ index, query, limit? }`, resolving the
+  reserved `self` alias within the active loop.
+- [ ] Connect lookup to provider query embedding and exact vector ranking, with ready-state,
+  embedding-dimension, loop-scope, result-bound, and tool-policy enforcement.
+- [ ] Return attributable source metadata and persist the ordinary tool-result snapshot so
+  replay never re-queries a changed index.
+- [ ] Add a UI-driven E2E demonstration in which `test_inference` invokes `rag_lookup`, recalls
+  a known fact from earlier loop activity, and uses the retrieved evidence in its answer.
+- [ ] Add lookup coverage for cross-loop isolation, policy denial, variable embedding
+  dimensions, deterministic tie-breaking, and replay after source supersession.
+- [ ] Complete loop-activity source adapters for tool decisions/results, runner results, and
+  mutable workgraph state.
+- [ ] Implement logical-reference supersession for mutable records while preserving additive
+  task messages.
+- [ ] Verify secret redaction and the UTF-8-safe 8 KiB source bound through the rendered UI.
+- [ ] Verify durable recovery and lifecycle races: reversed embedding batches, invalid
+  credentials followed by repair, process restart, concurrent enable/repair,
+  remove-during-build, and replacement.
+- [ ] Verify pgvector prerequisite failure, clean installation, upgraded databases, and
+  idempotent migration replay.
+- [ ] Complete operational logging, query-plan evidence, runbook documentation, deployment
+  smoke testing, full E2E/coverage validation, and final specification status updates.
+
 ## Phase 0: PostgreSQL platform prerequisite
 
 PostgreSQL must provide the `vector` extension before Athena application migrations run.

@@ -802,68 +802,6 @@ export const queryWebhookByReceiverId = async (
   };
 };
 
-export const queryWebhookItemCreate = async (payload: Record<string, unknown>): Promise<void> => {
-  await query(
-    `
-      INSERT INTO "webhookItem" (
-        "payload",
-        "status",
-        "retryCount"
-      )
-      VALUES ($1::jsonb, 'new', 0)
-    `,
-    [JSON.stringify(payload)],
-  );
-};
-
-export const queryWebhookItemClaimNext = async (): Promise<{ id: string; payload: Record<string, unknown>; retryCount: number } | undefined> => {
-  const result = await query<{ id: string; payload: Record<string, unknown>; retryCount: number }>(
-    `
-      WITH candidate AS (
-        SELECT wi."id"
-        FROM "webhookItem" wi
-        WHERE wi."status" = 'new'
-          AND wi."retryCount" < 3
-        ORDER BY wi."id" ASC
-        LIMIT 1
-        FOR UPDATE SKIP LOCKED
-      )
-      UPDATE "webhookItem" wi
-      SET
-        "status" = 'processing',
-        "retryCount" = wi."retryCount" + 1
-      FROM candidate
-      WHERE wi."id" = candidate."id"
-      RETURNING wi."id", wi."payload", wi."retryCount"
-    `,
-  );
-
-  return result.rows[0];
-};
-
-export const queryWebhookItemMarkDone = async (id: string): Promise<void> => {
-  await query(
-    `
-      UPDATE "webhookItem"
-      SET "status" = 'done'
-      WHERE "id" = $1
-    `,
-    [id],
-  );
-};
-
-export const queryWebhookItemRequeue = async (id: string): Promise<void> => {
-  await query(
-    `
-      UPDATE "webhookItem"
-      SET "status" = 'new'
-      WHERE "id" = $1
-        AND "status" = 'processing'
-    `,
-    [id],
-  );
-};
-
 export const queryLoopWorkgraphUpsertItem = async (input: {
   loopId: string;
   workgraphId: string;
