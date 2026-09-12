@@ -34,6 +34,11 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 \ir ./ddls/002000.loopUserRoleAudit.sql
 \ir ./ddls/002100.runnerQueue.sql
 \ir ./ddls/002200.loopRunnerRepository.sql
+\ir ./ddls/002300.stepSequence.sql
+\ir ./ddls/002400.stepDefinition.sql
+\ir ./ddls/002500.taskSourceStepSequence.sql
+\ir ./ddls/002600.runnerToken.sql
+\ir ./ddls/002700.runnerInstance.sql
 \ir ./ddls/999999.cleanup.sql
 
 \echo >>> Running Athena seed data

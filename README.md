@@ -3,6 +3,7 @@
 Athena is a deterministic, collaborative coordination layer for AI-assisted work across domains. Multiple users can participate in the same loop and steer the same task through conversation, clarification, approvals, and decisions. Athena routes work through configured personas and execution systems while enforcing task state, handoffs, and policy.
 
 - [Quick Start](./docs/quick-start.md)
+- [Runner Quick Start](./docs/runner-quick-start.md)
 - [Local Development](./docs/local-development.md)
 - [Coding Standards](./docs/coding-standards.md)
 - [Roadmap](./docs/roadmap.md)

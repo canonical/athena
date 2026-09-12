@@ -231,7 +231,7 @@ const getCandidates = async (client: PoolClient, loopId: string, pool: Selection
           h."credentialIv",
           h."credentialAuthTag",
           h."credentialKeyVersion",
-          h."runnerType" AS "definitionType",
+          h."type" AS "definitionType",
           NULL::text AS "baseUrl",
           NULL::text AS "defaultModel",
           ARRAY[]::text[] AS "enabledModels"

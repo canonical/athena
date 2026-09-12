@@ -27,3 +27,10 @@ export class RunnerForbiddenError extends HttpError {
     this.name = `RunnerForbiddenError`;
   }
 }
+
+export class RunnerAuthenticationError extends HttpError {
+  constructor(message = `Runner authentication failed.`) {
+    super({ status: 401, message });
+    this.name = `RunnerAuthenticationError`;
+  }
+}

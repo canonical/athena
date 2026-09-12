@@ -1,0 +1,186 @@
+#!/bin/sh
+set -eu
+
+ENV_FILE=/etc/athena-runner.env
+HOSTS_FILE=/etc/hosts
+HOSTS_MARKER="# athena-runner"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  athenaconfigure [--url URL] [--branch BRANCH] [--name NAME] [--host HOST] [--token TOKEN]
+
+Options:
+  --url URL          Set the Athena URL. Prompts when omitted.
+  --branch BRANCH    Set the Git branch. Prompts with main as the default when omitted.
+  --name NAME        Set the runner instance name. Prompts when omitted.
+  --host HOST        Set the hostname used for Traefik routing and /etc/hosts. Prompts when omitted.
+  --token TOKEN      Set the runner token. Prompts when omitted.
+EOF
+}
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "athenaconfigure must be run as root (use sudo)." >&2
+  exit 1
+fi
+
+url=
+branch=
+name=
+host=
+token=
+saved_url=
+saved_branch=
+saved_name=
+saved_host=
+saved_token=
+url_set=0
+branch_set=0
+name_set=0
+host_set=0
+token_set=0
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --url)
+      [ "$#" -ge 2 ] || { echo "--url requires a value." >&2; exit 1; }
+      url=$2
+      url_set=1
+      shift 2
+      ;;
+    --branch)
+      [ "$#" -ge 2 ] || { echo "--branch requires a value." >&2; exit 1; }
+      branch=$2
+      branch_set=1
+      shift 2
+      ;;
+    --name)
+      [ "$#" -ge 2 ] || { echo "--name requires a value." >&2; exit 1; }
+      name=$2
+      name_set=1
+      shift 2
+      ;;
+    --host)
+      [ "$#" -ge 2 ] || { echo "--host requires a value." >&2; exit 1; }
+      host=$2
+      host_set=1
+      shift 2
+      ;;
+    --token)
+      [ "$#" -ge 2 ] || { echo "--token requires a value." >&2; exit 1; }
+      token=$2
+      token_set=1
+      shift 2
+      ;;
+    token)
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [ -f "$ENV_FILE" ]; then
+  saved_url=$(sed -n 's/^ATHENA_URL=//p' "$ENV_FILE" | tail -n 1)
+  saved_branch=$(sed -n 's/^ATHENA_RUNNER_BRANCH=//p' "$ENV_FILE" | tail -n 1)
+  saved_name=$(sed -n 's/^ATHENA_RUNNER_NAME=//p' "$ENV_FILE" | tail -n 1)
+  saved_host=$(sed -n 's/^ATHENA_RUNNER_HOST=//p' "$ENV_FILE" | tail -n 1)
+  saved_token=$(sed -n 's/^ATHENA_RUNNER_TOKEN=//p' "$ENV_FILE" | tail -n 1)
+fi
+
+if [ "$url_set" -eq 0 ]; then
+  url_default=$saved_url
+  printf 'Athena URL [%s]: ' "$url_default" >&2
+  read -r url
+  [ -n "$url" ] || url=$url_default
+fi
+if [ "$branch_set" -eq 0 ]; then
+  branch_default=${saved_branch:-main}
+  printf 'Git branch [%s]: ' "$branch_default" >&2
+  read -r branch
+  [ -n "$branch" ] || branch=$branch_default
+fi
+if [ "$name_set" -eq 0 ]; then
+  name_default=${saved_name:-$(cat /var/lib/athena-runner/instance-id 2>/dev/null || hostname)}
+  printf 'Runner name [%s]: ' "$name_default" >&2
+  read -r name
+  [ -n "$name" ] || name=$name_default
+fi
+if [ "$host_set" -eq 0 ]; then
+  host_default=$saved_host
+  printf 'Hostname (optional; use athena.localhost when URL is an IP) [%s]: ' "$host_default" >&2
+  read -r host
+  [ -n "$host" ] || host=$host_default
+fi
+if [ "$token_set" -eq 0 ]; then
+  printf 'Athena runner token [current]: ' >&2
+  stty -echo
+  read -r token
+  stty echo
+  printf '\n' >&2
+  [ -n "$token" ] || token=$saved_token
+fi
+
+[ -n "$url" ] && case "$url" in
+  http://*|https://*) ;;
+  *) echo "URL must start with http:// or https://." >&2; exit 1 ;;
+esac
+[ -n "$url" ] && case "$url" in
+  *[!A-Za-z0-9:/._-]*) echo "Invalid URL." >&2; exit 1 ;;
+esac
+[ -n "$url" ] || { echo "URL is required." >&2; exit 1; }
+[ -n "$branch" ] && case "$branch" in
+  -*|*[!A-Za-z0-9._/-]*) echo "Invalid branch name." >&2; exit 1 ;;
+esac
+[ -n "$name" ] && case "$name" in
+  -*|*[!A-Za-z0-9._/-]*) echo "Invalid runner name." >&2; exit 1 ;;
+esac
+[ -n "$name" ] || { echo "Runner name is required." >&2; exit 1; }
+[ -n "$host" ] && case "$host" in
+  *[!A-Za-z0-9.-]*) echo "Invalid hostname." >&2; exit 1 ;;
+esac
+[ -n "$token" ] || { echo "Token is required." >&2; exit 1; }
+
+configured_url=$url
+if [ -n "$host" ]; then
+  url_without_scheme=${url#*://}
+  url_authority=${url_without_scheme%%/*}
+  url_hostname=${url_authority%%:*}
+  url_suffix=${url_without_scheme#"$url_authority"}
+  if [ "$url_hostname" != "$host" ]; then
+    [ -n "$url_hostname" ] || { echo "URL hostname is required when --host is set." >&2; exit 1; }
+    printf '%s\n' "$url_hostname" | grep -Eq '^[0-9]+(\.[0-9]+){3}$' || {
+      echo "The URL hostname must be an IPv4 address when --host is set." >&2
+      exit 1
+    }
+    configured_url="${url%%://*}://${host}${url_suffix}"
+    sed -i "\|$HOSTS_MARKER$|d" "$HOSTS_FILE"
+    printf '%s %s %s\n' "$url_hostname" "$host" "$HOSTS_MARKER" >> "$HOSTS_FILE"
+  fi
+fi
+
+mkdir -p "$(dirname "$ENV_FILE")"
+touch "$ENV_FILE"
+chmod 0600 "$ENV_FILE"
+
+sed -i '/^ATHENA_URL=/d' "$ENV_FILE"
+printf 'ATHENA_URL=%s\n' "$configured_url" >> "$ENV_FILE"
+sed -i '/^ATHENA_RUNNER_BRANCH=/d' "$ENV_FILE"
+printf 'ATHENA_RUNNER_BRANCH=%s\n' "$branch" >> "$ENV_FILE"
+sed -i '/^ATHENA_RUNNER_NAME=/d' "$ENV_FILE"
+printf 'ATHENA_RUNNER_NAME=%s\n' "$name" >> "$ENV_FILE"
+sed -i '/^ATHENA_RUNNER_HOST=/d' "$ENV_FILE"
+if [ -n "$host" ]; then
+  printf 'ATHENA_RUNNER_HOST=%s\n' "$host" >> "$ENV_FILE"
+fi
+sed -i '/^ATHENA_RUNNER_TOKEN=/d' "$ENV_FILE"
+printf 'ATHENA_RUNNER_TOKEN=%s\n' "$token" >> "$ENV_FILE"
+
+systemctl restart athena-runner.service

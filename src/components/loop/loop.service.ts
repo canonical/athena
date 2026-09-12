@@ -322,7 +322,7 @@ export const queryLoopReadinessCounts = async (loopId: string): Promise<LoopRead
           WHERE lr."loop" = $1
             AND lr."enabled" = TRUE
             AND r."lifecycleStatus" = 'active'
-            AND r."runnerType" = 'github-copilot-cloud'
+            AND r."type" = 'github-copilot-cloud'
         ) AS "activeRunnerCount",
         (
           SELECT COUNT(*)::text
@@ -424,7 +424,7 @@ export const queryLoopReadinessCountsAll = async (): Promise<LoopReadinessCounts
           WHERE lr."loop" = l."id"
             AND lr."enabled" = TRUE
             AND r."lifecycleStatus" = 'active'
-            AND r."runnerType" = 'github-copilot-cloud'
+            AND r."type" = 'github-copilot-cloud'
         ) AS "activeRunnerCount",
         (
           SELECT COUNT(*)::text

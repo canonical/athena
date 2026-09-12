@@ -34,6 +34,7 @@ defineMiddlewares(app);
 app.use(`${apiRoot}/authentication`, authenticationRouter);
 app.use(statusRouter);
 app.use(`${apiRoot}/webhook`, webhookPublicRouter);
+app.use(`${apiRoot}/runner-agent`, runnerAgentRouter);
 
 if (process.env.COVERAGE) {
   app.get(`${apiRoot}/__coverage__`, (_request: Request, response: Response) => {
@@ -49,6 +50,7 @@ app.use(`${apiRoot}/runner`, runnerRouter);
 app.use(`${apiRoot}/provider`, providerRouter);
 app.use(`${apiRoot}/repository`, repositoryRouter);
 app.use(`${apiRoot}/workgraph`, workgraphRouter);
+app.use(`${apiRoot}/stepSequence`, stepSequenceRouter);
 app.use(`${apiRoot}/webhook`, webhookRouter);
 app.use(staticRouter);
 

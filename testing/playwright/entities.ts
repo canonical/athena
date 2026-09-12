@@ -57,6 +57,7 @@ export const createRunnerViaUi = async (page: Page, displayName: string) => {
 
   await page.getByRole(`button`, { name: `Create runner` }).first().click();
   await page.getByLabel(`Display name`).fill(displayName);
+  await page.locator(`#runner-editor-runner-type`).selectOption(`github-copilot-cloud`);
   // Readiness needs an assignment, not a live runner connection.
   await page.getByLabel(`API key`).fill(`unused-runner-credential`);
   await page.locator(`form`).first().getByRole(`button`, { name: `Create runner` }).click();
