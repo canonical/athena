@@ -19,7 +19,7 @@ Task behavior is implemented in [src/components/task](./src/components/task).
   - optional assigned workgraph item
   - active queue items and archived queue history
 - Queue items are message entries with approval states (`pending`, `awaiting-approval`, `approved`, `completed`).
-- The server starts a background task processor from [src/server.ts](./src/server.ts), and task iteration logic lives in [src/components/task/task.processor.ts](./src/components/task/task.processor.ts) and [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
+- The separately deployed worker starts the background task processor from [src/worker.ts](./src/worker.ts), and task iteration logic lives in [src/components/task/task.processor.ts](./src/components/task/task.processor.ts) and [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
 - The loop-level tool catalog is defined in [src/components/tool/tool.catalog.ts](./src/components/tool/tool.catalog.ts); some tools require explicit user approval before completion.
 - Task iteration notes are tracked in [docs/task-iteration.md](./docs/task-iteration.md).
 
@@ -56,7 +56,8 @@ The current application serves an authenticated SPA plus a JSON API.
   - runner management under `/runner/...`
   - workgraph management under `/workgraph/...`
 - Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
-- The server also starts background processors for tasks and inbound webhook items.
+- A separate worker process runs the task, inbound webhook, and runner processors and the
+  registered durable-job catalog.
 
 ## E2E testing
 
@@ -151,7 +152,8 @@ The checked-in sample is [.example.env](./.example.env). It includes:
 
 - [rockcraft.yaml](./rockcraft.yaml) builds the Node application and stages the built backend, frontend, dependencies, and migrations into the rock.
 - [scripts/stage-app.sh](./scripts/stage-app.sh) assembles an ephemeral `app/` directory for rock builds without changing the tracked repository layout.
-- [charm](./charm) contains a Python-based `expressjs-framework` charm that depends on PostgreSQL and expects Juju secrets for OIDC and credential encryption.
+- [charm](./charm) contains the Python-based `expressjs-framework` web charm.
+- [worker-charm](./worker-charm) contains the independently scalable worker charm. It uses the same rock, manages its own PostgreSQL relation, and requires the web application's credential encryption key as a Juju secret.
 - Manual charm deployment guidance lives in [charm/tests/manual/README.md](./charm/tests/manual/README.md).
 
 ## Related documentation

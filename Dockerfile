@@ -17,7 +17,7 @@ COPY src ./src
 COPY scripts ./scripts
 COPY testing ./testing
 
-RUN chmod +x ./scripts/start-athena-container.sh
+RUN chmod +x ./scripts/start-athena-container.sh ./scripts/start-athena-worker-container.sh
 
 EXPOSE 8000
 

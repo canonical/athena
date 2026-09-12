@@ -28,3 +28,26 @@ services:
           -v ON_ERROR_STOP=1 \
           -v APP_ROLE_NAME="$$app_role" \
           -f /migrations/pg/migrate.sql
+
+  prepare-background-jobs-ci:
+    build:
+      context: .
+    environment:
+      - GITHUB_ACTIONS
+      - DB_CONNECT_STRING
+      - APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING=${DB_CONNECT_STRING}
+      - APP_ATHENA_INSTANCE_ID=github-actions-migration
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if [ "$${GITHUB_ACTIONS:-}" != "true" ]; then
+          echo "prepare-background-jobs-ci only runs in GitHub Actions"
+          exit 0
+        fi
+        if [ -z "$${DB_CONNECT_STRING:-}" ]; then
+          echo "DB_CONNECT_STRING must be set"
+          exit 1
+        fi
+        npm run build:be
+        npm run migrate:background-jobs

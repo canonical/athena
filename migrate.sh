@@ -18,7 +18,10 @@ app_role="$(psql "${POSTGRESQL_DB_CONNECT_STRING}" \
 : "${app_role:?Unable to determine the connected PostgreSQL role}"
 
 echo ">>> Running Athena migrations as role: ${app_role}"
-exec psql "${POSTGRESQL_DB_CONNECT_STRING}" \
+psql "${POSTGRESQL_DB_CONNECT_STRING}" \
   -v ON_ERROR_STOP=1 \
   -v APP_ROLE_NAME="${app_role}" \
   -f /app/migrations/pg/migrate.sql
+
+echo ">>> Running background job schema migrations"
+exec npm run migrate:background-jobs

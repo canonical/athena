@@ -43,6 +43,10 @@ requires:
     optional: false
     limit: 1
 
+provides:
+  workers:
+    interface: athena_worker
+
 config:
   options:
     run-migrations-on-startup:
@@ -75,6 +79,11 @@ config:
       description: Idle timeout for PostgreSQL pool clients in milliseconds
       type: int
       default: 60000
+      required: false
+    pg-connection-timeout-ms:
+      description: PostgreSQL connection timeout in milliseconds
+      type: int
+      default: 10000
       required: false
     frontend-base-url:
       type: string
