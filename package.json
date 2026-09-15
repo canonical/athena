@@ -28,7 +28,6 @@
     "watch:be": "nodemon --config ./nodemon.json",
     "watch": "sh -c 'npm run watch:fe & npm run watch:be & wait'",
     "coverage:start": "NODE_OPTIONS='--loader @istanbuljs/esm-loader-hook' nyc --silent --cwd . --reporter=json --temp-dir .nyc_output node dist/server.js",
-    "migrate:background-jobs": "node --enable-source-maps dist/migrate-background-jobs.js",
     "start": "NODE_USE_ENV_PROXY=1 node --enable-source-maps dist/server.js",
     "start:worker": "NODE_USE_ENV_PROXY=1 node --enable-source-maps dist/worker.js"
   },

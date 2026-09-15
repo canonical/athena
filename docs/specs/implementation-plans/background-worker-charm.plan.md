@@ -6,17 +6,17 @@ Implemented.
 
 ## Scope
 
-Separate all background processing from the Athena HTTP process into an independently
+Run `pg-boss` background jobs outside the Athena HTTP process in an independently
 deployable and scalable `athena-worker` Juju charm while retaining one shared application
-rock and the existing PostgreSQL-backed queue semantics.
+rock.
 
 ## Acceptance criteria
 
-- [x] The HTTP entrypoint does not import, start, or trigger background consumers.
-- [x] The worker entrypoint starts task and runner consumers and initializes the `pg-boss`
-  worker runtime for the registered job catalog, including webhook processing.
-- [x] Worker shutdown stops new task and runner polling cycles, then drains active `pg-boss`
-  jobs within the configured shutdown timeout before closing PostgreSQL.
+- [x] The HTTP entrypoint keeps the task, webhook, and runner consumers and starts the
+  `pg-boss` producer, which installs or upgrades its schema.
+- [x] The worker entrypoint initializes the `pg-boss` worker runtime for the registered job catalog.
+- [x] Worker shutdown drains active `pg-boss` jobs within the configured shutdown timeout
+  before closing PostgreSQL.
 - [x] The web charm runs only the HTTP Pebble service.
 - [x] A separate worker charm starts `npm run start:worker` from the shared rock.
 - [x] The worker manages its own PostgreSQL relation and role, while credential access uses
@@ -28,10 +28,11 @@ rock and the existing PostgreSQL-backed queue semantics.
 
 ## Operational dependencies
 
-`ATHENA_POSTGRESQL_APPLICATION` must identify the existing PostgreSQL provider and
-`ATHENA_WORKER_CREDENTIAL_SECRET` must identify the shared credential encryption secret in
-each GitHub deployment environment. Deployment relates the worker to PostgreSQL and Athena,
-then grants the credential secret. Schema migrations remain owned by Athena and must complete
+`ATHENA_POSTGRESQL_APPLICATION` must identify the worker's transaction-mode PgBouncer
+application and `ATHENA_WORKER_CREDENTIAL_SECRET` must identify the shared credential
+encryption secret in each GitHub deployment environment. The web application keeps its
+session-mode PgBouncer. Deployment relates the worker to its PgBouncer and to Athena, then
+grants the credential secret. Schema migrations remain owned by Athena and must complete
 before worker units process jobs.
 
 ## Related specifications

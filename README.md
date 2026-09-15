@@ -19,7 +19,7 @@ Task behavior is implemented in [src/components/task](./src/components/task).
   - optional assigned workgraph item
   - active queue items and archived queue history
 - Queue items are message entries with approval states (`pending`, `awaiting-approval`, `approved`, `completed`).
-- The separately deployed worker starts the background task processor from [src/worker.ts](./src/worker.ts), and task iteration logic lives in [src/components/task/task.processor.ts](./src/components/task/task.processor.ts) and [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
+- The server starts a background task processor from [src/server.ts](./src/server.ts), and task iteration logic lives in [src/components/task/task.processor.ts](./src/components/task/task.processor.ts) and [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
 - The loop-level tool catalog is defined in [src/components/tool/tool.catalog.ts](./src/components/tool/tool.catalog.ts); some tools require explicit user approval before completion.
 - Task iteration notes are tracked in [docs/task-iteration.md](./docs/task-iteration.md).
 
@@ -56,8 +56,7 @@ The current application serves an authenticated SPA plus a JSON API.
   - runner management under `/runner/...`
   - workgraph management under `/workgraph/...`
 - Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
-- A separate worker process runs the task, inbound webhook, and runner processors and the
-  registered durable-job catalog.
+- The server also starts background processors for tasks, inbound webhook items, and the runner queue.
 
 ## E2E testing
 
@@ -120,6 +119,15 @@ Athena reads backend runtime configuration from environment variables with the p
 - `APP_ATHENA_OIDC_DISCOVERY_URL=http://dex.localhost/dex/.well-known/openid-configuration`
 - `APP_ATHENA_OIDC_CLIENT_ID=athena`
 - `APP_ATHENA_SESSION_MAX_AGE=86400000`
+- `APP_ATHENA_INSTANCE_ID` defaults to the Juju unit name, then the hostname
+- `APP_ATHENA_PG_POOL_MAX=1`
+- `APP_ATHENA_PG_POOL_IDLE_TIMEOUT_MS=60000`
+- `APP_ATHENA_PG_CONNECTION_TIMEOUT_MS=10000`
+- `APP_ATHENA_BACKGROUND_JOB_SCHEMA=pgboss`
+- `APP_ATHENA_BACKGROUND_JOB_WORKER_CONCURRENCY=2`
+- `APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT=3`
+- `APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS=5`
+- `APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS=30000`
 
 ### Frontend build-time variable
 

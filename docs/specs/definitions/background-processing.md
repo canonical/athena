@@ -8,10 +8,9 @@ ownership, routing, or approval semantics.
 
 ## Runtime topology
 
-Production runs separate `athena` and `athena-worker` Juju applications. Web units run
-only the HTTP service; worker units run task, webhook, and runner processing plus the
-`pg-boss` runtime
-against the same PostgreSQL database and `pg-boss` schema.
+Production runs separate `athena` and `athena-worker` Juju applications. Web units run the
+HTTP service, task, webhook, and runner processing, and the `pg-boss` producer; worker units
+run the `pg-boss` runtime against the same PostgreSQL database and `pg-boss` schema.
 
 - Web and worker applications scale independently.
 - Scheduling and processing must not depend on Juju leadership or one permanent worker.
@@ -58,16 +57,14 @@ transactional domain guard so repeated execution cannot apply the same transitio
   claim interval.
 
 The existing `runnerQueue` remains a separate domain queue for external runner tasks.
-The task and runner queues remain PostgreSQL-backed domain queues while their handlers are
-moved behind the worker process boundary. Authenticated webhook deliveries enqueue a versioned
-`pg-boss` job keyed by receiver, and the HTTP handler never invokes an in-process consumer.
+The task, webhook, and runner queues remain PostgreSQL-backed domain queues processed in the
+web process. `pg-boss` jobs are reserved for RAG indexing.
 
 ## Schema and lifecycle
 
-The `pg-boss` version is pinned. Runtime web and worker processes do not create or migrate
-its schema. The web charm or external deployment migration installs or upgrades the schema
-before worker services start;
-PostgreSQL advisory locking serializes concurrent migration attempts.
+The `pg-boss` version is pinned. Web processes install or upgrade its schema when their
+producer starts; worker processes never create or migrate it and fail startup until it is
+installed. PostgreSQL advisory locking serializes concurrent migration attempts.
 
 On shutdown, a process stops scheduling task and runner polling cycles. Its `pg-boss` client
 stops accepting new background jobs and drains active background-job handlers within a bounded

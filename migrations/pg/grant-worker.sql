@@ -4,14 +4,8 @@
   \quit 1
 \endif
 
-SELECT true AS pgboss_exists
-WHERE EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'pgboss')
-\gset
-\if :{?pgboss_exists}
-\else
-  \echo 'pgboss schema must be migrated before granting worker access'
-  \quit 1
-\endif
+-- The web process installs pg-boss into this schema on startup, which can follow this grant.
+CREATE SCHEMA IF NOT EXISTS pgboss;
 
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'WORKER_ROLE_NAME')
 \gexec
