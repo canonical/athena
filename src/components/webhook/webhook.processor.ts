@@ -1,10 +1,20 @@
 import { log } from "@components/logging/logging.service.js";
-import { queryLoopWorkgraphMarkSyncFailed, queryLoopWorkgraphMarkSynchronizing, queryWebhookByReceiverId, queryWebhookItemClaimNext, queryWebhookItemMarkDone, queryWebhookItemRequeue } from "@components/workgraph/workgraph.pg.service.js";
+import {
+  queryLoopWorkgraphMarkSyncFailed,
+  queryLoopWorkgraphMarkSynchronizing,
+  queryWebhookByReceiverId,
+  queryWebhookItemClaimNext,
+  queryWebhookItemMarkDone,
+  queryWebhookItemPing,
+  queryWebhookItemRequeue,
+} from "@components/workgraph/workgraph.pg.service.js";
 import { synchronizeLoopWorkgraphAndPromoteTasks } from "@components/workgraph/workgraph.sync.service.js";
+
+const webhookItemHeartbeatIntervalMs = 30_000;
 
 let isProcessing = false;
 
-const processWebhookItem = async (item: { id: string; payload: Record<string, unknown> }): Promise<void> => {
+const processWebhookItem = async (item: { id: string; payload: Record<string, unknown>; reclaimed: boolean }): Promise<void> => {
   const receiverId = typeof item.payload.receiverId === `string` ? item.payload.receiverId : ``;
 
   if (!receiverId) {
@@ -19,6 +29,10 @@ const processWebhookItem = async (item: { id: string; payload: Record<string, un
 
   if (webhook.type !== `workgraph`) {
     return;
+  }
+
+  if (item.reclaimed) {
+    await queryLoopWorkgraphMarkSyncFailed(webhook.loop, webhook.workgraph, `Previous webhook synchronization attempt did not complete.`);
   }
 
   const started = await queryLoopWorkgraphMarkSynchronizing(webhook.loop, webhook.workgraph);
@@ -37,6 +51,17 @@ const processWebhookItem = async (item: { id: string; payload: Record<string, un
   }
 };
 
+const pingWebhookItem = async (id: string): Promise<void> => {
+  try {
+    await queryWebhookItemPing(id);
+  } catch (error) {
+    log.error(`Webhook item heartbeat failed`, {
+      itemId: id,
+      error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : { message: String(error) },
+    });
+  }
+};
+
 const processQueue = async (): Promise<void> => {
   while (true) {
     const item = await queryWebhookItemClaimNext();
@@ -44,6 +69,10 @@ const processQueue = async (): Promise<void> => {
     if (!item) {
       return;
     }
+
+    const heartbeatInterval = setInterval(() => {
+      void pingWebhookItem(item.id);
+    }, webhookItemHeartbeatIntervalMs);
 
     try {
       await processWebhookItem(item);
@@ -61,6 +90,8 @@ const processQueue = async (): Promise<void> => {
       }
 
       await queryWebhookItemRequeue(item.id);
+    } finally {
+      clearInterval(heartbeatInterval);
     }
   }
 };

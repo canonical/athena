@@ -19,6 +19,7 @@ import { queryRunnerDecryptCredential } from "./runner.service.js";
 
 let isConsuming = false;
 let consumerInterval: ReturnType<typeof setInterval> | null = null;
+let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 const runnerQueueConsumerIntervalMs = 15_000;
 const runnerQueueHeartbeatIntervalMs = 5_000;
 const consumerId = uuidv7();
@@ -33,10 +34,24 @@ export const startRunnerQueueConsumer = (): void => {
 
   triggerRunnerQueueConsumer();
   consumerInterval = setInterval(triggerRunnerQueueConsumer, runnerQueueConsumerIntervalMs);
-  setInterval(() => {
+  heartbeatInterval = setInterval(() => {
     void pingRunnerQueueClaims();
   }, runnerQueueHeartbeatIntervalMs);
   log.info(`Runner queue consumer interval scheduled`, { consumerId, intervalMs: runnerQueueConsumerIntervalMs });
+};
+
+export const stopRunnerQueueConsumer = (): void => {
+  if (consumerInterval) {
+    clearInterval(consumerInterval);
+    consumerInterval = null;
+  }
+
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+
+  log.info(`Runner queue consumer stopped`, { consumerId });
 };
 
 export const triggerRunnerQueueConsumer = (): void => {
