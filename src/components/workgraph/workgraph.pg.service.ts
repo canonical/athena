@@ -802,6 +802,91 @@ export const queryWebhookByReceiverId = async (
   };
 };
 
+export const queryWebhookItemCreate = async (payload: Record<string, unknown>): Promise<void> => {
+  await query(
+    `
+      INSERT INTO "webhookItem" (
+        "payload",
+        "status",
+        "retryCount"
+      )
+      VALUES ($1::jsonb, 'new', 0)
+    `,
+    [JSON.stringify(payload)],
+  );
+};
+
+// Claims the oldest new item, or a processing item whose processor stopped pinging it.
+export const queryWebhookItemClaimNext = async (): Promise<{ id: string; payload: Record<string, unknown>; retryCount: number; reclaimed: boolean } | undefined> => {
+  const result = await query<{ id: string; payload: Record<string, unknown>; retryCount: number; reclaimed: boolean }>(
+    `
+      WITH candidate AS (
+        SELECT wi."id", wi."status"
+        FROM "webhookItem" wi
+        WHERE wi."retryCount" < 3
+          AND (
+            wi."status" = 'new'
+            OR (
+              wi."status" = 'processing'
+              AND (
+                wi."processorPingedAt" < NOW() - INTERVAL '5 minutes'
+                OR wi."processorPingedAt" IS NULL
+              )
+            )
+          )
+        ORDER BY wi."id" ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE "webhookItem" wi
+      SET
+        "status" = 'processing',
+        "retryCount" = wi."retryCount" + 1,
+        "processorPingedAt" = NOW()
+      FROM candidate
+      WHERE wi."id" = candidate."id"
+      RETURNING wi."id", wi."payload", wi."retryCount", candidate."status" = 'processing' AS "reclaimed"
+    `,
+  );
+
+  return result.rows[0];
+};
+
+export const queryWebhookItemPing = async (id: string): Promise<void> => {
+  await query(
+    `
+      UPDATE "webhookItem"
+      SET "processorPingedAt" = NOW()
+      WHERE "id" = $1
+        AND "status" = 'processing'
+    `,
+    [id],
+  );
+};
+
+export const queryWebhookItemMarkDone = async (id: string): Promise<void> => {
+  await query(
+    `
+      UPDATE "webhookItem"
+      SET "status" = 'done'
+      WHERE "id" = $1
+    `,
+    [id],
+  );
+};
+
+export const queryWebhookItemRequeue = async (id: string): Promise<void> => {
+  await query(
+    `
+      UPDATE "webhookItem"
+      SET "status" = 'new'
+      WHERE "id" = $1
+        AND "status" = 'processing'
+    `,
+    [id],
+  );
+};
+
 export const queryLoopWorkgraphUpsertItem = async (input: {
   loopId: string;
   workgraphId: string;

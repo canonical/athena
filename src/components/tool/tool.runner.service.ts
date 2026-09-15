@@ -52,8 +52,8 @@ export const executeTaskRunners = async (context: ProviderToolExecutionContext, 
     total: runners.length,
     runners: runners.map((runner) => ({
       runnerId: runner.runner,
-      displayName: runner.displayName,
-      runnerType: runner.runnerType,
+      name: runner.name,
+      type: runner.type,
       enabled: runner.enabled,
       priority: runner.priority,
       priorityOverride: runner.priorityOverride,
@@ -94,7 +94,7 @@ export const executeAthenaEnqueueRun = async (context: ProviderToolExecutionCont
   console.log(`[athena_enqueue_run] runner selected`, { taskId, loopId, assignmentId, definitionType, repositoryId: repositoryConnection.repositoryId });
 
   const queueItem = await queryRunnerQueueCreate(loopId, taskId, assignmentId, repository, prompt, plan);
-  console.log(`[athena_enqueue_run] enqueued`, { taskId, loopId, queueItemId: queueItem.id, runnerType: definitionType, repository, repositoryId: repositoryConnection.repositoryId });
+  console.log(`[athena_enqueue_run] enqueued`, { taskId, loopId, queueItemId: queueItem.id, type: definitionType, repository, repositoryId: repositoryConnection.repositoryId });
 
-  return { queued: true, queueItemId: queueItem.id, runnerId: assignmentId, runnerType: definitionType, repository };
+  return { queued: true, queueItemId: queueItem.id, runnerId: assignmentId, type: definitionType, repository };
 };

@@ -18,8 +18,8 @@ const createBoss = (role: BackgroundJobClientRole): PgBoss => {
   const boss = new PgBoss({
     db: toPgBossDatabase({ query }),
     schema: backendConfig.backgroundJobs.schema,
-    createSchema: false,
-    migrate: false,
+    createSchema: !worker,
+    migrate: !worker,
     schedule: worker,
     supervise: worker,
   });
@@ -72,7 +72,6 @@ export const backgroundJobStartProducer = async (): Promise<void> => {
 
     try {
       await nextProducer.start();
-      await verifyInstalledSchema(nextProducer);
       await ensureQueues(nextProducer, definitions);
       producer = nextProducer;
       log.info(`Background job producer started`, { instanceId: backendConfig.runtime.instanceId });

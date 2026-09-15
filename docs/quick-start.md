@@ -158,8 +158,8 @@ lines AS (
    UNION ALL SELECT 42, format('  v_provider_priority INTEGER := %s;', COALESCE(sp."priority"::text, 'NULL')) FROM selected_provider sp
    UNION ALL SELECT 50, ''
    UNION ALL SELECT 51, '  -- Runner Definitions'
-   UNION ALL SELECT 52, format('  v_runner_display_name TEXT := %L;', sr."displayName") FROM selected_runner sr
-   UNION ALL SELECT 53, format('  v_runner_type TEXT := %L;', sr."runnerType") FROM selected_runner sr
+   UNION ALL SELECT 52, format('  v_runner_display_name TEXT := %L;', sr."name") FROM selected_runner sr
+   UNION ALL SELECT 53, format('  v_runner_type TEXT := %L;', sr."type") FROM selected_runner sr
    UNION ALL SELECT 54, format('  v_runner_credential_ciphertext TEXT := %L;', sr."credentialCiphertext") FROM selected_runner sr
    UNION ALL SELECT 55, format('  v_runner_credential_iv TEXT := %L;', sr."credentialIv") FROM selected_runner sr
    UNION ALL SELECT 56, format('  v_runner_credential_auth_tag TEXT := %L;', sr."credentialAuthTag") FROM selected_runner sr

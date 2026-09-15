@@ -1,6 +1,5 @@
 import { authenticationRouter } from "@components/authentication/authentication.router.js";
 import { requireAuthentication } from "@components/authentication/authentication-middleware.js";
-import { backgroundJobRegister } from "@components/background-job/background-job.registry.js";
 import { backgroundJobStartProducer, backgroundJobStopProducer } from "@components/background-job/background-job.service.js";
 import { defineMiddlewares } from "@components/base/define-middlewares.js";
 import { config } from "@components/config/config.js";
@@ -12,11 +11,15 @@ import { closePG } from "@components/postgres/postgres.js";
 import { providerRouter } from "@components/provider/provider.router.js";
 import { ragRouter } from "@components/rag/rag.router.js";
 import { repositoryRouter } from "@components/repository/repository.router.js";
+import { runnerAgentRouter } from "@components/runner/runner.agent.router.js";
+import { startRunnerQueueConsumer, stopRunnerQueueConsumer } from "@components/runner/runner.queue.consumer.js";
 import { runnerRouter } from "@components/runner/runner.router.js";
 import { staticRouter } from "@components/static/static.router.js";
 import { statusRouter } from "@components/status/status.router.js";
+import { stepSequenceRouter } from "@components/stepSequence/stepSequence.router.js";
+import { startTaskProcessor, stopTaskProcessor } from "@components/task/task.processor.js";
 import { taskRouter } from "@components/task/task.router.js";
-import { webhookBackgroundJobDefinition } from "@components/webhook/webhook.background-job.js";
+import { startWebhookItemProcessor } from "@components/webhook/webhook.processor.js";
 import { webhookPublicRouter } from "@components/webhook/webhook.public.router.js";
 import { webhookRouter } from "@components/webhook/webhook.router.js";
 import { workgraphRouter } from "@components/workgraph/workgraph.router.js";
@@ -26,7 +29,6 @@ const app = express();
 const port = config.application.port;
 const apiRoot = `/api`;
 
-backgroundJobRegister(webhookBackgroundJobDefinition);
 await backgroundJobStartProducer();
 
 app.set(`trust proxy`, 1);
@@ -35,6 +37,7 @@ defineMiddlewares(app);
 app.use(`${apiRoot}/authentication`, authenticationRouter);
 app.use(statusRouter);
 app.use(`${apiRoot}/webhook`, webhookPublicRouter);
+app.use(`${apiRoot}/runner-agent`, runnerAgentRouter);
 
 if (process.env.COVERAGE) {
   app.get(`${apiRoot}/__coverage__`, (_request: Request, response: Response) => {
@@ -51,6 +54,7 @@ app.use(`${apiRoot}/provider`, providerRouter);
 app.use(`${apiRoot}/rag`, ragRouter);
 app.use(`${apiRoot}/repository`, repositoryRouter);
 app.use(`${apiRoot}/workgraph`, workgraphRouter);
+app.use(`${apiRoot}/stepSequence`, stepSequenceRouter);
 app.use(`${apiRoot}/webhook`, webhookRouter);
 app.use(staticRouter);
 
@@ -62,6 +66,10 @@ defineLoggingErrorHandler(app);
 
 const server = app.listen(port, () => {
   log.info(`Athena server listening on port ${port}`);
+
+  startTaskProcessor();
+  startWebhookItemProcessor();
+  startRunnerQueueConsumer();
 });
 
 let stopping = false;
@@ -75,6 +83,8 @@ const stop = async (signal: NodeJS.Signals): Promise<void> => {
   log.info(`Athena server stopping`, { signal });
 
   try {
+    stopTaskProcessor();
+    stopRunnerQueueConsumer();
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
     });

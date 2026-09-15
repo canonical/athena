@@ -5,7 +5,23 @@ import type { CopilotAgentTask } from "./runner.copilot.adapter.js";
 import { listCopilotAgentTasks } from "./runner.copilot.adapter.js";
 import { RunnerForbiddenError, RunnerNotFoundError, RunnerValidationError } from "./runner.errors.js";
 import { queryRunnerQueueListByLoop, queryRunnerQueueListByRunner } from "./runner.queue.service.js";
-import type { LoopRunner, LoopRunnerAdminUpdate, LoopRunnerInsert, LoopRunnerRepository, LoopRunnerRepositoryUpdate, Runner, RunnerInsert, RunnerQueueItem, RunnerUpdate } from "./runner.schema.js";
+import type {
+  LoopRunner,
+  LoopRunnerAdminUpdate,
+  LoopRunnerInsert,
+  LoopRunnerRepository,
+  LoopRunnerRepositoryUpdate,
+  Runner,
+  RunnerAgentConnect,
+  RunnerAgentHeartbeat,
+  RunnerInsert,
+  RunnerInstance,
+  RunnerQueueItem,
+  RunnerToken,
+  RunnerTokenCreate,
+  RunnerTokenCreated,
+  RunnerUpdate,
+} from "./runner.schema.js";
 import {
   queryLoopRunnerCreate,
   queryLoopRunnerDelete,
@@ -13,19 +29,19 @@ import {
   queryLoopRunnerRepositoryList,
   queryLoopRunnerRepositoryReplace,
   queryLoopRunnerUpdateByAdmin,
+  queryRunnerAgentConnect as queryRunnerAgentConnectForToken,
   queryRunnerByIdForOwner,
   queryRunnerCreate,
   queryRunnerDecryptCredential,
   queryRunnerDelete,
+  queryRunnerInstanceList,
+  queryRunnerInstanceUpsert,
   queryRunnerListByOwner,
+  queryRunnerTokenCreate,
+  queryRunnerTokenList,
+  queryRunnerTokenRevoke,
   queryRunnerUpdate,
 } from "./runner.service.js";
-
-const enforceMvpRunnerType = (runnerType: string): void => {
-  if (runnerType !== `github-copilot-cloud`) {
-    throw new RunnerValidationError(`Only github-copilot-cloud is executable in MVP.`);
-  }
-};
 
 const validateLoopId = (loopId: string): void => {
   if (!isValidUuid(loopId)) {
@@ -54,10 +70,33 @@ export const runnerGet = async (runnerId: string, ownerId: string): Promise<Runn
 };
 
 export const runnerCreate = async (input: RunnerInsert, ownerId: string): Promise<Runner> => {
-  enforceMvpRunnerType(input.runnerType);
-
   return queryRunnerCreate(input, ownerId);
 };
+
+export const runnerTokenList = async (runnerId: string, ownerId: string): Promise<RunnerToken[]> => {
+  await runnerGet(runnerId, ownerId);
+  return queryRunnerTokenList(runnerId);
+};
+
+export const runnerTokenCreate = async (runnerId: string, ownerId: string, input: RunnerTokenCreate): Promise<RunnerTokenCreated> => {
+  const runner = await runnerGet(runnerId, ownerId);
+  if (runner.type !== `athena-workshop`) throw new RunnerValidationError(`Tokens are only available for athena-workshop runners.`);
+  return queryRunnerTokenCreate(runnerId, input);
+};
+
+export const runnerTokenRevoke = async (runnerId: string, tokenId: string, ownerId: string): Promise<void> => {
+  await runnerGet(runnerId, ownerId);
+  if (!(await queryRunnerTokenRevoke(runnerId, tokenId))) throw new RunnerNotFoundError(`Runner token not found.`);
+};
+
+export const runnerInstanceList = async (runnerId: string, ownerId: string): Promise<RunnerInstance[]> => {
+  await runnerGet(runnerId, ownerId);
+  return queryRunnerInstanceList(runnerId);
+};
+
+export const runnerAgentConnect = async (token: string, input: RunnerAgentConnect): Promise<RunnerInstance | undefined> => queryRunnerAgentConnectForToken(token, input);
+
+export const runnerAgentHeartbeat = async (runnerId: string, input: RunnerAgentHeartbeat): Promise<RunnerInstance> => queryRunnerInstanceUpsert(runnerId, input);
 
 export const runnerUpdate = async (runnerId: string, ownerId: string, input: RunnerUpdate): Promise<Runner> => {
   validateRunnerId(runnerId);
@@ -102,8 +141,6 @@ export const loopRunnerCreate = async (loopId: string, userId: string, input: Lo
   if (!runner) {
     throw new RunnerNotFoundError(`Runner not found.`);
   }
-
-  enforceMvpRunnerType(runner.runnerType);
 
   await queryLoopRunnerCreate(loopId, input.runner);
 

@@ -6,7 +6,7 @@ This index is the entry point for implementation planning artifacts.
 
 ### Deployment architecture
 
-- [x] Extract background processing into an independently scalable charm. Detailed plan:
+- [x] Run `pg-boss` background jobs in an independently scalable worker charm. Detailed plan:
   [background-worker-charm.plan.md](./background-worker-charm.plan.md)
 
 ### Persona Definition Capability (Foundation)

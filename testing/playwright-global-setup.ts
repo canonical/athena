@@ -134,7 +134,7 @@ const globalSetup = async (): Promise<void> => {
       stdio: `inherit`,
     });
 
-    execFileSync(`docker`, [`compose`, `--profile`, `test`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `prepare-background-jobs`, `dex`, `test-inference`, `athena`, `athena-worker`], {
+    execFileSync(`docker`, [`compose`, `--profile`, `test`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `test-inference`, `athena`, `athena-worker`], {
       cwd: workspaceRoot,
       stdio: `inherit`,
     });

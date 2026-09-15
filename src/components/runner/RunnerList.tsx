@@ -1,7 +1,7 @@
 import { Button, Icon, MainTable, Notification, NotificationSeverity } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
 import { useFeedbackToast } from "@components/base/toast.js";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { RunnerEditor } from "./RunnerEditor.js";
 import { deleteRunner } from "./runner.client.js";
@@ -60,7 +60,7 @@ export function RunnerList({ editor, runnerId }: RunnerListProps) {
       setFeedback({
         severity: NotificationSeverity.INFORMATION,
         title: `Runner deleted`,
-        message: `${runner.displayName} has been deleted.`,
+        message: `${runner.name} has been deleted.`,
       });
 
       if (editor === `edit` && runnerId === runner.id) {
@@ -105,17 +105,23 @@ export function RunnerList({ editor, runnerId }: RunnerListProps) {
           rows={runners.map((runner: Runner) => ({
             key: runner.id,
             columns: [
-              { content: runner.displayName },
-              { content: runner.runnerType },
+              {
+                content: (
+                  <Link params={{ runnerId: runner.id }} to={`/runner/$runnerId`}>
+                    {runner.name}
+                  </Link>
+                ),
+              },
+              { content: runner.type },
               { content: lifecycleLabel[runner.lifecycleStatus] ?? runner.lifecycleStatus },
               { content: formatTimestamp(runner.updatedAt) },
               {
                 content: (
                   <div className="u-align--right">
-                    <Button appearance="base" aria-label={`Edit ${runner.displayName}`} onClick={() => openEditDrawer(runner)} title={`Edit ${runner.displayName}`} type="button">
+                    <Button appearance="base" aria-label={`Edit ${runner.name}`} onClick={() => openEditDrawer(runner)} title={`Edit ${runner.name}`} type="button">
                       <Icon aria-hidden="true" name="copy" />
                     </Button>
-                    <Button appearance="base" aria-label={`Delete ${runner.displayName}`} disabled={busyRunnerId === runner.id} onClick={() => handleDelete(runner)} title={`Delete ${runner.displayName}`} type="button">
+                    <Button appearance="base" aria-label={`Delete ${runner.name}`} disabled={busyRunnerId === runner.id} onClick={() => handleDelete(runner)} title={`Delete ${runner.name}`} type="button">
                       <Icon aria-hidden="true" className="text-negative" name="delete" />
                     </Button>
                   </div>

@@ -42,10 +42,16 @@ $$;
 \ir ./ddls/002000.loopUserRoleAudit.sql
 \ir ./ddls/002100.runnerQueue.sql
 \ir ./ddls/002200.loopRunnerRepository.sql
-\ir ./ddls/002500.ragIndex.sql
-\ir ./ddls/002700.ragRecordSource.sql
-\ir ./ddls/002800.ragEntry.sql
-\ir ./ddls/002900.ragRecordProjection.sql
+\ir ./ddls/002300.stepSequence.sql
+\ir ./ddls/002400.stepDefinition.sql
+\ir ./ddls/002500.taskSourceStepSequence.sql
+\ir ./ddls/002600.runnerToken.sql
+\ir ./ddls/002700.runnerInstance.sql
+\ir ./ddls/002800.providerCapabilities.sql
+\ir ./ddls/002900.ragIndex.sql
+\ir ./ddls/003000.ragRecordSource.sql
+\ir ./ddls/003100.ragEntry.sql
+\ir ./ddls/003200.ragRecordProjection.sql
 \ir ./ddls/999999.cleanup.sql
 
 \echo >>> Running Athena seed data

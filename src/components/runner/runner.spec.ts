@@ -5,12 +5,15 @@ const openRunnerList = async (page: Page) => {
   await expect(page.getByRole(`button`, { name: `Create runner` })).toBeVisible();
 };
 
-const createRunnerViaUi = async (page: Page, displayName: string) => {
+const createRunnerViaUi = async (page: Page, displayName: string, runnerType = `github-copilot-cloud`) => {
   await openRunnerList(page);
 
   await page.getByRole(`button`, { name: `Create runner` }).first().click();
   await page.getByLabel(`Display name`).fill(displayName);
-  await page.getByLabel(`API key`).fill(`copilot-${Date.now()}`);
+  await page.locator(`#runner-editor-runner-type`).selectOption(runnerType);
+  if (runnerType === `github-copilot-cloud`) {
+    await page.getByLabel(`API key`).fill(`copilot-${Date.now()}`);
+  }
   await page.locator(`form`).first().getByRole(`button`, { name: `Create runner` }).click();
 
   await expect(page.getByText(`${displayName} is available for loop assignment.`)).toBeVisible();
@@ -170,6 +173,34 @@ test(`runner detail page renders expected fields`, async ({ page }) => {
   await expect(page.getByRole(`heading`, { name: `Runner details` })).toBeVisible();
   await expect(page.getByText(`github-copilot-cloud`, { exact: true })).toBeVisible();
   await expect(page.getByText(`Credential configured`)).toBeVisible();
+});
+
+test(`Workshop runner tokens can be created and revoked`, async ({ page }) => {
+  await authenticate(page);
+
+  const displayName = `Workshop token runner ${Date.now()}`;
+  await createRunnerViaUi(page, displayName, `athena-workshop`);
+
+  const runnerId = await getRunnerIdFromEditUrl(page, displayName);
+  await page.goto(`http://athena.localhost/runner/${runnerId}`);
+  await expect(page.getByRole(`heading`, { name: `Workforce connection` })).toBeVisible();
+
+  await page.getByLabel(`Token name`).fill(`Workshop test token`);
+  await page.getByRole(`button`, { name: `Create token` }).click();
+
+  const tokenSecret = page.locator(`pre`);
+  await expect(tokenSecret).toHaveText(/^athena_runner_/);
+  const secret = await tokenSecret.textContent();
+  expect(secret).toBeTruthy();
+  await expect(page.getByText(`Workshop test token (active)`)).toBeVisible();
+
+  await page.reload();
+  await expect(page.locator(`pre`)).toHaveCount(0);
+  await expect(page.getByText(`Workshop test token (active)`)).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Revoke` }).click();
+  await expect(page.getByText(`Workshop test token (revoked)`)).toBeVisible();
+  await expect(page.getByRole(`button`, { name: `Revoke` })).toHaveCount(0);
 });
 
 test(`runner detail with invalid id shows an error notification`, async ({ page }) => {

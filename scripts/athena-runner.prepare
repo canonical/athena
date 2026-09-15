@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+REPO_DIR=/opt/athena
+ENV_FILE=/etc/athena-runner.env
+
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  . "$ENV_FILE"
+  set +a
+fi
+
+branch=${ATHENA_RUNNER_BRANCH:-main}
+
+case "$branch" in
+  -*|*[!A-Za-z0-9._/-]*)
+    echo "Invalid ATHENA_RUNNER_BRANCH: $branch" >&2
+    exit 1
+    ;;
+esac
+
+if [ ! -d "$REPO_DIR/.git" ]; then
+  git clone https://github.com/canonical/athena.git "$REPO_DIR"
+fi
+
+git -C "$REPO_DIR" fetch origin "$branch"
+git -C "$REPO_DIR" checkout "$branch" 2>/dev/null || git -C "$REPO_DIR" checkout -b "$branch" "origin/$branch"
+git -C "$REPO_DIR" reset --hard "origin/$branch"
+
+cd "$REPO_DIR"
+/snap/node/current/bin/npm ci
+/snap/node/current/bin/npm run build:be

@@ -10,7 +10,7 @@ export function LoopRunnerSessions({ loopId, runnerId }: LoopRunnerSessionsProps
   const { state: runnerState } = useRunnerById(runnerId);
   const { state: sessionsState, reload } = useLoopRunnerSessions(loopId);
 
-  const runnerName = runnerState.status === `success` ? runnerState.runner.displayName : `Runner`;
+  const runnerName = runnerState.status === `success` ? runnerState.runner.name : `Runner`;
 
   const queueItems = sessionsState.status === `success` ? sessionsState.data.queueItems.filter((item) => item.runner === runnerId) : [];
 

@@ -1,12 +1,8 @@
-import { backgroundJobRegister } from "@components/background-job/background-job.registry.js";
 import { backgroundJobCreateWorker } from "@components/background-job/background-job.service.js";
 import "@components/rag/rag.job.js";
 import { backendConfig } from "@components/config/backend-config.js";
 import { log } from "@components/logging/logging.service.js";
 import { closePG, ensurePG } from "@components/postgres/postgres.js";
-import { startRunnerQueueConsumer, stopRunnerQueueConsumer } from "@components/runner/runner.queue.consumer.js";
-import { startTaskProcessor, stopTaskProcessor } from "@components/task/task.processor.js";
-import { webhookBackgroundJobDefinition } from "@components/webhook/webhook.background-job.js";
 
 ensurePG({
   applicationName: `athena-worker/${backendConfig.runtime.instanceId}`,
@@ -25,10 +21,7 @@ const startWorker = async () => {
   }
 };
 
-backgroundJobRegister(webhookBackgroundJobDefinition);
 const worker = await startWorker();
-startTaskProcessor();
-startRunnerQueueConsumer();
 let stopping = false;
 
 const stop = async (signal: NodeJS.Signals): Promise<void> => {
@@ -47,8 +40,6 @@ const stop = async (signal: NodeJS.Signals): Promise<void> => {
   }, backendConfig.backgroundJobs.shutdownTimeoutMs);
 
   try {
-    stopTaskProcessor();
-    stopRunnerQueueConsumer();
     await worker.stop({ close: false, graceful: true, timeout: backendConfig.backgroundJobs.shutdownTimeoutMs });
   } catch (error) {
     process.exitCode = 1;

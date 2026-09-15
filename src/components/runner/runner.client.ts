@@ -1,7 +1,7 @@
 import { authenticatedJsonDelete, authenticatedJsonGet, authenticatedJsonPost, authenticatedJsonPut } from "@components/authentication/authenticated-fetch.client.js";
 import { getApiUrl } from "@components/config/frontend.client.js";
 import type { CopilotAgentTask } from "./runner.copilot.adapter.js";
-import type { LoopRunner, LoopRunnerRepository, Runner, RunnerInsert, RunnerQueueItem, RunnerUpdate } from "./runner.schema.js";
+import type { LoopRunner, LoopRunnerRepository, Runner, RunnerInsert, RunnerInstance, RunnerQueueItem, RunnerToken, RunnerTokenCreate, RunnerTokenCreated, RunnerUpdate } from "./runner.schema.js";
 
 export type LoopRunnerSessionsResult = {
   queueItems: RunnerQueueItem[];
@@ -17,6 +17,9 @@ export const runnerApiPaths = {
   loopRunnerRepositories: (loopId: string, runnerId: string) => getApiUrl(`/runner/loop/${loopId}/${runnerId}/repositories`),
   assign: getApiUrl(`/runner/assign`),
   unassign: getApiUrl(`/runner/unassign`),
+  tokens: (runnerId: string) => getApiUrl(`/runner/${runnerId}/tokens`),
+  token: (runnerId: string, tokenId: string) => getApiUrl(`/runner/${runnerId}/tokens/${tokenId}`),
+  instances: (runnerId: string) => getApiUrl(`/runner/${runnerId}/instances`),
 } as const;
 
 const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
@@ -26,6 +29,29 @@ const readErrorMessage = async (response: Response, fallback: string): Promise<s
   } catch {
     return fallback;
   }
+};
+
+export const fetchRunnerTokens = async (runnerId: string): Promise<RunnerToken[]> => {
+  const response = await authenticatedJsonGet(runnerApiPaths.tokens(runnerId));
+  if (!response.ok) throw new Error(await readErrorMessage(response, `Runner tokens request failed with status ${response.status}`));
+  return response.json() as Promise<RunnerToken[]>;
+};
+
+export const createRunnerToken = async (runnerId: string, payload: RunnerTokenCreate): Promise<RunnerTokenCreated> => {
+  const response = await authenticatedJsonPost(runnerApiPaths.tokens(runnerId), payload);
+  if (!response.ok) throw new Error(await readErrorMessage(response, `Runner token creation failed with status ${response.status}`));
+  return response.json() as Promise<RunnerTokenCreated>;
+};
+
+export const revokeRunnerToken = async (runnerId: string, tokenId: string): Promise<void> => {
+  const response = await authenticatedJsonDelete(runnerApiPaths.token(runnerId, tokenId));
+  if (!response.ok) throw new Error(await readErrorMessage(response, `Runner token revocation failed with status ${response.status}`));
+};
+
+export const fetchRunnerInstances = async (runnerId: string): Promise<RunnerInstance[]> => {
+  const response = await authenticatedJsonGet(runnerApiPaths.instances(runnerId));
+  if (!response.ok) throw new Error(await readErrorMessage(response, `Runner instances request failed with status ${response.status}`));
+  return response.json() as Promise<RunnerInstance[]>;
 };
 
 export const fetchRunnerList = async (): Promise<Runner[]> => {

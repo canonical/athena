@@ -112,7 +112,7 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
       onFeedback({
         severity: NotificationSeverity.INFORMATION,
         title: `Runner removed`,
-        message: `${runner.displayName} has been removed from this loop.`,
+        message: `${runner.name} has been removed from this loop.`,
       });
       await queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
       reloadAssignedRunners();
@@ -162,11 +162,11 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
                 {
                   content: (
                     <Link params={{ loopId, loopRunnerId: runner.runner }} to="/loop/$loopId/runners/$loopRunnerId">
-                      {runner.displayName}
+                      {runner.name}
                     </Link>
                   ),
                 },
-                { content: runner.runnerType },
+                { content: runner.type },
                 {
                   content: (
                     <Link params={{ loopId, loopRunnerId: runner.runner }} to="/loop/$loopId/runners/$loopRunnerId/repositories">
@@ -180,7 +180,7 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
                 {
                   content: (
                     <div className="u-align--right">
-                      <Button appearance="base" aria-label={`Remove ${runner.displayName}`} disabled={busyRunnerId === runner.runner} onClick={() => handleRemoveAssignment(runner)} title={`Remove ${runner.displayName}`} type="button">
+                      <Button appearance="base" aria-label={`Remove ${runner.name}`} disabled={busyRunnerId === runner.runner} onClick={() => handleRemoveAssignment(runner)} title={`Remove ${runner.name}`} type="button">
                         <Icon aria-hidden="true" className="text-negative" name="delete" />
                       </Button>
                     </div>
@@ -208,7 +208,7 @@ export function LoopRunners({ loopId, onFeedback }: LoopRunnersProps) {
               label="Runner"
               name="selectedRunnerId"
               onChange={assignFormik.handleChange}
-              options={[{ value: ``, label: `— Select a runner —` }, ...unassignedRunners.map((runner) => ({ value: runner.id, label: runner.displayName }))]}
+              options={[{ value: ``, label: `— Select a runner —` }, ...unassignedRunners.map((runner) => ({ value: runner.id, label: runner.name }))]}
               value={assignFormik.values.selectedRunnerId}
             />
             <div className="u-align--right">

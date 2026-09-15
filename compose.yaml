@@ -115,20 +115,6 @@ services:
           psql -h postgres -U athena -d athena -v APP_ROLE_NAME=athena -f "$$f"
         done
 
-  prepare-background-jobs:
-    build:
-      context: .
-    depends_on:
-      prepare:
-        condition: service_completed_successfully
-    environment:
-      APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING: ${APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING:?APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING is required}
-      APP_ATHENA_INSTANCE_ID: migration
-    command:
-      - /bin/sh
-      - -ec
-      - npm run build:be && npm run migrate:background-jobs
-
   # Deterministic inference service used by Playwright specs.
   test-inference:
     profiles:
@@ -159,8 +145,6 @@ services:
       postgres:
         condition: service_healthy
       prepare:
-        condition: service_completed_successfully
-      prepare-background-jobs:
         condition: service_completed_successfully
     environment:
       APP_ATHENA_PORT: "8000"
@@ -208,8 +192,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      prepare-background-jobs:
-        condition: service_completed_successfully
+      athena:
+        condition: service_healthy
     environment:
       APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY: ${APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY:?APP_ATHENA_CREDENTIAL_ENCRYPTION_KEY is required}
       APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING: ${APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING:?APP_ATHENA_POSTGRESQL_DB_CONNECT_STRING is required}

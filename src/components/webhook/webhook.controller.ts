@@ -1,6 +1,4 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { BackgroundJobUnavailableError } from "@components/background-job/background-job.errors.js";
-import { backgroundJobEnqueue } from "@components/background-job/background-job.service.js";
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
 import {
@@ -10,10 +8,11 @@ import {
   queryLoopWorkgraphWebhookList,
   queryLoopWorkgraphWebhookUpdate,
   queryWebhookByReceiverId,
+  queryWebhookItemCreate,
 } from "@components/workgraph/workgraph.pg.service.js";
 import { v7 as uuidv7 } from "uuid";
-import { webhookBackgroundJobDefinition } from "./webhook.background-job.js";
 import { WebhookForbiddenError, WebhookNotFoundError, WebhookUnauthorizedError, WebhookValidationError } from "./webhook.errors.js";
+import { triggerWebhookItemProcessor } from "./webhook.processor.js";
 import type { LoopWorkgraphWebhook, LoopWorkgraphWebhookCreate, LoopWorkgraphWebhookCreateResult, LoopWorkgraphWebhookUpdate } from "./webhook.schema.js";
 
 const validateLoopId = (loopId: string): void => {
@@ -192,11 +191,7 @@ export const webhookInboundReceive = async (receiverId: string, headers: Record<
     throw new WebhookUnauthorizedError(`Webhook authentication failed.`);
   }
 
-  const result = await backgroundJobEnqueue(webhookBackgroundJobDefinition, { receiverId }, { group: { id: receiverId } });
-
-  if (!result.accepted) {
-    throw new BackgroundJobUnavailableError(`Webhook background job was not accepted.`);
-  }
+  await queryWebhookItemCreate({ receiverId });
 
   console.log(`[webhook][ingest] accepted and enqueued`, {
     receiverId,
@@ -205,4 +200,6 @@ export const webhookInboundReceive = async (receiverId: string, headers: Record<
     loopId: webhook.loop,
     workgraphId: webhook.workgraph,
   });
+
+  triggerWebhookItemProcessor();
 };

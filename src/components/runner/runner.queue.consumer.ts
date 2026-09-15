@@ -1,4 +1,5 @@
 import { log } from "@components/logging/logging.service.js";
+import { triggerTaskProcessor } from "@components/task/task.processor.js";
 import { queryAppendQueueItem } from "@components/task/task.service.js";
 import { delay } from "@components/utilities/timers.js";
 import { v7 as uuidv7 } from "uuid";
@@ -126,6 +127,7 @@ const checkClaimedItems = async (): Promise<void> => {
     if (succeeded) {
       await queryRunnerQueueSubmitResult(item.id, consumerId, result);
       await appendRunnerResultToTask(item.task, item.loop, result);
+      triggerTaskProcessor();
       console.log(`[runner-queue-consumer] agent task completed — task resumed`, { id: item.id, externalTaskId: item.externalTaskId });
     } else {
       await failRunnerQueueItem(item, result, `Runner task failed or was cancelled. Details: ${result}`);
@@ -194,6 +196,7 @@ const failRunnerQueueItem = async (item: RunnerQueueItem, error: string, taskMes
   }
 
   await appendRunnerResultToTask(item.task, item.loop, taskMessage);
+  triggerTaskProcessor();
 };
 
 const runWithRetries = async <T>(operation: string, action: () => Promise<T>): Promise<T> => {

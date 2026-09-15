@@ -460,7 +460,7 @@ export const queryTaskCompactQueue = async (loopId: string, taskId: string, proc
           || jsonb_build_array(
                jsonb_build_object(
                  'type', 'compaction',
-                 'id', gen_random_uuid()::text,
+                 'id', uuidv7()::text,
                  'timestamp', to_jsonb(clock_timestamp()),
                  'itemCount', (
                    SELECT COUNT(*)::int
@@ -472,7 +472,7 @@ export const queryTaskCompactQueue = async (loopId: string, taskId: string, proc
         "queue" = jsonb_build_array(
                     jsonb_build_object(
                       'type', 'message',
-                      'id', gen_random_uuid()::text,
+                      'id', uuidv7()::text,
                       'status', 'completed',
                       'timestamp', to_jsonb(clock_timestamp()),
                       'value', jsonb_build_object('role', 'assistant', 'content', $4::text)
@@ -696,7 +696,7 @@ export const queryTaskToolCallReject = async (loopId: string, taskId: string, qu
         tool_rejections AS (
           SELECT jsonb_build_object(
             'type', 'message',
-            'id', gen_random_uuid()::text,
+            'id', uuidv7()::text,
             'status', 'completed',
             'timestamp', to_jsonb(clock_timestamp()),
             'value', jsonb_build_object(

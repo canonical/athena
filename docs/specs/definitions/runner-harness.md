@@ -52,7 +52,7 @@ runs.
 
 A **harness definition** is an owner-scoped connection profile that Athena uses to invoke a harness on a runner. It stores:
 
-- The **runner type** (`runnerType`): which execution environment the harness runs on.
+- The **runner type** (`type`): which execution environment the harness runs on.
 - Credentials and connectivity settings required to reach the runner.
 - Lifecycle status and runtime tuning fields.
 
