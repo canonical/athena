@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 import { assignProviderToLoopViaUi, assignRunnerToLoopViaUi, assignWorkgraphToLoopViaUi, configureProviderModelsViaUi, createProviderViaUi, createRunnerViaUi, createWorkgraphViaUi } from "./entities.js";
-import type { InferenceMock, TestInferenceService } from "./inference.js";
+import { type InferenceMock, type TestInferenceService, testInferenceChatModel } from "./inference.js";
 import { createLoop } from "./loop.js";
 import { modelValidationScenario } from "./scenario.js";
 
-const runnableLoopModel = `deterministic-chat`;
+const runnableLoopModel = testInferenceChatModel;
 
 export type RunnableLoop = {
   loop: { id: string; name: string };
@@ -20,7 +20,7 @@ export const prepareRunnableLoop = async (page: Page, testInference: TestInferen
 
   const inference = await testInference.setup(modelValidationScenario(), { name: `provider` });
   await createProviderViaUi(page, providerName, inference.scope);
-  await configureProviderModelsViaUi(page, providerName, runnableLoopModel);
+  await configureProviderModelsViaUi(page, providerName, `chat`, runnableLoopModel);
   await assignProviderToLoopViaUi(page, loop.id, providerName);
 
   await createRunnerViaUi(page, runnerName);

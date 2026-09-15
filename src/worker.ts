@@ -1,4 +1,5 @@
 import { backgroundJobCreateWorker } from "@components/background-job/background-job.service.js";
+import "@components/rag/rag.job.js";
 import { backendConfig } from "@components/config/backend-config.js";
 import { log } from "@components/logging/logging.service.js";
 import { closePG, ensurePG } from "@components/postgres/postgres.js";
