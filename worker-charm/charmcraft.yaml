@@ -1,0 +1,74 @@
+name: athena-worker
+
+type: charm
+
+base: ubuntu@24.04
+
+platforms:
+  amd64:
+
+summary: Background processing service for Athena.
+
+description: |
+  Runs Athena task, webhook, runner, and registered durable background jobs
+  independently from the Athena HTTP application.
+
+charm-libs:
+  - lib: data_platform_libs.data_interfaces
+    version: "0"
+
+resources:
+  app-image:
+    type: oci-image
+    description: OCI image containing the Athena web and worker entrypoints.
+
+containers:
+  app:
+    resource: app-image
+
+parts:
+  charm:
+    plugin: charm
+    source: .
+
+config:
+  options:
+    database-name:
+      type: string
+      default: athena
+      description: PostgreSQL database name owned and migrated by the Athena application
+    credential:
+      type: secret
+      description: >
+        Credential encryption configuration. The secret must contain the
+        encryption-key used by the Athena web application.
+    pg-pool-max:
+      description: Maximum number of clients in the worker PostgreSQL pool
+      type: int
+      default: 1
+    pg-pool-idle-timeout-ms:
+      description: Idle timeout for worker PostgreSQL pool clients in milliseconds
+      type: int
+      default: 60000
+    pg-connection-timeout-ms:
+      description: PostgreSQL connection timeout in milliseconds
+      type: int
+      default: 10000
+    background-job-worker-concurrency:
+      description: Local durable-job concurrency per worker unit
+      type: int
+      default: 2
+    background-job-shutdown-timeout-ms:
+      description: Graceful worker shutdown timeout in milliseconds
+      type: int
+      default: 30000
+
+requires:
+  postgresql:
+    interface: postgresql_client
+    optional: false
+    limit: 1
+  athena:
+    interface: athena_worker
+    optional: false
+    limit: 1

@@ -176,7 +176,7 @@ export const loopWorkgraphWebhookDelete = async (loopId: string, workgraphId: st
   }
 };
 
-export const webhookInboundReceive = async (receiverId: string, headers: Record<string, string | string[] | undefined>, body: unknown): Promise<void> => {
+export const webhookInboundReceive = async (receiverId: string, headers: Record<string, string | string[] | undefined>, _body: unknown): Promise<void> => {
   const webhook = await queryWebhookByReceiverId(receiverId);
 
   if (!webhook?.active) {
@@ -191,11 +191,7 @@ export const webhookInboundReceive = async (receiverId: string, headers: Record<
     throw new WebhookUnauthorizedError(`Webhook authentication failed.`);
   }
 
-  await queryWebhookItemCreate({
-    receiverId,
-    headers: normalizedHeaders,
-    body,
-  });
+  await queryWebhookItemCreate({ receiverId });
 
   console.log(`[webhook][ingest] accepted and enqueued`, {
     receiverId,
