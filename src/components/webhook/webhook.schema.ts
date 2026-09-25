@@ -3,6 +3,7 @@ import { z } from "zod";
 
 export const webhookTypes = [`workgraph`] as const;
 export const webhookSecurityModes = [`header`] as const;
+export const webhookItemStatuses = [`new`, `processing`, `done`] as const;
 
 export const loopWorkgraphWebhookSchema = z.object({
   id: uuid(),
@@ -33,7 +34,15 @@ export const loopWorkgraphWebhookCreateResultSchema = loopWorkgraphWebhookSchema
   secret: requiredString(`secret is required.`),
 });
 
+export const webhookItemSchema = z.object({
+  id: uuid(),
+  payload: z.record(z.string(), z.unknown()),
+  status: z.enum(webhookItemStatuses),
+  retryCount: z.number().int().nonnegative(),
+});
+
 export type LoopWorkgraphWebhook = z.infer<typeof loopWorkgraphWebhookSchema>;
 export type LoopWorkgraphWebhookCreate = z.infer<typeof loopWorkgraphWebhookCreateSchema>;
 export type LoopWorkgraphWebhookUpdate = z.infer<typeof loopWorkgraphWebhookUpdateSchema>;
 export type LoopWorkgraphWebhookCreateResult = z.infer<typeof loopWorkgraphWebhookCreateResultSchema>;
+export type WebhookItem = z.infer<typeof webhookItemSchema>;

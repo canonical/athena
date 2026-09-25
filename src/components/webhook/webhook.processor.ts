@@ -13,6 +13,8 @@ import { synchronizeLoopWorkgraphAndPromoteTasks } from "@components/workgraph/w
 const webhookItemHeartbeatIntervalMs = 30_000;
 
 let isProcessing = false;
+let isStopping = false;
+let currentRun: Promise<void> | null = null;
 
 const processWebhookItem = async (item: { id: string; payload: Record<string, unknown>; reclaimed: boolean }): Promise<void> => {
   const receiverId = typeof item.payload.receiverId === `string` ? item.payload.receiverId : ``;
@@ -63,7 +65,7 @@ const pingWebhookItem = async (id: string): Promise<void> => {
 };
 
 const processQueue = async (): Promise<void> => {
-  while (true) {
+  while (!isStopping) {
     const item = await queryWebhookItemClaimNext();
 
     if (!item) {
@@ -97,13 +99,13 @@ const processQueue = async (): Promise<void> => {
 };
 
 export const triggerWebhookItemProcessor = (): void => {
-  if (isProcessing) {
+  if (isStopping || isProcessing) {
     return;
   }
 
   isProcessing = true;
 
-  void (async () => {
+  currentRun = (async () => {
     try {
       await processQueue();
     } catch (error) {
@@ -112,10 +114,17 @@ export const triggerWebhookItemProcessor = (): void => {
       });
     } finally {
       isProcessing = false;
+      currentRun = null;
     }
   })();
 };
 
 export const startWebhookItemProcessor = (): void => {
   triggerWebhookItemProcessor();
+};
+
+// Stops accepting triggers and waits for the in-flight item to finish.
+export const stopWebhookItemProcessor = async (): Promise<void> => {
+  isStopping = true;
+  await currentRun;
 };

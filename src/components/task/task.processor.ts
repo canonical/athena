@@ -6,6 +6,8 @@ import { queryTaskMarkCompleted, queryTaskPick, queryTaskProcessorPing, queryTas
 import { v7 as uuidv7 } from "uuid";
 
 let isProcessing = false;
+let isStopping = false;
+let currentRun: Promise<void> | null = null;
 let processorInterval: ReturnType<typeof setInterval> | null = null;
 const taskProcessorIntervalMs = 15_000;
 const processorId = uuidv7();
@@ -27,16 +29,25 @@ export const startTaskProcessor = (): void => {
   log.info(`Task processor interval scheduled`, { processorId, processorIntervalMs: taskProcessorIntervalMs });
 };
 
-export const stopTaskProcessor = (): void => {
+// Stops scheduling runs and waits for the in-flight run to release its current task.
+export const stopTaskProcessor = async (): Promise<void> => {
+  isStopping = true;
+
   if (processorInterval) {
     clearInterval(processorInterval);
     processorInterval = null;
   }
 
+  await currentRun;
   log.info(`Task processor stopped`, { processorId });
 };
 
 export const triggerTaskProcessor = (): void => {
+  if (isStopping) {
+    log.info(`Task processor trigger skipped`, { processorId, reason: `stopping` });
+    return;
+  }
+
   if (isProcessing) {
     log.info(`Task processor trigger skipped`, { processorId, reason: `already-processing` });
     return;
@@ -45,7 +56,7 @@ export const triggerTaskProcessor = (): void => {
   isProcessing = true;
   log.info(`Task processor trigger accepted`, { processorId });
 
-  void runTaskProcessor();
+  currentRun = runTaskProcessor();
 };
 
 const runTaskProcessor = async (): Promise<void> => {
@@ -60,6 +71,7 @@ const runTaskProcessor = async (): Promise<void> => {
     });
   } finally {
     isProcessing = false;
+    currentRun = null;
     log.info(`Task processor run finished`, { processorId });
   }
 };
@@ -70,7 +82,7 @@ const processQueue = async (): Promise<void> => {
   const resetCount = await queryTaskResetStaleProcessorClaims();
   log.info(`Task processor stale claim recovery completed`, { processorId, resetCount });
 
-  while (true) {
+  while (!isStopping) {
     const task = await pickTask();
 
     if (!task) {

@@ -66,7 +66,9 @@ The `pg-boss` version is pinned. Web processes install or upgrade its schema whe
 producer starts; worker processes never create or migrate it and fail startup until it is
 installed. PostgreSQL advisory locking serializes concurrent migration attempts.
 
-On shutdown, a process stops scheduling task and runner polling cycles. Its `pg-boss` client
+On shutdown, a process stops scheduling task, webhook, and runner processing cycles and waits,
+within a bounded timeout, for in-flight cycles to finish; claims abandoned after the timeout are
+recovered by stale-claim recovery. Its `pg-boss` client
 stops accepting new background jobs and drains active background-job handlers within a bounded
 timeout before the domain PostgreSQL pool closes. A database outage must never fall back to an
 in-memory queue.

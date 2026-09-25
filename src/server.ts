@@ -2,6 +2,7 @@ import { authenticationRouter } from "@components/authentication/authentication.
 import { requireAuthentication } from "@components/authentication/authentication-middleware.js";
 import { backgroundJobStartProducer, backgroundJobStopProducer } from "@components/background-job/background-job.service.js";
 import { defineMiddlewares } from "@components/base/define-middlewares.js";
+import { backendConfig } from "@components/config/backend-config.js";
 import { config } from "@components/config/config.js";
 import { defineLoggingErrorHandler } from "@components/logging/logging.middleware.js";
 import { log } from "@components/logging/logging.service.js";
@@ -18,7 +19,7 @@ import { statusRouter } from "@components/status/status.router.js";
 import { stepSequenceRouter } from "@components/stepSequence/stepSequence.router.js";
 import { startTaskProcessor, stopTaskProcessor } from "@components/task/task.processor.js";
 import { taskRouter } from "@components/task/task.router.js";
-import { startWebhookItemProcessor } from "@components/webhook/webhook.processor.js";
+import { startWebhookItemProcessor, stopWebhookItemProcessor } from "@components/webhook/webhook.processor.js";
 import { webhookPublicRouter } from "@components/webhook/webhook.public.router.js";
 import { webhookRouter } from "@components/webhook/webhook.router.js";
 import { workgraphRouter } from "@components/workgraph/workgraph.router.js";
@@ -81,11 +82,26 @@ const stop = async (signal: NodeJS.Signals): Promise<void> => {
   log.info(`Athena server stopping`, { signal });
 
   try {
-    stopTaskProcessor();
-    stopRunnerQueueConsumer();
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
-    });
+    const timeoutMs = backendConfig.backgroundJobs.shutdownTimeoutMs;
+    let drainTimeout: ReturnType<typeof setTimeout> | undefined;
+    const [, drained] = await Promise.all([
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+      Promise.race([
+        Promise.all([stopTaskProcessor(), stopWebhookItemProcessor(), stopRunnerQueueConsumer()]).then(() => true),
+        new Promise<false>((resolve) => {
+          drainTimeout = setTimeout(() => resolve(false), timeoutMs);
+        }),
+      ]).finally(() => clearTimeout(drainTimeout)),
+    ]);
+
+    // Claims abandoned here are recovered by the stale-claim sweep of the next process.
+    if (!drained) {
+      process.exitCode = 1;
+      log.error(`Athena server domain queue drain timed out`, { signal, timeoutMs });
+    }
+
     await backgroundJobStopProducer();
     await closePG();
     log.info(`Athena server stopped`, { signal });

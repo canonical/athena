@@ -18,6 +18,8 @@ import type { RunnerQueueItem } from "./runner.schema.js";
 import { queryRunnerDecryptCredential } from "./runner.service.js";
 
 let isConsuming = false;
+let isStopping = false;
+let currentCycle: Promise<void> | null = null;
 let consumerInterval: ReturnType<typeof setInterval> | null = null;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 const runnerQueueConsumerIntervalMs = 15_000;
@@ -40,11 +42,16 @@ export const startRunnerQueueConsumer = (): void => {
   log.info(`Runner queue consumer interval scheduled`, { consumerId, intervalMs: runnerQueueConsumerIntervalMs });
 };
 
-export const stopRunnerQueueConsumer = (): void => {
+// Stops scheduling cycles and waits for the in-flight cycle; claims keep their heartbeat until it finishes.
+export const stopRunnerQueueConsumer = async (): Promise<void> => {
+  isStopping = true;
+
   if (consumerInterval) {
     clearInterval(consumerInterval);
     consumerInterval = null;
   }
+
+  await currentCycle;
 
   if (heartbeatInterval) {
     clearInterval(heartbeatInterval);
@@ -55,6 +62,11 @@ export const stopRunnerQueueConsumer = (): void => {
 };
 
 export const triggerRunnerQueueConsumer = (): void => {
+  if (isStopping) {
+    log.info(`Runner queue consumer trigger skipped`, { consumerId, reason: `stopping` });
+    return;
+  }
+
   if (isConsuming) {
     log.info(`Runner queue consumer trigger skipped`, { consumerId, reason: `already-consuming` });
     return;
@@ -63,7 +75,7 @@ export const triggerRunnerQueueConsumer = (): void => {
   isConsuming = true;
   log.info(`Runner queue consumer trigger accepted`, { consumerId });
 
-  void runConsumerCycle();
+  currentCycle = runConsumerCycle();
 };
 
 const runConsumerCycle = async (): Promise<void> => {
@@ -71,7 +83,10 @@ const runConsumerCycle = async (): Promise<void> => {
 
   try {
     await checkClaimedItems();
-    await claimAndSubmitNext();
+
+    if (!isStopping) {
+      await claimAndSubmitNext();
+    }
   } catch (error) {
     log.error(`Runner queue consumer cycle failed`, {
       consumerId,
@@ -79,6 +94,7 @@ const runConsumerCycle = async (): Promise<void> => {
     });
   } finally {
     isConsuming = false;
+    currentCycle = null;
     console.log(`[runner-queue-consumer] cycle finished`, { consumerId });
   }
 };
@@ -95,6 +111,10 @@ const checkClaimedItems = async (): Promise<void> => {
   console.log(`[runner-queue-consumer] checking claimed items`, { consumerId, count: claimedItems.length });
 
   for (const item of claimedItems) {
+    if (isStopping) {
+      return;
+    }
+
     if (!item.externalTaskId) {
       console.log(`[runner-queue-consumer] claimed item has no externalTaskId — marking failed`, { id: item.id });
       await failRunnerQueueItem(item, `external-task-id-missing`, `Runner task did not provide an external task ID.`);
