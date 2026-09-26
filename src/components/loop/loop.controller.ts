@@ -1,3 +1,4 @@
+import { queryLoopDelete } from "@components/rag/rag.transaction.service.js";
 import { disabledProviderToolNamesFromEnabled, enabledProviderToolNamesFromDisabled, normalizeProviderToolNames, providerToolDefinitions } from "@components/tool/tool.catalog.js";
 import { LoopForbiddenError, LoopNotFoundError, LoopValidationError } from "./loop.errors.js";
 import { evaluateLoopReadiness } from "./loop.readiness.js";
@@ -20,7 +21,6 @@ import {
   queryLoopAdminCount,
   queryLoopAdminMembership,
   queryLoopCreate,
-  queryLoopDelete,
   queryLoopDisabledProviderTools,
   queryLoopDisabledProviderToolsUpdate,
   queryLoopForUser,

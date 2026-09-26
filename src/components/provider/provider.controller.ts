@@ -1,18 +1,28 @@
 import type { AppLogger } from "@components/logging/logging.schema.js";
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
-import { fetchOpenRouterModels, validateOpenRouterModel } from "@components/openrouter/openrouter.service.js";
+import { fetchOpenRouterModels, validateOpenRouterEmbeddingModel, validateOpenRouterModel } from "@components/openrouter/openrouter.service.js";
+import { queryLoopProviderDelete, queryProviderDelete } from "@components/rag/rag.transaction.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
 import { ProviderForbiddenError, ProviderNotFoundError, ProviderValidationError } from "./provider.errors.js";
-import type { LoopProvider, LoopProviderAdminUpdate, LoopProviderInsert, Provider, ProviderInsert, ProviderModel, ProviderModelPreviewRequest, ProviderModelValidateResultItem, ProviderUpdate } from "./provider.schema.js";
+import type {
+  LoopProvider,
+  LoopProviderAdminUpdate,
+  LoopProviderInsert,
+  Provider,
+  ProviderCapability,
+  ProviderInsert,
+  ProviderModel,
+  ProviderModelPreviewRequest,
+  ProviderModelValidateResultItem,
+  ProviderUpdate,
+} from "./provider.schema.js";
 import {
   queryLoopProviderAssign,
-  queryLoopProviderDelete,
   queryLoopProviderList,
   queryLoopProviderUpdateByAdmin,
   queryProviderApiConnectionByOwner,
   queryProviderByIdForOwner,
   queryProviderCreate,
-  queryProviderDelete,
   queryProviderListByOwner,
   queryProviderUpdate,
 } from "./provider.service.js";
@@ -44,18 +54,34 @@ const fetchProviderModelsByType = async (providerType: string, connection: { bas
   }
 };
 
-const normalizeProviderModelConfig = <T extends { defaultModel: string | null; enabledModels: string[] | null }>(input: T): T => {
-  const enabledModels = input.enabledModels === null ? null : Array.from(new Set(input.enabledModels.map((value) => value.trim()).filter((value) => value.length > 0)));
-  const defaultModel = input.defaultModel?.trim() ?? null;
+type ProviderModelConfig = {
+  chatDefaultModel: string | null;
+  chatEnabledModels: string[] | null;
+  embeddingDefaultModel: string | null;
+  embeddingEnabledModels: string[] | null;
+};
 
-  if (defaultModel && !enabledModels?.includes(defaultModel)) {
-    throw new ProviderValidationError(`Default model must also be present in enabledModels.`);
+const normalizeCapabilityModelConfig = (capability: `Chat` | `Embedding`, defaultModel: string | null, enabledModels: string[] | null): { defaultModel: string | null; enabledModels: string[] | null } => {
+  const normalizedEnabledModels = enabledModels === null ? null : Array.from(new Set(enabledModels.map((value) => value.trim()).filter((value) => value.length > 0)));
+  const normalizedDefaultModel = defaultModel?.trim() ?? null;
+
+  if (normalizedDefaultModel && !normalizedEnabledModels?.includes(normalizedDefaultModel)) {
+    throw new ProviderValidationError(`${capability} default model must also be present in enabled models.`);
   }
+
+  return { defaultModel: normalizedDefaultModel, enabledModels: normalizedEnabledModels };
+};
+
+const normalizeProviderModelConfig = <T extends ProviderModelConfig>(input: T): T => {
+  const chat = normalizeCapabilityModelConfig(`Chat`, input.chatDefaultModel, input.chatEnabledModels);
+  const embedding = normalizeCapabilityModelConfig(`Embedding`, input.embeddingDefaultModel, input.embeddingEnabledModels);
 
   return {
     ...input,
-    defaultModel,
-    enabledModels,
+    chatDefaultModel: chat.defaultModel,
+    chatEnabledModels: chat.enabledModels,
+    embeddingDefaultModel: embedding.defaultModel,
+    embeddingEnabledModels: embedding.enabledModels,
   };
 };
 
@@ -95,8 +121,17 @@ export const providerUpdate = async (providerId: string, ownerId: string, input:
 export const providerDelete = async (providerId: string, ownerId: string): Promise<void> => {
   validateProviderId(providerId);
 
-  if (!(await queryProviderDelete(providerId, ownerId))) {
+  const result = await queryProviderDelete(providerId, ownerId);
+
+  if (result.status === `notFound`) {
     throw new ProviderNotFoundError(`Provider not found.`);
+  }
+
+  if (result.status === `inUse`) {
+    const loopIds = Array.from(new Set(result.ragIndexes.map((index) => index.loop).filter((loop): loop is string => loop !== null)));
+    throw new ProviderValidationError(`Provider cannot be deleted because it is used by loops: ${loopIds.join(`, `)}.`, {
+      usingEntities: loopIds.map((loop) => ({ type: `loop`, id: loop })),
+    });
   }
 };
 
@@ -123,7 +158,7 @@ export const providerModelPreview = async (input: ProviderModelPreviewRequest, l
   );
 };
 
-export const providerValidateModels = async (providerId: string, ownerId: string, models: string[], logger?: AppLogger): Promise<ProviderModelValidateResultItem[]> => {
+export const providerValidateModels = async (providerId: string, ownerId: string, capability: ProviderCapability, models: string[], logger?: AppLogger): Promise<ProviderModelValidateResultItem[]> => {
   validateProviderId(providerId);
 
   const connection = await queryProviderApiConnectionByOwner(providerId, ownerId);
@@ -150,18 +185,19 @@ export const providerValidateModels = async (providerId: string, ownerId: string
     const batchValidations = await Promise.all(
       batchModels.map(async (model) => ({
         model,
-        validation: await validateOpenRouterModel(
+        validation: await (capability === `embedding` ? validateOpenRouterEmbeddingModel : validateOpenRouterModel)(
           {
             baseUrl: connection.baseUrl,
             apiKey: connection.apiKey,
           },
           {
             model,
-            operation: `provider-model-validate`,
+            operation: `provider-${capability}-model-validate`,
             timeoutMs: 20_000,
             logger,
             context: {
               providerId,
+              capability,
               model,
             },
           },
@@ -178,7 +214,7 @@ export const providerValidateModels = async (providerId: string, ownerId: string
         continue;
       }
 
-      if (validation.status === 404) {
+      if (validation.status === 400 || validation.status === 404) {
         results.push({
           model,
           available: false,
@@ -187,7 +223,7 @@ export const providerValidateModels = async (providerId: string, ownerId: string
         continue;
       }
 
-      throw validation.error ?? new Error(validation.reason ?? `Model validation failed.`);
+      throw new ProviderValidationError(validation.reason ?? `Model validation failed.`);
     }
   }
 
@@ -258,7 +294,15 @@ export const loopProviderDelete = async (loopId: string, providerId: string, use
     throw new ProviderForbiddenError(`Only loop admins may remove assignments.`);
   }
 
-  if (!(await queryLoopProviderDelete(loopId, providerId))) {
+  const result = await queryLoopProviderDelete(loopId, providerId);
+
+  if (result.status === `notFound`) {
     throw new ProviderNotFoundError(`Loop provider not found.`);
+  }
+
+  if (result.status === `inUse`) {
+    throw new ProviderValidationError(`Provider cannot be removed from loop ${loopId} because it is used by RAG index ${result.ragIndexes.map((index) => index.id).join(`, `)}.`, {
+      usingEntities: [{ type: `loop`, id: loopId }],
+    });
   }
 };

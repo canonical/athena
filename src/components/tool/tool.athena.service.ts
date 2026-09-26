@@ -154,7 +154,7 @@ export const executeAthenaListModels = async (context: ProviderToolExecutionCont
   });
 
   const enabledIds = new Set(providerContext.providerResolution.selected.enabledModels);
-  const models = enabledIds.size > 0 ? allModels.filter((m) => enabledIds.has(m.id)) : allModels;
+  const models = allModels.filter((model) => model.capabilities.includes(`chat`) && enabledIds.has(model.id));
 
   return {
     models,
