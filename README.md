@@ -56,7 +56,7 @@ The current application serves an authenticated SPA plus a JSON API.
   - runner management under `/runner/...`
   - workgraph management under `/workgraph/...`
 - Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
-- The server also starts background processors for tasks, inbound webhook items, and the runner queue.
+- The server also starts background processors for tasks and inbound webhook items.
 
 ## E2E testing
 
@@ -160,8 +160,8 @@ The checked-in sample is [.example.env](./.example.env). It includes:
 
 - [rockcraft.yaml](./rockcraft.yaml) builds the Node application and stages the built backend, frontend, dependencies, and migrations into the rock.
 - [scripts/stage-app.sh](./scripts/stage-app.sh) assembles an ephemeral `app/` directory for rock builds without changing the tracked repository layout.
-- [charm](./charm) contains the Python-based `expressjs-framework` web charm.
-- [worker-charm](./worker-charm) contains the independently scalable worker charm. It uses the same rock, manages its own PostgreSQL relation, and requires the web application's credential encryption key as a Juju secret.
+- [charm](./charm) contains a Python-based `expressjs-framework` charm that depends on PostgreSQL and expects Juju secrets for OIDC and credential encryption.
+- [worker-charm](./worker-charm) contains the `pg-boss` worker charm.
 - Manual charm deployment guidance lives in [charm/tests/manual/README.md](./charm/tests/manual/README.md).
 
 ## Related documentation

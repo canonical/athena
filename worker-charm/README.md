@@ -1,20 +1,21 @@
 # Athena worker charm
 
-This charm runs Athena background processing separately from the HTTP application. It uses
-the same `app-image` rock as the web charm and starts `npm run start:worker`.
+Runs Athena `pg-boss` jobs from the shared `app-image` rock with `npm run start:worker`. The
+worker never runs migrations.
 
-## Database and secret ownership
+The `credential` secret must hold the web charm's `encryption-key`. Relating `athena:workers`
+grants the worker's PostgreSQL role access to Athena tables and the `pgboss` schema.
 
-The worker relates directly to PostgreSQL and receives its own role and connection details.
-Relate its `athena` endpoint to the web charm's `workers` endpoint so that Athena can grant
-that role access to its tables, sequences, and `pgboss` schema. Athena remains the sole owner
-of schema creation and migrations; the worker never runs migrations.
+## Deployment
 
-The `credential` secret must contain the same `encryption-key` configured on the web charm.
-The worker uses it when a queued operation needs provider, runner, repository, or Workgraph
-credentials.
-
-Juju model HTTP, HTTPS, and no-proxy settings are forwarded to the worker workload for
-provider, runner, repository, and Workgraph requests.
-
-See [deployment.md](../docs/deployment.md) for deployment commands and migration ownership.
+```bash
+juju deploy pgbouncer-k8s pgbouncer-worker --trust --config pool_mode=transaction
+juju integrate pgbouncer-worker postgresql-k8s
+juju deploy ./athena-worker_amd64.charm athena-worker \
+  --resource app-image=ghcr.io/canonical/athena:latest
+juju integrate athena-worker:postgresql pgbouncer-worker
+juju integrate athena:workers athena-worker:athena
+secret=$(juju add-secret athena-worker-credential encryption-key='<athena key>')
+juju grant-secret athena-worker-credential athena-worker
+juju config athena-worker credential="$secret"
+```
