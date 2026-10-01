@@ -1,3 +1,4 @@
+import { backendConfig } from "@components/config/backend-config.js";
 import { createEnvAccessor } from "@components/config/env-accessor.js";
 import { ensurePG } from "@components/postgres/postgres.js";
 
@@ -20,10 +21,7 @@ export const config = {
     nodeEnv,
   },
   logging: {
-    traceHeaderName: env.getEnv(`LOG_TRACE_HEADER_NAME`, `traceparent`),
-    serviceName: env.getEnv(`LOG_SERVICE_NAME`, `athena-service`),
-    level: env.getEnv(`LOG_LEVEL`, `info`),
-    enabled: env.getBoolean(`LOG_ENABLED`, true),
+    ...backendConfig.logging,
   },
   cors: {
     allowedOrigins: requiredEnv.getList(`ALLOWED_ORIGINS`, `,`),
@@ -47,12 +45,18 @@ export const config = {
     },
   },
   database: {
-    connectionString: requiredEnv.getEnv(`POSTGRESQL_DB_CONNECT_STRING`),
+    ...backendConfig.database,
   },
 };
 
 Object.freeze(config);
 
-ensurePG({ connectionString: config.database.connectionString });
+ensurePG({
+  applicationName: `athena-web/${backendConfig.runtime.instanceId}`,
+  connectionString: config.database.connectionString,
+  connectionTimeoutMillis: config.database.connectionTimeoutMs,
+  idleTimeoutMillis: config.database.poolIdleTimeoutMs,
+  max: config.database.poolMax,
+});
 
 export type AppConfig = typeof config;

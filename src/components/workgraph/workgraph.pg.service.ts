@@ -816,14 +816,24 @@ export const queryWebhookItemCreate = async (payload: Record<string, unknown>): 
   );
 };
 
-export const queryWebhookItemClaimNext = async (): Promise<{ id: string; payload: Record<string, unknown>; retryCount: number } | undefined> => {
-  const result = await query<{ id: string; payload: Record<string, unknown>; retryCount: number }>(
+// Claims the oldest new item, or a processing item whose processor stopped pinging it.
+export const queryWebhookItemClaimNext = async (): Promise<{ id: string; payload: Record<string, unknown>; retryCount: number; reclaimed: boolean } | undefined> => {
+  const result = await query<{ id: string; payload: Record<string, unknown>; retryCount: number; reclaimed: boolean }>(
     `
       WITH candidate AS (
-        SELECT wi."id"
+        SELECT wi."id", wi."status"
         FROM "webhookItem" wi
-        WHERE wi."status" = 'new'
-          AND wi."retryCount" < 3
+        WHERE wi."retryCount" < 3
+          AND (
+            wi."status" = 'new'
+            OR (
+              wi."status" = 'processing'
+              AND (
+                wi."processorPingedAt" < NOW() - INTERVAL '5 minutes'
+                OR wi."processorPingedAt" IS NULL
+              )
+            )
+          )
         ORDER BY wi."id" ASC
         LIMIT 1
         FOR UPDATE SKIP LOCKED
@@ -831,14 +841,27 @@ export const queryWebhookItemClaimNext = async (): Promise<{ id: string; payload
       UPDATE "webhookItem" wi
       SET
         "status" = 'processing',
-        "retryCount" = wi."retryCount" + 1
+        "retryCount" = wi."retryCount" + 1,
+        "processorPingedAt" = NOW()
       FROM candidate
       WHERE wi."id" = candidate."id"
-      RETURNING wi."id", wi."payload", wi."retryCount"
+      RETURNING wi."id", wi."payload", wi."retryCount", candidate."status" = 'processing' AS "reclaimed"
     `,
   );
 
   return result.rows[0];
+};
+
+export const queryWebhookItemPing = async (id: string): Promise<void> => {
+  await query(
+    `
+      UPDATE "webhookItem"
+      SET "processorPingedAt" = NOW()
+      WHERE "id" = $1
+        AND "status" = 'processing'
+    `,
+    [id],
+  );
 };
 
 export const queryWebhookItemMarkDone = async (id: string): Promise<void> => {

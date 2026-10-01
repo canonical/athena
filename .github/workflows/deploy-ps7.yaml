@@ -27,11 +27,17 @@ on:
         required: true
         type: string
         default: "athena"
+      worker_application_name:
+        description: "Juju worker application name"
+        required: true
+        type: string
+        default: "athena-worker"
 
 env:
   DEPLOYMENT_ENV: ${{ inputs.environment || 'edge' }}
   VERSION: ${{ inputs.version || 'latest' }}
   APP_NAME: ${{ inputs.application_name || 'athena' }}
+  WORKER_APP_NAME: ${{ inputs.worker_application_name || 'athena-worker' }}
 
 jobs:
   validate:
@@ -131,6 +137,7 @@ jobs:
       JUJU_MODEL_NAME: ${{ vars.JUJU_MODEL_NAME }}
       RESOLVED_RELEASE_TAG: ${{ needs.validate.outputs.resolved_tag }}
       JUJU_VERSION: ${{ vars.JUJU_VERSION || '3/stable' }}
+      POSTGRESQL_APP: ${{ vars.ATHENA_POSTGRESQL_APPLICATION }}
     steps:
       - name: Install Juju
         run: sudo snap install juju --channel="$JUJU_VERSION"
@@ -154,10 +161,12 @@ jobs:
             exit 1
           fi
 
-          CHARM_FILE=$(ls ./*.charm | head -1)
-          echo "Successfully downloaded charm: $CHARM_FILE"
+          WEB_CHARM_FILE=$(ls ./athena_*.charm | head -1)
+          WORKER_CHARM_FILE=$(ls ./athena-worker_*.charm | head -1)
+          echo "Successfully downloaded charms: $WEB_CHARM_FILE, $WORKER_CHARM_FILE"
           echo "## 📦 Release Assets Downloaded" >> $GITHUB_STEP_SUMMARY
-          echo "**Charm:** $CHARM_FILE" >> $GITHUB_STEP_SUMMARY
+          echo "**Web charm:** $WEB_CHARM_FILE" >> $GITHUB_STEP_SUMMARY
+          echo "**Worker charm:** $WORKER_CHARM_FILE" >> $GITHUB_STEP_SUMMARY
 
       - name: Authenticate with JAAS
         env:
@@ -178,9 +187,14 @@ jobs:
           WEBSITE_URL: ${{ vars.WEBSITE_URL }}
           GHCR_READ_USERNAME: ${{ secrets.GHCR_READ_USERNAME }}
           GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+          WORKER_CREDENTIAL_SECRET: ${{ vars.ATHENA_WORKER_CREDENTIAL_SECRET }}
         run: |
-          CHARM_FILE=$(ls ./*.charm | head -1)
+          WEB_CHARM_FILE=$(ls ./athena_*.charm | head -1)
+          WORKER_CHARM_FILE=$(ls ./athena-worker_*.charm | head -1)
           RESOURCE_NAME=app-image
+
+          : "${WORKER_CREDENTIAL_SECRET:?Set ATHENA_WORKER_CREDENTIAL_SECRET in the deployment environment}"
+          : "${POSTGRESQL_APP:?Set ATHENA_POSTGRESQL_APPLICATION in the deployment environment}"
 
           umask 077
           trap 'rm -f ./image_metadata.json' EXIT
@@ -204,12 +218,42 @@ jobs:
 
           if juju show-application "$APP_NAME" &>/dev/null; then
             juju refresh --debug "$APP_NAME" \
-              --path="./$CHARM_FILE" \
+              --path="$WEB_CHARM_FILE" \
               --resource "$RESOURCE_NAME=./image_metadata.json"
           else
-            juju deploy --debug "./$CHARM_FILE" "$APP_NAME" \
+            juju deploy --debug "$WEB_CHARM_FILE" "$APP_NAME" \
               --resource "$RESOURCE_NAME=./image_metadata.json"
           fi
+
+          if juju show-application "$WORKER_APP_NAME" &>/dev/null; then
+            juju refresh --debug "$WORKER_APP_NAME" \
+              --path="$WORKER_CHARM_FILE" \
+              --resource "$RESOURCE_NAME=./image_metadata.json"
+          else
+            juju deploy --debug "$WORKER_CHARM_FILE" "$WORKER_APP_NAME" \
+              --resource "$RESOURCE_NAME=./image_metadata.json" \
+              --config "database-name=$APP_NAME"
+          fi
+
+          integrate_if_needed() {
+            local output
+            if ! output=$(juju integrate "$1" "$2" 2>&1); then
+              if [[ "$output" != *"already exists"* && "$output" != *"already integrated"* ]]; then
+                echo "$output"
+                return 1
+              fi
+            fi
+          }
+
+          juju config "$WORKER_APP_NAME" "database-name=$APP_NAME"
+          integrate_if_needed "$WORKER_APP_NAME:postgresql" "$POSTGRESQL_APP"
+          integrate_if_needed "$APP_NAME:workers" "$WORKER_APP_NAME:athena"
+          juju grant-secret "$WORKER_CREDENTIAL_SECRET" "$WORKER_APP_NAME"
+          juju config "$WORKER_APP_NAME" \
+            "credential=$WORKER_CREDENTIAL_SECRET"
+
+          juju wait-for application "$APP_NAME" --query='status=="active"' --timeout=20m
+          juju wait-for application "$WORKER_APP_NAME" --query='status=="active"' --timeout=20m
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## ✅ Deployment Complete" >> $GITHUB_STEP_SUMMARY

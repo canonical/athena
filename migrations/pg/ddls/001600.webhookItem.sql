@@ -3,8 +3,12 @@ CREATE TABLE IF NOT EXISTS "webhookItem" (
   "payload" JSONB NOT NULL DEFAULT '{}'::jsonb,
   "status" TEXT NOT NULL DEFAULT 'new' CHECK ("status" IN ('new', 'processing', 'done')),
   "retryCount" INTEGER NOT NULL DEFAULT 0,
+  "processorPingedAt" TIMESTAMPTZ NULL,
   PRIMARY KEY ("id")
 );
+
+ALTER TABLE "webhookItem"
+  ADD COLUMN IF NOT EXISTS "processorPingedAt" TIMESTAMPTZ NULL;
 
 CREATE INDEX IF NOT EXISTS "idxWebhookItemStatus" ON "webhookItem"("status");
 
