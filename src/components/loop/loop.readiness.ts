@@ -3,9 +3,7 @@ import type { LoopReadiness, LoopReadinessBlocker } from "./loop.schema.js";
 export type LoopReadinessCounts = {
   activeRoutingPersonaCount: number;
   activeExecutionPersonaCount: number;
-  activeProviderCount: number;
-  activeProviderWithModelConfigCount: number;
-  activeProviderMissingModelConfigCount: number;
+  activeChatProviderCount: number;
   activeRunnerCount: number;
   activeWorkgraphCount: number;
 };
@@ -34,25 +32,11 @@ export const evaluateLoopReadiness = (loopId: string, counts: LoopReadinessCount
     });
   }
 
-  if (counts.activeProviderCount === 0) {
+  if (counts.activeChatProviderCount === 0) {
     blockers.push({
-      code: `NO_ACTIVE_PROVIDER`,
-      message: `No active provider assignment is available for this loop.`,
+      code: `NO_ACTIVE_CHAT_PROVIDER`,
+      message: `No active chat-capable provider assignment is available for this loop.`,
     });
-  } else {
-    if (counts.activeProviderWithModelConfigCount === 0) {
-      blockers.push({
-        code: `NO_PROVIDER_MODEL_CONFIGURATION`,
-        message: `No active provider assignment has a default model and enabled models configured.`,
-      });
-    }
-
-    if (counts.activeProviderMissingModelConfigCount > 0) {
-      blockers.push({
-        code: `PROVIDER_MODEL_CONFIGURATION_INCOMPLETE`,
-        message: `One or more active provider assignments are missing default model or enabled models configuration.`,
-      });
-    }
   }
 
   if (counts.activeRunnerCount === 0) {

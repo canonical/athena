@@ -18,6 +18,10 @@ export function ProviderDetails({ provider, lifecycleLabel }: ProviderDetailsPro
         <dd>{lifecycleLabel[provider.lifecycleStatus] ?? provider.lifecycleStatus}</dd>
         <dt>Credential configured</dt>
         <dd>{provider.hasCredential ? `Yes` : `No`}</dd>
+        <dt>Chat capability</dt>
+        <dd>{(provider.chatEnabledModels?.length ?? 0) > 0 ? `Available` : `Not configured`}</dd>
+        <dt>Embedding capability</dt>
+        <dd>{(provider.embeddingEnabledModels?.length ?? 0) > 0 ? `Available` : `Not configured`}</dd>
       </dl>
     </div>
   );

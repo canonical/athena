@@ -1,5 +1,6 @@
 import { Button, Icon } from "@canonical/react-components";
 import { EntityDrawer } from "@components/base/EntityDrawer.js";
+import { useRagIndexState } from "@components/rag/rag.query.js";
 import { useState } from "react";
 import { LoopEditor } from "./LoopEditor.js";
 import type { LoopDetailsProps } from "./loop.schema.js";
@@ -14,6 +15,8 @@ const formatUsd = (value: number | null): string => {
 
 export function LoopDetails({ loopId, loopName, loopDescription, loopIterationCostLimitUsd, onFeedback, onSaved }: LoopDetailsProps) {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const { data: ragIndexState } = useRagIndexState(loopId);
+  const ragIndex = ragIndexState?.index;
 
   return (
     <>
@@ -36,6 +39,21 @@ export function LoopDetails({ loopId, loopName, loopDescription, loopIterationCo
         <dd>{loopDescription || `-`}</dd>
         <dt>Per-iteration cost limit</dt>
         <dd>{formatUsd(loopIterationCostLimitUsd)}</dd>
+      </dl>
+      <h3 className="p-heading--5">Memory</h3>
+      <dl>
+        <dt>Status</dt>
+        <dd id="loop-details-rag-status">{ragIndex?.lifecycleStatus ?? `Not configured`}</dd>
+        <dt>Source records</dt>
+        <dd id="loop-details-rag-source-count">{ragIndex?.sourceCount ?? 0}</dd>
+        <dt>Indexed</dt>
+        <dd id="loop-details-rag-projected-count">{ragIndex?.projectedCount ?? 0}</dd>
+        <dt>Pending</dt>
+        <dd id="loop-details-rag-pending-count">{ragIndex?.pendingCount ?? 0}</dd>
+        <dt>Skipped</dt>
+        <dd id="loop-details-rag-skipped-count">{ragIndex?.skippedCount ?? 0}</dd>
+        <dt>Failed</dt>
+        <dd id="loop-details-rag-failed-count">{ragIndex?.failedCount ?? 0}</dd>
       </dl>
       <EntityDrawer isOpen={isEditorOpen} onClose={() => setIsEditorOpen(false)} title="Edit loop">
         <LoopEditor

@@ -52,7 +52,7 @@ export const parseJsonWithSchema = <T>(schema: z.ZodType<T>, value: string): T |
 };
 
 export const resolveTaskProviderContext = async (task: Pick<Task, "loop" | "currentProvider" | "currentModel">): Promise<TaskProviderContext> => {
-  const providerResolution = task.currentProvider ? await resolveLoopSelectionByAssignment(task.loop, `provider`, task.currentProvider) : await resolveLoopSelection(task.loop, `provider`);
+  const providerResolution = task.currentProvider ? await resolveLoopSelectionByAssignment(task.loop, `provider`, task.currentProvider, { capability: `chat` }) : await resolveLoopSelection(task.loop, `provider`, { capability: `chat` });
 
   const baseUrl = providerResolution.selected?.baseUrl ?? null;
   const model = task.currentModel ?? providerResolution.selected?.defaultModel ?? providerResolution.selected?.enabledModels[0] ?? null;

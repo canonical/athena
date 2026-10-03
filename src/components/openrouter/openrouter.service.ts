@@ -2,8 +2,8 @@ import type { AppLogger } from "@components/logging/logging.schema.js";
 import { log } from "@components/logging/logging.service.js";
 import type { ProviderModel } from "@components/provider/provider.schema.js";
 import { fetchWithRetry } from "@components/utilities/http-retry.js";
-import type { OpenRouterChatCompletionPayload, OpenRouterChatCompletionRequest, OpenRouterConnection } from "./openrouter.schema.js";
-import { openRouterChatCompletionPayloadSchema } from "./openrouter.schema.js";
+import type { OpenRouterChatCompletionPayload, OpenRouterChatCompletionRequest, OpenRouterConnection, OpenRouterEmbeddingRequest } from "./openrouter.schema.js";
+import { openRouterChatCompletionPayloadSchema, openRouterEmbeddingPayloadSchema } from "./openrouter.schema.js";
 
 const normalizeBaseUrl = (value: string): string => value.replace(/\/$/, ``);
 
@@ -148,20 +148,32 @@ const readModelList = (payload: unknown): OpenRouterModelRecord[] => {
     const pricing = (entry as { pricing?: unknown }).pricing;
     const supportedParameters = readStringList((entry as { supported_parameters?: unknown }).supported_parameters);
     const reasoning = (entry as { reasoning?: unknown }).reasoning;
+    const outputModalities = readStringList((architecture as { output_modalities?: unknown } | undefined)?.output_modalities);
 
     if (typeof id !== `string` || id.trim().length === 0) {
       continue;
     }
 
+    const capabilities: ProviderModel["capabilities"] = [];
+
+    if (!outputModalities || outputModalities.includes(`text`)) {
+      capabilities.push(`chat`);
+    }
+
+    if (outputModalities?.includes(`embedding`)) {
+      capabilities.push(`embedding`);
+    }
+
     models.push({
       id: id.trim(),
+      capabilities,
       displayName: typeof name === `string` && name.trim().length > 0 ? name.trim() : undefined,
       description,
       contextLength,
       maxCompletionTokens: readPositiveInteger((topProvider as { max_completion_tokens?: unknown } | undefined)?.max_completion_tokens),
       modality: readString((architecture as { modality?: unknown } | undefined)?.modality),
       inputModalities: readStringList((architecture as { input_modalities?: unknown } | undefined)?.input_modalities),
-      outputModalities: readStringList((architecture as { output_modalities?: unknown } | undefined)?.output_modalities),
+      outputModalities,
       promptPrice: readString((pricing as { prompt?: unknown } | undefined)?.prompt),
       completionPrice: readString((pricing as { completion?: unknown } | undefined)?.completion),
       requestPrice: readString((pricing as { request?: unknown } | undefined)?.request),
@@ -179,6 +191,7 @@ const readModelList = (payload: unknown): OpenRouterModelRecord[] => {
 const toProviderModelList = (models: OpenRouterModelRecord[]): ProviderModel[] =>
   models.map((model) => ({
     id: model.id,
+    capabilities: model.capabilities,
     displayName: model.displayName,
     description: model.description,
     contextLength: model.contextLength,
@@ -196,12 +209,18 @@ const toProviderModelList = (models: OpenRouterModelRecord[]): ProviderModel[] =
     reasoningEfforts: model.reasoningEfforts,
   }));
 
+type OpenRouterErrorPayload = {
+  error?: {
+    message?: string;
+  };
+};
+
 export class OpenRouterRequestError extends Error {
   status: number;
 
-  payload: OpenRouterChatCompletionPayload;
+  payload: OpenRouterErrorPayload;
 
-  constructor(message: string, status: number, payload: OpenRouterChatCompletionPayload) {
+  constructor(message: string, status: number, payload: OpenRouterErrorPayload) {
     super(message);
     this.name = `OpenRouterRequestError`;
     this.status = status;
@@ -214,7 +233,7 @@ export type OpenRouterModelValidationResult = {
   status: number | null;
   reason: string | null;
   usageCostUsd: number;
-  payload: OpenRouterChatCompletionPayload | null;
+  payload: unknown;
   error: OpenRouterRequestError | null;
 };
 
@@ -326,6 +345,157 @@ export const fetchOpenRouterModels = async (connection: OpenRouterConnection, lo
     throw error;
   } finally {
     clearTimeout(timeout);
+  }
+};
+
+export const fetchOpenRouterEmbeddings = async (connection: OpenRouterConnection, request: OpenRouterEmbeddingRequest): Promise<number[][]> => {
+  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  const endpoint = baseUrl.endsWith(`/embeddings`) ? baseUrl : `${baseUrl}/embeddings`;
+  const timeoutMs = request.timeoutMs ?? 300_000;
+  const inputs = Array.isArray(request.input) ? request.input : [request.input];
+  const startedAt = Date.now();
+  const logger = request.logger ?? log;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  logger.info(`OpenRouter embedding request started`, {
+    endpoint,
+    model: request.model,
+    inputCount: inputs.length,
+    timeoutMs,
+    operation: request.operation,
+    ...request.context,
+  });
+
+  try {
+    const response = await fetchWithRetry(
+      endpoint,
+      {
+        method: `POST`,
+        headers: {
+          Authorization: `Bearer ${connection.apiKey}`,
+          "Content-Type": `application/json`,
+          ...(request.idempotencyKey ? { "Idempotency-Key": request.idempotencyKey } : {}),
+        },
+        body: JSON.stringify({ model: request.model, input: request.input }),
+        signal: controller.signal,
+      },
+      {
+        maxAttempts: 4,
+        baseDelayMs: 600,
+        maxDelayMs: 8_000,
+        allowRetryOnNonIdempotentMethods: true,
+      },
+    );
+
+    const rawPayload = (await response.json().catch(() => ({}))) as unknown;
+
+    if (!response.ok) {
+      const errorPayload = openRouterChatCompletionPayloadSchema.safeParse(rawPayload);
+      const payload = errorPayload.success ? errorPayload.data : {};
+      throw new OpenRouterRequestError(readErrorMessage(payload, response.status, `OpenRouter embedding request failed`), response.status, payload);
+    }
+
+    const parsedPayload = openRouterEmbeddingPayloadSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new Error(`OpenRouter embedding response validation failed: ${parsedPayload.error.issues.map((issue) => issue.message).join(`; `)}`);
+    }
+
+    if (parsedPayload.data.data.length !== inputs.length) {
+      throw new Error(`OpenRouter embedding response returned ${parsedPayload.data.data.length} vectors for ${inputs.length} inputs.`);
+    }
+
+    const ordered = new Array<number[]>(inputs.length);
+    let dimensions: number | null = null;
+
+    for (const entry of parsedPayload.data.data) {
+      if (entry.index >= inputs.length || ordered[entry.index]) {
+        throw new Error(`OpenRouter embedding response returned an invalid or duplicate index ${entry.index}.`);
+      }
+
+      if (entry.embedding.length === 0 || entry.embedding.some((coordinate) => !Number.isFinite(coordinate))) {
+        throw new Error(`OpenRouter embedding response returned an invalid vector at index ${entry.index}.`);
+      }
+
+      dimensions ??= entry.embedding.length;
+
+      if (entry.embedding.length !== dimensions) {
+        throw new Error(`OpenRouter embedding response returned inconsistent vector dimensions.`);
+      }
+
+      ordered[entry.index] = entry.embedding;
+    }
+
+    logger.info(`OpenRouter embedding request completed`, {
+      endpoint,
+      model: request.model,
+      inputCount: inputs.length,
+      dimensions,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+      operation: request.operation,
+      ...request.context,
+    });
+
+    return ordered;
+  } catch (error) {
+    logger.error(`OpenRouter embedding request errored`, {
+      endpoint,
+      model: request.model,
+      inputCount: inputs.length,
+      durationMs: Date.now() - startedAt,
+      operation: request.operation,
+      ...request.context,
+      error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) },
+    });
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+export const validateOpenRouterEmbeddingModel = async (
+  connection: OpenRouterConnection,
+  request: {
+    model: string;
+    operation: string;
+    timeoutMs?: number;
+    logger?: AppLogger;
+    context?: Record<string, unknown>;
+  },
+): Promise<OpenRouterModelValidationResult> => {
+  try {
+    const payload = await fetchOpenRouterEmbeddings(connection, {
+      model: request.model,
+      input: [`embedding validation one`, `embedding validation two`],
+      operation: request.operation,
+      timeoutMs: request.timeoutMs ?? 20_000,
+      logger: request.logger,
+      context: request.context,
+    });
+
+    return {
+      available: true,
+      status: 200,
+      reason: null,
+      usageCostUsd: 0,
+      payload,
+      error: null,
+    };
+  } catch (error) {
+    if (error instanceof OpenRouterRequestError) {
+      return {
+        available: false,
+        status: error.status,
+        reason: error.payload.error?.message ?? error.message,
+        usageCostUsd: 0,
+        payload: error.payload,
+        error,
+      };
+    }
+
+    throw error;
   }
 };
 

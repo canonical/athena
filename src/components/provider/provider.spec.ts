@@ -1,4 +1,4 @@
-import { authenticate, configureProviderModelsViaUi, createLoop, createProviderViaUi, expect, inferenceBaseUrl, type Page, scenario, test } from "../../../testing/playwright/index.js";
+import { authenticate, configureProviderModelsViaUi, createLoop, createProviderViaUi, expect, inferenceBaseUrl, type Page, scenario, test, testInferenceChatModel, testInferenceEmbeddingModel } from "../../../testing/playwright/index.js";
 
 const providerCredential = `provider-credential`;
 
@@ -116,23 +116,58 @@ test(`provider detail page renders expected fields`, async ({ page }) => {
   await expect(page.getByText(`openrouter`, { exact: true })).toBeVisible();
   await expect(page.getByText(inferenceBaseUrl)).toBeVisible();
   await expect(page.getByText(`Credential configured`)).toBeVisible();
+  await expect(page.getByText(`Chat capability`)).toBeVisible();
+  await expect(page.getByText(`Embedding capability`)).toBeVisible();
 
   await page.getByRole(`link`, { name: `Settings` }).click();
   await expect(page.getByRole(`heading`, { name: `Model settings` })).toBeVisible();
 });
 
-test(`provider detail persists enabled models and the default model`, async ({ page, testInference }) => {
+test(`provider detail persists independent chat and embedding model settings`, async ({ page, testInference }) => {
   await authenticate(page);
 
   const inference = await testInference.setup(scenario().answersModelValidation(), { name: `working-provider` });
   const displayName = `Working provider ${Date.now()}`;
 
   await createProviderViaUi(page, displayName, inference.scope);
-  await configureProviderModelsViaUi(page, displayName, `deterministic-chat`);
+  await configureProviderModelsViaUi(page, displayName, `chat`, testInferenceChatModel);
+  await configureProviderModelsViaUi(page, displayName, `embedding`, testInferenceEmbeddingModel);
 
   await page.reload();
-  await expect(page.locator(`#provider-enabled-model-deterministic-chat`)).toBeChecked();
-  await expect(page.getByLabel(`Default model`)).toHaveValue(`deterministic-chat`);
+  await expect(page.locator(`#provider-chat-enabled-model-${testInferenceChatModel}`)).toBeChecked();
+  await expect(page.locator(`#provider-chat-default-model`)).toHaveValue(testInferenceChatModel);
+  await expect(page.locator(`#provider-embedding-enabled-model-${testInferenceEmbeddingModel}`)).toBeChecked();
+  await expect(page.locator(`#provider-embedding-default-model`)).toHaveValue(testInferenceEmbeddingModel);
+});
+
+test(`loop chat readiness ignores embedding-only providers`, async ({ page, testInference }) => {
+  await authenticate(page);
+
+  const loop = await createLoop(page, `Capability-filtered loop ${Date.now()}`);
+  const embeddingProviderName = `Embedding-only provider ${Date.now()}`;
+
+  await createProviderViaUi(page, embeddingProviderName);
+  await configureProviderModelsViaUi(page, embeddingProviderName, `embedding`, testInferenceEmbeddingModel);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/providers`);
+  await page.getByRole(`button`, { name: `Assign provider` }).click();
+  await page.locator(`#assign-provider-select`).selectOption({ label: embeddingProviderName });
+  await page.getByRole(`dialog`).getByRole(`button`, { name: `Assign` }).click();
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/task/list`);
+  await expect(page.getByText(`No active chat-capable provider assignment is available for this loop.`)).toBeVisible();
+
+  const inference = await testInference.setup(scenario().answersModelValidation(), { name: `chat-readiness-provider` });
+  const chatProviderName = `Chat provider ${Date.now()}`;
+
+  await createProviderViaUi(page, chatProviderName, inference.scope);
+  await configureProviderModelsViaUi(page, chatProviderName, `chat`, testInferenceChatModel);
+  await page.goto(`http://athena.localhost/loop/${loop.id}/providers`);
+  await page.getByRole(`button`, { name: `Assign provider` }).click();
+  await page.locator(`#assign-provider-select`).selectOption({ label: chatProviderName });
+  await page.getByRole(`dialog`).getByRole(`button`, { name: `Assign` }).click();
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/task/list`);
+  await expect(page.getByText(`No active chat-capable provider assignment is available for this loop.`)).toHaveCount(0);
 });
 
 test(`a provider that keeps failing is reported, and nothing is saved`, async ({ page, testInference }) => {
@@ -151,18 +186,47 @@ test(`a provider that keeps failing is reported, and nothing is saved`, async ({
 
   // Model listing does not use a scenario; the configured failure applies to model validation.
   await page.getByRole(`button`, { name: `Fetch models` }).click();
-  await expect(page.locator(`#provider-enabled-model-deterministic-chat`)).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(`#provider-chat-enabled-model-${testInferenceChatModel}`)).toBeVisible({ timeout: 20_000 });
 
-  await page.getByRole(`button`, { name: `Clear all` }).click();
-  await page.locator(`#provider-enabled-model-deterministic-chat`).check();
-  await page.getByLabel(`Default model`).selectOption(`deterministic-chat`);
+  await page.locator(`#provider-chat-enabled-model-${testInferenceChatModel}`).check();
+  await page.locator(`#provider-chat-default-model`).selectOption(testInferenceChatModel);
   await page.getByRole(`button`, { name: `Save model settings` }).click();
 
   // TestInferenceService returns 502 here, so Athena completes its retry sequence before reporting the failure.
   await expect(page.getByText(`Unable to save model settings`)).toBeVisible({ timeout: 30_000 });
 
   await page.reload();
-  await expect(page.getByLabel(`Default model`)).toHaveValue(``);
+  await expect(page.locator(`#provider-chat-default-model`)).toHaveValue(``);
+});
+
+test(`embedding authentication failure preserves the configured embedding model`, async ({ page }) => {
+  await authenticate(page);
+
+  const displayName = `Embedding auth provider ${Date.now()}`;
+  await createProviderViaUi(page, displayName);
+  await configureProviderModelsViaUi(page, displayName, `embedding`, testInferenceEmbeddingModel);
+
+  await page.goto(`http://athena.localhost/provider/list`);
+  await page
+    .getByRole(`button`, { name: `Edit ${displayName}` })
+    .first()
+    .click();
+  await page.getByLabel(`API key (optional for rotation)`).fill(`invalid-embedding-credential`);
+  await page.getByRole(`button`, { name: `Save provider` }).click();
+  await expect(page.getByText(`${displayName} has been updated.`)).toBeVisible();
+
+  await page.getByRole(`link`, { name: displayName, exact: true }).first().click();
+  await page.getByRole(`link`, { name: `Settings` }).click();
+  await expect(page.locator(`#provider-embedding-enabled-model-${testInferenceEmbeddingModel}`)).toBeChecked();
+  await page.locator(`#provider-embedding-default-model`).selectOption(``);
+
+  page.once(`dialog`, (dialog) => void dialog.accept());
+  await page.getByRole(`button`, { name: `Save model settings` }).click();
+  await expect(page.getByText(`Unable to save model settings`)).toBeVisible();
+
+  await page.reload();
+  await expect(page.locator(`#provider-embedding-enabled-model-${testInferenceEmbeddingModel}`)).toBeChecked();
+  await expect(page.locator(`#provider-embedding-default-model`)).toHaveValue(testInferenceEmbeddingModel);
 });
 
 test(`provider detail with invalid id shows an error notification`, async ({ page }) => {

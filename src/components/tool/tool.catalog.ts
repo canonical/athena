@@ -1,3 +1,4 @@
+import { ragIndexAliasSchema } from "@components/rag/rag.schema.js";
 import { optionalString, requiredString, uuid } from "@components/utilities/zod.utilities.js";
 import { z } from "zod";
 
@@ -22,6 +23,19 @@ const workgraphItemInputSchema = workgraphInputSchema
   .strict();
 
 export const providerToolDefinitions: ReadonlyArray<ProviderToolDefinition> = [
+  {
+    name: `rag_lookup`,
+    label: `Search Loop Index`,
+    description: `Search an index available to this loop for semantically relevant prior knowledge.`,
+    requiresApproval: false,
+    inputSchema: z
+      .object({
+        index: ragIndexAliasSchema.describe(`Alias of the index to search. Use self for this loop's own memory.`),
+        query: requiredString(`must be a non-empty string.`).describe(`Semantic search query.`),
+        limit: z.number().int().min(1).max(20).optional().describe(`Maximum number of matching entries to return. Defaults to 5.`),
+      })
+      .strict(),
+  },
   {
     name: `task_repositories`,
     label: `List Repositories`,

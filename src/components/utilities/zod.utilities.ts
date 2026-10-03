@@ -14,7 +14,7 @@ export const nullableString = preprocess(trimToNull, string().nullable());
 
 export const isoDateTime = z.iso.datetime({ offset: true });
 
-export const uuid = (message = `must be a valid UUID.`) => zodUuid({ version: `v7`, error: message });
+export const uuid = (message = `must be a valid UUID.`) => zodUuid({ version: `v7`, error: message }).toLowerCase();
 
 export const httpsUrl = url(`baseUrl must be a valid URL.`).refine((value) => value.startsWith(`https://`), { message: `baseUrl must use HTTPS.` });
 

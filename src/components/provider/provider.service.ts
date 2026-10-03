@@ -2,7 +2,7 @@ import { query } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
 import type { LoopProvider, LoopProviderAdminUpdate, Provider, ProviderInsert, ProviderUpdate } from "./provider.schema.js";
 
-const providerColumns = `"id", "owner", "displayName", "providerType", "baseUrl", "defaultModel", "enabledModels", "lifecycleStatus", "createdAt", "updatedAt"`;
+const providerColumns = `"id", "owner", "displayName", "providerType", "baseUrl", "chatDefaultModel", "chatEnabledModels", "embeddingDefaultModel", "embeddingEnabledModels", "lifecycleStatus", "createdAt", "updatedAt"`;
 
 export const queryProviderListByOwner = async (ownerId: string): Promise<Provider[]> => {
   const result = await query<Provider>(
@@ -42,18 +42,34 @@ export const queryProviderCreate = async (input: ProviderInsert, ownerId: string
         "displayName",
         "providerType",
         "baseUrl",
-        "defaultModel",
-        "enabledModels",
+        "chatDefaultModel",
+        "chatEnabledModels",
+        "embeddingDefaultModel",
+        "embeddingEnabledModels",
         "credentialCiphertext",
         "credentialIv",
         "credentialAuthTag",
         "credentialKeyVersion",
         "lifecycleStatus"
       )
-      VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8::text[], $9, $10, $11, $12, $13)
       RETURNING ${providerColumns}, TRUE AS "hasCredential"
     `,
-    [ownerId, input.displayName, input.providerType, input.baseUrl, input.defaultModel, input.enabledModels, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, input.lifecycleStatus],
+    [
+      ownerId,
+      input.displayName,
+      input.providerType,
+      input.baseUrl,
+      input.chatDefaultModel,
+      input.chatEnabledModels,
+      input.embeddingDefaultModel,
+      input.embeddingEnabledModels,
+      envelope.ciphertext,
+      envelope.iv,
+      envelope.authTag,
+      envelope.keyVersion,
+      input.lifecycleStatus,
+    ],
   );
 
   const provider = result.rows[0];
@@ -75,18 +91,35 @@ export const queryProviderUpdate = async (providerId: string, ownerId: string, i
           "displayName" = $1,
           "providerType" = $2,
           "baseUrl" = $3,
-          "defaultModel" = $4,
-          "enabledModels" = $5::text[],
-          "lifecycleStatus" = $6,
-          "credentialCiphertext" = $7,
-          "credentialIv" = $8,
-          "credentialAuthTag" = $9,
-          "credentialKeyVersion" = $10
-        WHERE "id" = $11
-          AND "owner" = $12
+          "chatDefaultModel" = $4,
+          "chatEnabledModels" = $5::text[],
+          "embeddingDefaultModel" = $6,
+          "embeddingEnabledModels" = $7::text[],
+          "lifecycleStatus" = $8,
+          "credentialCiphertext" = $9,
+          "credentialIv" = $10,
+          "credentialAuthTag" = $11,
+          "credentialKeyVersion" = $12
+        WHERE "id" = $13
+          AND "owner" = $14
         RETURNING ${providerColumns}, TRUE AS "hasCredential"
       `,
-      [input.displayName, input.providerType, input.baseUrl, input.defaultModel, input.enabledModels, input.lifecycleStatus, envelope.ciphertext, envelope.iv, envelope.authTag, envelope.keyVersion, providerId, ownerId],
+      [
+        input.displayName,
+        input.providerType,
+        input.baseUrl,
+        input.chatDefaultModel,
+        input.chatEnabledModels,
+        input.embeddingDefaultModel,
+        input.embeddingEnabledModels,
+        input.lifecycleStatus,
+        envelope.ciphertext,
+        envelope.iv,
+        envelope.authTag,
+        envelope.keyVersion,
+        providerId,
+        ownerId,
+      ],
     );
 
     return result.rows[0];
@@ -99,23 +132,19 @@ export const queryProviderUpdate = async (providerId: string, ownerId: string, i
         "displayName" = $1,
         "providerType" = $2,
         "baseUrl" = $3,
-        "defaultModel" = $4,
-        "enabledModels" = $5::text[],
-        "lifecycleStatus" = $6
-      WHERE "id" = $7
-        AND "owner" = $8
+        "chatDefaultModel" = $4,
+        "chatEnabledModels" = $5::text[],
+        "embeddingDefaultModel" = $6,
+        "embeddingEnabledModels" = $7::text[],
+        "lifecycleStatus" = $8
+      WHERE "id" = $9
+        AND "owner" = $10
       RETURNING ${providerColumns}, TRUE AS "hasCredential"
     `,
-    [input.displayName, input.providerType, input.baseUrl, input.defaultModel, input.enabledModels, input.lifecycleStatus, providerId, ownerId],
+    [input.displayName, input.providerType, input.baseUrl, input.chatDefaultModel, input.chatEnabledModels, input.embeddingDefaultModel, input.embeddingEnabledModels, input.lifecycleStatus, providerId, ownerId],
   );
 
   return result.rows[0];
-};
-
-export const queryProviderDelete = async (providerId: string, ownerId: string): Promise<boolean> => {
-  const result = await query(`DELETE FROM "provider" WHERE "id" = $1 AND "owner" = $2`, [providerId, ownerId]);
-
-  return Boolean(result.rowCount);
 };
 
 export const queryLoopProviderList = async (loopId: string): Promise<LoopProvider[]> => {
@@ -222,12 +251,6 @@ export const queryLoopProviderUpdateByAdmin = async (loopId: string, providerId:
   return assignments.find((assignment) => assignment.provider === providerId);
 };
 
-export const queryLoopProviderDelete = async (loopId: string, providerId: string): Promise<boolean> => {
-  const result = await query(`DELETE FROM "loopProvider" WHERE "loop" = $1 AND "provider" = $2`, [loopId, providerId]);
-
-  return Boolean(result.rowCount);
-};
-
 export type LoopProviderCandidateRow = {
   loop: string;
   provider: string;
@@ -250,7 +273,10 @@ export type LoopProviderCandidateRow = {
   credentialAuthTag: string;
   credentialKeyVersion: string;
   providerType: string;
-  defaultModel: string | null;
+  chatDefaultModel: string | null;
+  chatEnabledModels: string[];
+  embeddingDefaultModel: string | null;
+  embeddingEnabledModels: string[];
   displayName: string;
   baseUrl: string;
 };
@@ -280,8 +306,10 @@ export const queryLoopProviderCandidates = async (loopId: string): Promise<LoopP
         p."credentialAuthTag",
         p."credentialKeyVersion",
         p."providerType",
-        p."defaultModel",
-        COALESCE(p."enabledModels", ARRAY[]::text[]) AS "enabledModels",
+        p."chatDefaultModel",
+        COALESCE(p."chatEnabledModels", ARRAY[]::text[]) AS "chatEnabledModels",
+        p."embeddingDefaultModel",
+        COALESCE(p."embeddingEnabledModels", ARRAY[]::text[]) AS "embeddingEnabledModels",
         p."displayName",
         p."baseUrl"
       FROM "loopProvider" lp

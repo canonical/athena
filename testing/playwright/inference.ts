@@ -70,3 +70,5 @@ export class TestInferenceService {
 export const testInferenceBaseUrl = `http://127.0.0.1:8099`;
 export const testInferenceHealthUrl = `${testInferenceBaseUrl}/health`;
 export const inferenceBaseUrl = `http://test-inference:8080/v1`;
+export const testInferenceChatModel = `deterministic-chat`;
+export const testInferenceEmbeddingModel = `deterministic-embed-1536`;
