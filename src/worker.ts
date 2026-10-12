@@ -1,3 +1,4 @@
+import "@components/background-job/background-job.catalog.js";
 import { backgroundJobCreateWorker } from "@components/background-job/background-job.service.js";
 import { backendConfig } from "@components/config/backend-config.js";
 import { log } from "@components/logging/logging.service.js";

@@ -43,10 +43,6 @@ requires:
     optional: false
     limit: 1
 
-provides:
-  workers:
-    interface: athena_worker
-
 config:
   options:
     run-migrations-on-startup:

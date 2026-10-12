@@ -1,101 +1,55 @@
+import { backgroundJobRegister } from "@components/background-job/background-job.registry.js";
+import type { BackgroundJobDefinition } from "@components/background-job/background-job.schema.js";
+import { backgroundJobEnqueue } from "@components/background-job/background-job.service.js";
 import { log } from "@components/logging/logging.service.js";
 import { readyLoops } from "@components/loop/loop.controller.js";
 import * as iteratorPrimary from "@components/task/task.iteratorPrimary.js";
 import type { Task } from "@components/task/task.schema.js";
 import { queryTaskMarkCompleted, queryTaskPick, queryTaskProcessorPing, queryTaskResetProcessorClaim, queryTaskResetStaleProcessorClaims } from "@components/task/task.service.js";
-import { v7 as uuidv7 } from "uuid";
+import { z } from "zod";
 
-let isProcessing = false;
-let isStopping = false;
-let currentRun: Promise<void> | null = null;
-let processorInterval: ReturnType<typeof setInterval> | null = null;
-const taskProcessorIntervalMs = 15_000;
-const processorId = uuidv7();
 const taskPingIntervalMs = 5_000;
 
-export const startTaskProcessor = (): void => {
-  if (processorInterval) {
-    log.info(`Task processor start skipped`, { processorId, reason: `already-started` });
-    return;
-  }
-
-  log.info(`Task processor starting`, {
-    processorId,
-    processorIntervalMs: taskProcessorIntervalMs,
-  });
-
-  triggerTaskProcessor();
-  processorInterval = setInterval(triggerTaskProcessor, taskProcessorIntervalMs);
-  log.info(`Task processor interval scheduled`, { processorId, processorIntervalMs: taskProcessorIntervalMs });
-};
-
-// Stops scheduling runs and waits for the in-flight run to release its current task.
-export const stopTaskProcessor = async (): Promise<void> => {
-  isStopping = true;
-
-  if (processorInterval) {
-    clearInterval(processorInterval);
-    processorInterval = null;
-  }
-
-  await currentRun;
-  log.info(`Task processor stopped`, { processorId });
-};
-
 export const triggerTaskProcessor = (): void => {
-  if (isStopping) {
-    log.info(`Task processor trigger skipped`, { processorId, reason: `stopping` });
-    return;
-  }
-
-  if (isProcessing) {
-    log.info(`Task processor trigger skipped`, { processorId, reason: `already-processing` });
-    return;
-  }
-
-  isProcessing = true;
-  log.info(`Task processor trigger accepted`, { processorId });
-
-  currentRun = runTaskProcessor();
+  void backgroundJobEnqueue(taskProcessJobDefinition, {}).catch((error) => {
+    log.error(`Task processing enqueue failed`, {
+      error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : { message: String(error) },
+    });
+  });
 };
 
-const runTaskProcessor = async (): Promise<void> => {
+const runTaskProcessor = async (processorId: string): Promise<number> => {
   log.info(`Task processor run started`, { processorId });
 
   try {
-    await processQueue();
-  } catch (error) {
-    log.error(`Task processor failed`, {
-      processorId,
-      error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : { message: String(error) },
-    });
+    return await processQueue(processorId);
   } finally {
-    isProcessing = false;
-    currentRun = null;
     log.info(`Task processor run finished`, { processorId });
   }
 };
 
-const processQueue = async (): Promise<void> => {
+const processQueue = async (processorId: string): Promise<number> => {
   log.info(`Task processor queue run started`, { processorId });
 
   const resetCount = await queryTaskResetStaleProcessorClaims();
   log.info(`Task processor stale claim recovery completed`, { processorId, resetCount });
+  let processedCount = 0;
 
-  while (!isStopping) {
-    const task = await pickTask();
+  while (true) {
+    const task = await pickTask(processorId);
 
     if (!task) {
       log.info(`Task processor queue empty`, { processorId });
-      return;
+      return processedCount;
     }
 
     log.info(`Task processor picked task`, { taskId: task.id, processorId });
-    await iterateTask(task);
+    await iterateTask(task, processorId);
+    processedCount += 1;
   }
 };
 
-export const pickTask = async (): Promise<Task | null> => {
+export const pickTask = async (processorId: string): Promise<Task | null> => {
   const readyLoopIds = await readyLoops();
   const task = await queryTaskPick(processorId, readyLoopIds);
 
@@ -108,7 +62,7 @@ export const pickTask = async (): Promise<Task | null> => {
   return task;
 };
 
-export const iterateTask = async (task: Task): Promise<void> => {
+export const iterateTask = async (task: Task, processorId: string): Promise<void> => {
   log.info(`Task iterate started`, {
     taskId: task.id,
     processorId,
@@ -119,10 +73,10 @@ export const iterateTask = async (task: Task): Promise<void> => {
 
   try {
     pingInterval = setInterval(() => {
-      void pingTask(task.id);
+      void pingTask(task.id, processorId);
     }, taskPingIntervalMs);
 
-    await pingTask(task.id);
+    await pingTask(task.id, processorId);
 
     const primarySteps: Array<(task: Task, processorId: string) => Promise<iteratorPrimary.TaskPrimaryIterationOutcome>> = [
       iteratorPrimary.iterateTaskAssignCurrentPersona,
@@ -159,7 +113,7 @@ export const iterateTask = async (task: Task): Promise<void> => {
   }
 };
 
-const pingTask = async (taskId: string): Promise<void> => {
+const pingTask = async (taskId: string, processorId: string): Promise<void> => {
   try {
     await queryTaskProcessorPing(taskId, processorId);
     log.info(`Task processor ping updated`, { taskId, processorId });
@@ -171,3 +125,21 @@ const pingTask = async (taskId: string): Promise<void> => {
     });
   }
 };
+
+const taskProcessPayloadSchema = z.object({});
+
+export const taskProcessJobDefinition: BackgroundJobDefinition<z.infer<typeof taskProcessPayloadSchema>, { processedCount: number }> = {
+  name: `task.process`,
+  version: 1,
+  payloadSchema: taskProcessPayloadSchema,
+  queue: { policy: `stately` },
+  schedule: {
+    cron: `*/15 * * * * *`,
+    payload: {},
+    options: { key: `task-reconciliation` },
+  },
+  worker: { localConcurrency: 1 },
+  handler: async ({ job }) => ({ processedCount: await runTaskProcessor(job.id) }),
+};
+
+backgroundJobRegister(taskProcessJobDefinition);

@@ -5,6 +5,8 @@ BEGIN;
 SELECT pg_advisory_xact_lock(hashtextextended('athena-schema-migrations', 0));
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS vector;
+\ir ./grant-worker.sql
 
 \echo >>> Running Athena function migrations
 \ir ./fncs/000100.uuidv7.sql
@@ -27,7 +29,6 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 \ir ./ddls/001400.loopWorkgraphItem.sql
 \ir ./ddls/000500.task.sql
 \ir ./ddls/001500.webhook.sql
-\ir ./ddls/001600.webhookItem.sql
 \ir ./ddls/001700.repository.sql
 \ir ./ddls/001800.loopRepository.sql
 \ir ./ddls/001900.loopInvite.sql

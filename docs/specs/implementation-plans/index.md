@@ -7,6 +7,7 @@ This index is the entry point for implementation planning artifacts.
 ### Deployment architecture
 
 - [x] Run `pg-boss` jobs in a worker charm. Detailed plan: [background-worker-charm.plan.md](./background-worker-charm.plan.md)
+- [ ] Migrate durable domain work to `pg-boss` without breaking task, Workgraph, or runner handoffs. Detailed plan: [background-domain-jobs.plan.md](./background-domain-jobs.plan.md)
 
 ### Persona Definition Capability (Foundation)
 

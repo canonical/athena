@@ -21,3 +21,17 @@ def charm() -> pathlib.Path:
         path = charms[0].resolve()
     assert path.is_file(), f"{path} is not a file"
     return path
+
+
+@pytest.fixture(scope="session")
+def web_charm() -> pathlib.Path:
+    """Return the packed Athena web charm used to grant worker database access."""
+    configured = os.environ.get("ATHENA_WEB_CHARM_PATH")
+    if configured:
+        path = pathlib.Path(configured).resolve()
+    else:
+        charms = list(pathlib.Path("../charm").glob("*.charm"))
+        assert len(charms) == 1, f"Expected one packed web charm, found {charms}"
+        path = charms[0].resolve()
+    assert path.is_file(), f"{path} is not a file"
+    return path

@@ -1,6 +1,8 @@
 import { resolveLoopSelection, resolveLoopSelectionByAssignment } from "@components/loop/loop-selection.service.js";
 import { queryLoopRepositoryApiConnectionList } from "@components/repository/repository.service.js";
+import { enqueueRunnerSubmit } from "@components/runner/runner.background-job.js";
 import { queryRunnerQueueCreate } from "@components/runner/runner.queue.service.js";
+import { isAthenaConsumedRunner } from "@components/runner/runner.schema.js";
 import { queryLoopRunnersForRepository } from "@components/runner/runner.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
 import type { ProviderToolExecutionContext } from "./tool.schema.js";
@@ -94,6 +96,10 @@ export const executeAthenaEnqueueRun = async (context: ProviderToolExecutionCont
   console.log(`[athena_enqueue_run] runner selected`, { taskId, loopId, assignmentId, definitionType, repositoryId: repositoryConnection.repositoryId });
 
   const queueItem = await queryRunnerQueueCreate(loopId, taskId, assignmentId, repository, prompt, plan);
+
+  if (isAthenaConsumedRunner(definitionType)) {
+    await enqueueRunnerSubmit(queueItem.id);
+  }
   console.log(`[athena_enqueue_run] enqueued`, { taskId, loopId, queueItemId: queueItem.id, type: definitionType, repository, repositoryId: repositoryConnection.repositoryId });
 
   return { queued: true, queueItemId: queueItem.id, runnerId: assignmentId, type: definitionType, repository };

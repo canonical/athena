@@ -246,13 +246,13 @@ jobs:
           }
 
           juju config "$WORKER_APP_NAME" "database-name=$APP_NAME"
+          integrate_if_needed "$APP_NAME:postgresql" "$POSTGRESQL_APP"
+          juju wait-for application "$APP_NAME" --query='status=="active"' --timeout=20m
           integrate_if_needed "$WORKER_APP_NAME:postgresql" "$POSTGRESQL_APP"
-          integrate_if_needed "$APP_NAME:workers" "$WORKER_APP_NAME:athena"
           juju grant-secret "$WORKER_CREDENTIAL_SECRET" "$WORKER_APP_NAME"
           juju config "$WORKER_APP_NAME" \
             "credential=$WORKER_CREDENTIAL_SECRET"
 
-          juju wait-for application "$APP_NAME" --query='status=="active"' --timeout=20m
           juju wait-for application "$WORKER_APP_NAME" --query='status=="active"' --timeout=20m
 
           echo "" >> $GITHUB_STEP_SUMMARY

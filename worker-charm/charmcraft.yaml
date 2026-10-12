@@ -10,8 +10,8 @@ platforms:
 summary: Background processing service for Athena.
 
 description: |
-  Runs Athena task, webhook, runner, and registered durable background jobs
-  independently from the Athena HTTP application.
+  Runs Athena task iteration, Workgraph synchronization, runner execution, and
+  registered RAG jobs independently from the Athena HTTP application.
 
 charm-libs:
   - lib: data_platform_libs.data_interfaces
@@ -66,9 +66,5 @@ config:
 requires:
   postgresql:
     interface: postgresql_client
-    optional: false
-    limit: 1
-  athena:
-    interface: athena_worker
     optional: false
     limit: 1

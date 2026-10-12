@@ -1,5 +1,6 @@
 import { authenticationRouter } from "@components/authentication/authentication.router.js";
 import { requireAuthentication } from "@components/authentication/authentication-middleware.js";
+import "@components/background-job/background-job.catalog.js";
 import { backgroundJobStartProducer, backgroundJobStopProducer } from "@components/background-job/background-job.service.js";
 import { defineMiddlewares } from "@components/base/define-middlewares.js";
 import { backendConfig } from "@components/config/backend-config.js";
@@ -12,14 +13,11 @@ import { closePG } from "@components/postgres/postgres.js";
 import { providerRouter } from "@components/provider/provider.router.js";
 import { repositoryRouter } from "@components/repository/repository.router.js";
 import { runnerAgentRouter } from "@components/runner/runner.agent.router.js";
-import { startRunnerQueueConsumer, stopRunnerQueueConsumer } from "@components/runner/runner.queue.consumer.js";
 import { runnerRouter } from "@components/runner/runner.router.js";
 import { staticRouter } from "@components/static/static.router.js";
 import { statusRouter } from "@components/status/status.router.js";
 import { stepSequenceRouter } from "@components/stepSequence/stepSequence.router.js";
-import { startTaskProcessor, stopTaskProcessor } from "@components/task/task.processor.js";
 import { taskRouter } from "@components/task/task.router.js";
-import { startWebhookItemProcessor, stopWebhookItemProcessor } from "@components/webhook/webhook.processor.js";
 import { webhookPublicRouter } from "@components/webhook/webhook.public.router.js";
 import { webhookRouter } from "@components/webhook/webhook.router.js";
 import { workgraphRouter } from "@components/workgraph/workgraph.router.js";
@@ -65,10 +63,6 @@ defineLoggingErrorHandler(app);
 
 const server = app.listen(port, () => {
   log.info(`Athena server listening on port ${port}`);
-
-  startTaskProcessor();
-  startWebhookItemProcessor();
-  startRunnerQueueConsumer();
 });
 
 let stopping = false;
@@ -80,28 +74,17 @@ const stop = async (signal: NodeJS.Signals): Promise<void> => {
 
   stopping = true;
   log.info(`Athena server stopping`, { signal });
+  const timeoutMs = backendConfig.backgroundJobs.shutdownTimeoutMs;
+  const forceShutdown = setTimeout(() => {
+    log.error(`Athena server graceful shutdown timed out`, { signal, timeoutMs });
+    server.closeAllConnections();
+    process.exit(1);
+  }, timeoutMs);
 
   try {
-    const timeoutMs = backendConfig.backgroundJobs.shutdownTimeoutMs;
-    let drainTimeout: ReturnType<typeof setTimeout> | undefined;
-    const [, drained] = await Promise.all([
-      new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
-      }),
-      Promise.race([
-        Promise.all([stopTaskProcessor(), stopWebhookItemProcessor(), stopRunnerQueueConsumer()]).then(() => true),
-        new Promise<false>((resolve) => {
-          drainTimeout = setTimeout(() => resolve(false), timeoutMs);
-        }),
-      ]).finally(() => clearTimeout(drainTimeout)),
-    ]);
-
-    // Claims abandoned here are recovered by the stale-claim sweep of the next process.
-    if (!drained) {
-      process.exitCode = 1;
-      log.error(`Athena server domain queue drain timed out`, { signal, timeoutMs });
-    }
-
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
     await backgroundJobStopProducer();
     await closePG();
     log.info(`Athena server stopped`, { signal });
@@ -111,6 +94,8 @@ const stop = async (signal: NodeJS.Signals): Promise<void> => {
       signal,
       error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : { message: String(error) },
     });
+  } finally {
+    clearTimeout(forceShutdown);
   }
 };
 

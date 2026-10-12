@@ -39,6 +39,7 @@ const createBoss = (role: BackgroundJobClientRole): PgBoss => {
 
 let producer: PgBoss | undefined;
 let producerStart: Promise<void> | undefined;
+let enqueueClient: PgBoss | undefined;
 
 const verifyInstalledSchema = async (boss: PgBoss): Promise<void> => {
   if (!(await boss.isInstalled())) {
@@ -72,7 +73,9 @@ export const backgroundJobStartProducer = async (): Promise<void> => {
     try {
       await nextProducer.start();
       await ensureQueues(nextProducer, definitions);
+      await ensureSchedules(nextProducer, definitions);
       producer = nextProducer;
+      enqueueClient = nextProducer;
       log.info(`Background job producer started`, { instanceId: backendConfig.runtime.instanceId });
     } catch (error) {
       await stopAfterStartupFailure(nextProducer);
@@ -92,6 +95,9 @@ export const backgroundJobStopProducer = async (): Promise<void> => {
 
   const currentProducer = producer;
   producer = undefined;
+  if (enqueueClient === currentProducer) {
+    enqueueClient = undefined;
+  }
 
   if (!currentProducer) {
     return;
@@ -101,14 +107,19 @@ export const backgroundJobStopProducer = async (): Promise<void> => {
   log.info(`Background job producer stopped`, { instanceId: backendConfig.runtime.instanceId });
 };
 
-export const backgroundJobEnqueue = async <TPayload extends Record<string, unknown>>(definition: BackgroundJobDefinition<TPayload>, payload: TPayload, options: BackgroundJobEnqueueOptions = {}): Promise<BackgroundJobEnqueueResult> => {
-  if (!producer) {
-    throw new BackgroundJobUnavailableError(`Background job producer has not started.`);
+export const backgroundJobEnqueue = async <TPayload extends Record<string, unknown>>(
+  definition: BackgroundJobDefinition<TPayload>,
+  payload: TPayload,
+  options: BackgroundJobEnqueueOptions = {},
+  executor?: QueryExecutor,
+): Promise<BackgroundJobEnqueueResult> => {
+  if (!enqueueClient) {
+    throw new BackgroundJobUnavailableError(`Background job client has not started.`);
   }
 
   const validatedPayload = definition.payloadSchema.parse(payload);
   const envelope: BackgroundJobPayloadEnvelope = { version: definition.version, payload: validatedPayload };
-  const jobId = await producer.send(definition.name, envelope, options);
+  const jobId = await enqueueClient.send(definition.name, envelope, executor ? { ...options, db: toPgBossDatabase(executor) } : options);
 
   return jobId ? { accepted: true, jobId } : { accepted: false, jobId: null };
 };
@@ -147,6 +158,18 @@ async function ensureQueues(boss: PgBoss, definitions: readonly BackgroundJobDef
   }
 }
 
+async function ensureSchedules(boss: PgBoss, definitions: readonly BackgroundJobDefinition[]): Promise<void> {
+  for (const definition of definitions) {
+    if (!definition.schedule) {
+      continue;
+    }
+
+    const payload = definition.payloadSchema.parse(definition.schedule.payload);
+    const envelope: BackgroundJobPayloadEnvelope = { version: definition.version, payload };
+    await boss.schedule(definition.name, definition.schedule.cron, envelope, definition.schedule.options);
+  }
+}
+
 export const backgroundJobCreateWorker = async (): Promise<PgBoss> => {
   const definitions = backgroundJobSealRegistry();
   const worker = createBoss(`worker`);
@@ -155,6 +178,7 @@ export const backgroundJobCreateWorker = async (): Promise<PgBoss> => {
     await worker.start();
     await verifyInstalledSchema(worker);
     await ensureQueues(worker, definitions);
+    enqueueClient = worker;
 
     for (const definition of definitions) {
       const workerOptions = {
@@ -195,6 +219,9 @@ export const backgroundJobCreateWorker = async (): Promise<PgBoss> => {
       );
     }
   } catch (error) {
+    if (enqueueClient === worker) {
+      enqueueClient = undefined;
+    }
     await stopAfterStartupFailure(worker);
     throw error;
   }

@@ -16,7 +16,8 @@ from charms.data_platform_libs.v0.data_interfaces import (  # pyright: ignore[re
 
 logger = logging.getLogger(__name__)
 
-VERSION = "1.1.4"
+VERSION = "1.2.0"
+WORKER_RUNTIME_ROLE = "athena_worker_runtime"
 
 
 class AthenaWorkerCharm(ops.CharmBase):
@@ -30,6 +31,7 @@ class AthenaWorkerCharm(ops.CharmBase):
             self,
             relation_name="postgresql",
             database_name=str(self.config["database-name"]),
+            extra_user_roles=WORKER_RUNTIME_ROLE,
         )
         framework.observe(self.on.app_pebble_ready, self._reconcile)
         framework.observe(self.on.config_changed, self._on_config_changed)
@@ -37,9 +39,6 @@ class AthenaWorkerCharm(ops.CharmBase):
         framework.observe(self._database.on.database_created, self._on_database_changed)
         framework.observe(self._database.on.endpoints_changed, self._on_database_changed)
         framework.observe(self.on.postgresql_relation_broken, self._on_database_broken)
-        framework.observe(self.on.athena_relation_joined, self._on_athena_changed)
-        framework.observe(self.on.athena_relation_changed, self._on_athena_changed)
-        framework.observe(self.on.athena_relation_broken, self._on_athena_broken)
         framework.observe(self.on.update_status, self._on_update_status)
         framework.observe(self.on.start, self._on_start)
 
@@ -105,19 +104,6 @@ class AthenaWorkerCharm(ops.CharmBase):
             urllib.parse.quote(database, safe=""),
         )
 
-    def _database_role(self) -> str | None:
-        """Return the relation-managed PostgreSQL role."""
-        data = self._database_data()
-        username = data.get("username")
-        if username:
-            return username
-
-        uris = data.get("uris")
-        if not uris:
-            return None
-        username = urllib.parse.urlparse(uris.split(",")[0]).username
-        return urllib.parse.unquote(username) if username else None
-
     def _on_config_changed(self, event: ops.ConfigChangedEvent) -> None:
         """Refresh the requested database name and reconcile the worker."""
         database_name = str(self.config["database-name"])
@@ -128,8 +114,7 @@ class AthenaWorkerCharm(ops.CharmBase):
         self._on_database_changed(event)
 
     def _on_database_changed(self, event: typing.Any) -> None:
-        """Publish the database role and reconcile the worker service."""
-        self._publish_database_role()
+        """Reconcile the worker service when database credentials change."""
         self._reconcile(event)
 
     def _on_database_broken(self, _: ops.RelationBrokenEvent) -> None:
@@ -138,30 +123,6 @@ class AthenaWorkerCharm(ops.CharmBase):
             self.unit.status = ops.WaitingStatus("Waiting for workload container")
             return
         self._block("PostgreSQL relation is required")
-
-    def _publish_database_role(self) -> None:
-        """Tell Athena which relation-managed role requires runtime grants."""
-        if not self.unit.is_leader():
-            return
-
-        username = self._database_role()
-        relation = self.model.get_relation("athena")
-        if not username or not relation:
-            return
-
-        relation.data[self.app]["database-role"] = username
-
-    def _on_athena_changed(self, event: ops.RelationEvent) -> None:
-        """Publish the database role and reconcile grant acknowledgment."""
-        self._publish_database_role()
-        self._reconcile(event)
-
-    def _on_athena_broken(self, _: ops.RelationBrokenEvent) -> None:
-        """Stop processing when the grant-control relation is removed."""
-        if not self._container.can_connect():
-            self.unit.status = ops.WaitingStatus("Waiting for workload container")
-            return
-        self._block("Athena relation is required")
 
     def _credential_key(self) -> str | None:
         """Read the shared credential encryption key from its Juju secret."""
@@ -184,18 +145,6 @@ class AthenaWorkerCharm(ops.CharmBase):
         database_uri = self._database_uri()
         if not database_uri:
             self._block("PostgreSQL relation is required")
-            return
-
-        athena_relation = self.model.get_relation("athena")
-        database_role = self._database_role()
-        if (
-            not database_role
-            or not athena_relation
-            or athena_relation.app is None
-            or athena_relation.data[athena_relation.app].get("database-access-role")
-            != database_role
-        ):
-            self._block("Waiting for Athena database grants")
             return
 
         credential_key = self._credential_key()
