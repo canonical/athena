@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { v5 as uuidv5 } from "uuid";
@@ -120,6 +120,7 @@ const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
 
 const globalSetup = async (): Promise<void> => {
   await renderDexUsers();
+  await mkdir(join(workspaceRoot, `testing`, `results`), { recursive: true });
 
   const localSeedDir = join(workspaceRoot, `migrations`, `pg`, `seed.local`);
   const localSeedDirHidden = `${localSeedDir}.bak`;
