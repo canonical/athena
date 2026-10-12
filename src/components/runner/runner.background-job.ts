@@ -6,7 +6,7 @@ import { delay } from "@components/utilities/timers.js";
 import { z } from "zod";
 import { pollCopilotAgentTask, submitCopilotAgentTask } from "./runner.copilot.adapter.js";
 import { CopilotAgentTaskIdMissingError } from "./runner.errors.js";
-import { queryRunnerQueueById, queryRunnerQueueFinalize, queryRunnerQueueListActive, queryRunnerQueueMarkSubmitting, queryRunnerQueueStoreExternalTaskId } from "./runner.queue.service.js";
+import { queryRunnerQueueById, queryRunnerQueueFinalize, queryRunnerQueueMarkSubmitting, queryRunnerQueueStoreExternalTaskId } from "./runner.queue.service.js";
 import { queryRunnerDecryptCredential } from "./runner.service.js";
 
 const runnerQueueJobPayloadSchema = z.object({ runnerQueueId: z.uuid() });
@@ -47,7 +47,7 @@ const finalizeRunner = async (runnerQueueId: string, status: `completed` | `fail
   return finalized;
 };
 
-export const runnerSubmitJobDefinition: BackgroundJobDefinition<RunnerQueueJobPayload, { skipped: boolean }> = {
+const runnerSubmitJobDefinition: BackgroundJobDefinition<RunnerQueueJobPayload, { skipped: boolean }> = {
   name: `runner.submit`,
   version: 1,
   payloadSchema: runnerQueueJobPayloadSchema,
@@ -104,7 +104,7 @@ export const runnerSubmitJobDefinition: BackgroundJobDefinition<RunnerQueueJobPa
   },
 };
 
-export const runnerPollJobDefinition: BackgroundJobDefinition<RunnerQueueJobPayload, { done: boolean; skipped: boolean }> = {
+const runnerPollJobDefinition: BackgroundJobDefinition<RunnerQueueJobPayload, { done: boolean; skipped: boolean }> = {
   name: `runner.poll`,
   version: 1,
   payloadSchema: runnerQueueJobPayloadSchema,
@@ -152,36 +152,7 @@ export const runnerPollJobDefinition: BackgroundJobDefinition<RunnerQueueJobPayl
   },
 };
 
-const runnerReconcilePayloadSchema = z.object({});
-
-export const runnerReconcileJobDefinition: BackgroundJobDefinition<z.infer<typeof runnerReconcilePayloadSchema>, { reconciledCount: number }> = {
-  name: `runner.reconcile`,
-  version: 1,
-  payloadSchema: runnerReconcilePayloadSchema,
-  queue: { policy: `exclusive` },
-  schedule: {
-    cron: `*/15 * * * * *`,
-    payload: {},
-    options: { key: `runner-reconciliation` },
-  },
-  worker: { localConcurrency: 1 },
-  handler: async () => {
-    const items = await queryRunnerQueueListActive(`github-copilot-cloud`);
-
-    for (const item of items) {
-      if (item.status === `pending`) {
-        await enqueueRunnerSubmit(item.id);
-      } else {
-        await enqueueRunnerPoll(item.id);
-      }
-    }
-
-    return { reconciledCount: items.length };
-  },
-};
-
 backgroundJobRegister(runnerSubmitJobDefinition);
 backgroundJobRegister(runnerPollJobDefinition);
-backgroundJobRegister(runnerReconcileJobDefinition);
 
 export { enqueueRunnerSubmit };

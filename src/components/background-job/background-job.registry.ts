@@ -16,9 +16,7 @@ export const backgroundJobRegister = (definition: BackgroundJobDefinition): void
   definitions.set(definition.name, definition);
 };
 
-export const backgroundJobDefinitions = (): readonly BackgroundJobDefinition[] => [...definitions.values()];
-
 export const backgroundJobSealRegistry = (): readonly BackgroundJobDefinition[] => {
   sealed = true;
-  return backgroundJobDefinitions();
+  return [...definitions.values()];
 };

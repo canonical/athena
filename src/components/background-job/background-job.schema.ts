@@ -1,4 +1,4 @@
-import type { JobWithMetadata, QueueOptions, QueuePolicy, ScheduleOptions, SendOptions, WorkOptions } from "pg-boss";
+import type { JobWithMetadata, QueueOptions, QueuePolicy, SendOptions, WorkOptions } from "pg-boss";
 import { z } from "zod";
 
 export const backgroundJobPayloadEnvelopeSchema = z.object({
@@ -18,17 +18,10 @@ export type BackgroundJobDefinition<TPayload extends Record<string, unknown> = R
   version: number;
   payloadSchema: z.ZodType<TPayload>;
   queue?: QueueOptions & { policy?: QueuePolicy };
-  schedule?: {
-    cron: string;
-    payload: TPayload;
-    options?: ScheduleOptions;
-  };
   worker?: WorkOptions;
   handler(context: BackgroundJobHandlerContext<TPayload>): Promise<TResult>;
 };
 
-export type BackgroundJobEnqueueOptions = Pick<SendOptions, "group" | "singletonKey" | "startAfter">;
+export type BackgroundJobEnqueueOptions = Pick<SendOptions, "singletonKey" | "startAfter">;
 
-export const backgroundJobEnqueueResultSchema = z.discriminatedUnion(`accepted`, [z.object({ accepted: z.literal(true), jobId: z.string().min(1) }), z.object({ accepted: z.literal(false), jobId: z.null() })]);
-
-export type BackgroundJobEnqueueResult = z.infer<typeof backgroundJobEnqueueResultSchema>;
+export type BackgroundJobEnqueueResult = { accepted: true; jobId: string } | { accepted: false; jobId: null };

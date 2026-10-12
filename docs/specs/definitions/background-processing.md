@@ -26,9 +26,8 @@ Athena runs durable background work as PostgreSQL-backed `pg-boss` jobs.
 - Runner tool execution creates a `runnerQueue` record and enqueues submission. Submission stores
   the external task identifier before polling begins. Poll completion atomically updates the
   runner record and appends one task message, then enqueues task iteration.
-- Periodic pg-boss reconciliation jobs recover the narrow window where domain state commits but
-  process failure prevents the immediate enqueue. Reconciliation never performs domain work
-  directly and uses singleton keys to avoid duplicate active chains.
+- Processing is event-driven. Athena does not periodically scan domain tables to recover missed
+  enqueues; callers must successfully enqueue each required handoff.
 
 ## Delivery
 

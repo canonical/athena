@@ -49,7 +49,7 @@ const processQueue = async (processorId: string): Promise<number> => {
   }
 };
 
-export const pickTask = async (processorId: string): Promise<Task | null> => {
+const pickTask = async (processorId: string): Promise<Task | null> => {
   const readyLoopIds = await readyLoops();
   const task = await queryTaskPick(processorId, readyLoopIds);
 
@@ -62,7 +62,7 @@ export const pickTask = async (processorId: string): Promise<Task | null> => {
   return task;
 };
 
-export const iterateTask = async (task: Task, processorId: string): Promise<void> => {
+const iterateTask = async (task: Task, processorId: string): Promise<void> => {
   log.info(`Task iterate started`, {
     taskId: task.id,
     processorId,
@@ -128,16 +128,11 @@ const pingTask = async (taskId: string, processorId: string): Promise<void> => {
 
 const taskProcessPayloadSchema = z.object({});
 
-export const taskProcessJobDefinition: BackgroundJobDefinition<z.infer<typeof taskProcessPayloadSchema>, { processedCount: number }> = {
+const taskProcessJobDefinition: BackgroundJobDefinition<z.infer<typeof taskProcessPayloadSchema>, { processedCount: number }> = {
   name: `task.process`,
   version: 1,
   payloadSchema: taskProcessPayloadSchema,
   queue: { policy: `stately` },
-  schedule: {
-    cron: `*/15 * * * * *`,
-    payload: {},
-    options: { key: `task-reconciliation` },
-  },
   worker: { localConcurrency: 1 },
   handler: async ({ job }) => ({ processedCount: await runTaskProcessor(job.id) }),
 };

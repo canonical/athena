@@ -20,7 +20,7 @@ const createBoss = (role: BackgroundJobClientRole): PgBoss => {
     schema: backendConfig.backgroundJobs.schema,
     createSchema: !worker,
     migrate: !worker,
-    schedule: worker,
+    schedule: false,
     supervise: worker,
   });
 
@@ -72,8 +72,8 @@ export const backgroundJobStartProducer = async (): Promise<void> => {
 
     try {
       await nextProducer.start();
+      await removeDeprecatedSchedules(nextProducer);
       await ensureQueues(nextProducer, definitions);
-      await ensureSchedules(nextProducer, definitions);
       producer = nextProducer;
       enqueueClient = nextProducer;
       log.info(`Background job producer started`, { instanceId: backendConfig.runtime.instanceId });
@@ -124,15 +124,6 @@ export const backgroundJobEnqueue = async <TPayload extends Record<string, unkno
   return jobId ? { accepted: true, jobId } : { accepted: false, jobId: null };
 };
 
-export const backgroundJobFind = async <TPayload extends Record<string, unknown>>(definition: BackgroundJobDefinition<TPayload>, jobId: string) => {
-  if (!producer) {
-    throw new BackgroundJobUnavailableError(`Background job producer has not started.`);
-  }
-
-  const jobs = await producer.findJobs<BackgroundJobPayloadEnvelope>(definition.name, { id: jobId });
-  return jobs[0] ?? null;
-};
-
 async function ensureQueues(boss: PgBoss, definitions: readonly BackgroundJobDefinition[]): Promise<void> {
   for (const definition of definitions) {
     const queue = {
@@ -158,16 +149,9 @@ async function ensureQueues(boss: PgBoss, definitions: readonly BackgroundJobDef
   }
 }
 
-async function ensureSchedules(boss: PgBoss, definitions: readonly BackgroundJobDefinition[]): Promise<void> {
-  for (const definition of definitions) {
-    if (!definition.schedule) {
-      continue;
-    }
-
-    const payload = definition.payloadSchema.parse(definition.schedule.payload);
-    const envelope: BackgroundJobPayloadEnvelope = { version: definition.version, payload };
-    await boss.schedule(definition.name, definition.schedule.cron, envelope, definition.schedule.options);
-  }
+async function removeDeprecatedSchedules(boss: PgBoss): Promise<void> {
+  await boss.unschedule(`task.process`, `task-reconciliation`);
+  await boss.unschedule(`runner.reconcile`, `runner-reconciliation`);
 }
 
 export const backgroundJobCreateWorker = async (): Promise<PgBoss> => {

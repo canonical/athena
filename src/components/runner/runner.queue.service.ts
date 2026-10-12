@@ -3,7 +3,6 @@ import { getPool, query } from "@components/postgres/postgres.js";
 import type { RunnerQueueItem } from "./runner.schema.js";
 
 const runnerQueueColumnNames = [`id`, `loop`, `task`, `runner`, `repository`, `prompt`, `plan`, `status`, `externalTaskId`, `result`, `error`, `createdAt`, `updatedAt`] as const;
-const runnerQueueColumns = pgColumns(runnerQueueColumnNames, `rq`);
 const runnerQueueColumnsUnscoped = pgColumns(runnerQueueColumnNames);
 
 export const queryRunnerQueueCreate = async (loopId: string, taskId: string, runnerId: string, repository: string, prompt: string, plan: string): Promise<RunnerQueueItem> => {
@@ -29,13 +28,6 @@ export const queryRunnerQueueCreate = async (loopId: string, taskId: string, run
 export const queryRunnerQueueById = async (id: string): Promise<RunnerQueueItem | undefined> => {
   const result = await query<RunnerQueueItem>(`SELECT ${runnerQueueColumnsUnscoped} FROM "runnerQueue" WHERE "id" = $1`, [id]);
   return result.rows[0];
-};
-
-export const queryRunnerQueueListActive = async (runnerType: string): Promise<RunnerQueueItem[]> => {
-  const result = await query<RunnerQueueItem>(`SELECT ${runnerQueueColumns} FROM "runnerQueue" rq JOIN "runner" r ON r."id" = rq."runner" WHERE rq."status" IN ('pending', 'claimed') AND r."type" = $1 ORDER BY rq."createdAt" ASC`, [
-    runnerType,
-  ]);
-  return result.rows;
 };
 
 export const queryRunnerQueueMarkSubmitting = async (id: string): Promise<boolean> => {

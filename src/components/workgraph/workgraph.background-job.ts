@@ -14,7 +14,7 @@ const workgraphSyncPayloadSchema = z.object({
 
 type WorkgraphSyncPayload = z.infer<typeof workgraphSyncPayloadSchema>;
 
-export const workgraphSyncJobDefinition: BackgroundJobDefinition<WorkgraphSyncPayload, { syncedCount: number; createdTaskCount: number; skipped: boolean }> = {
+const workgraphSyncJobDefinition: BackgroundJobDefinition<WorkgraphSyncPayload, { syncedCount: number; createdTaskCount: number; skipped: boolean }> = {
   name: `workgraph.sync`,
   version: 1,
   payloadSchema: workgraphSyncPayloadSchema,
