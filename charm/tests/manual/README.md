@@ -141,23 +141,21 @@ sudo microk8s kubectl exec -n athena athena-app-0 -c app -- pebble plan \
 ```
 
 That prints the database name (`athena-app`), the app role (a dynamic name such
-as `relation_id_4`), and its password. Copy the migration files into the
-PostgreSQL pod and run `migrate.sql`, passing that role as `APP_ROLE_NAME` (the
-Compose stack uses `athena`, but the charm's relation user differs):
+as `relation_id_4`), and its password. Build a connection string for that existing
+user and run the packaged migration entrypoint, which applies both Athena and
+`pg-boss` migrations:
 
 ```bash
 cd /home/ubuntu/athena
 DB_NAME=athena-app
 DB_ROLE=relation_id_4        # from POSTGRESQL_DB_USERNAME above
 DB_PASS=<password>           # from POSTGRESQL_DB_PASSWORD above
+DB_HOST=postgresql-k8s-primary.athena.svc.cluster.local
+DB_CONNECT_STRING="postgresql://$DB_ROLE:$DB_PASS@$DB_HOST/$DB_NAME"
 
-sudo microk8s kubectl cp migrations/pg athena/postgresql-k8s-0:/tmp/pgmig -c postgresql
-sudo microk8s kubectl exec -n athena postgresql-k8s-0 -c postgresql -- bash -lc "
-  cd /tmp/pgmig &&
-  PGPASSWORD=$DB_PASS psql -h postgresql-k8s-primary.athena.svc.cluster.local \
-    -U $DB_ROLE -d $DB_NAME -v ON_ERROR_STOP=1 -v APP_ROLE_NAME=$DB_ROLE -f migrate.sql
-"
-sudo microk8s kubectl exec -n athena postgresql-k8s-0 -c postgresql -- rm -rf /tmp/pgmig
+sudo microk8s kubectl exec -n athena athena-app-0 -c app -- env \
+  POSTGRESQL_DB_CONNECT_STRING="$DB_CONNECT_STRING" \
+  /app/migrate.sh
 ```
 
 Confirm the tables were created:

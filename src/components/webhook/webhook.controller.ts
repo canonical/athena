@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { queryLoopAdminMembership, queryLoopForUser, queryLoopMembership } from "@components/loop/loop.service.js";
 import { isValidUuid } from "@components/utilities/zod.utilities.js";
+import { enqueueWorkgraphSync } from "@components/workgraph/workgraph.background-job.js";
 import {
   queryLoopWorkgraphId,
   queryLoopWorkgraphWebhookCreate,
@@ -8,11 +9,9 @@ import {
   queryLoopWorkgraphWebhookList,
   queryLoopWorkgraphWebhookUpdate,
   queryWebhookByReceiverId,
-  queryWebhookItemCreate,
 } from "@components/workgraph/workgraph.pg.service.js";
 import { v7 as uuidv7 } from "uuid";
 import { WebhookForbiddenError, WebhookNotFoundError, WebhookUnauthorizedError, WebhookValidationError } from "./webhook.errors.js";
-import { triggerWebhookItemProcessor } from "./webhook.processor.js";
 import type { LoopWorkgraphWebhook, LoopWorkgraphWebhookCreate, LoopWorkgraphWebhookCreateResult, LoopWorkgraphWebhookUpdate } from "./webhook.schema.js";
 
 const validateLoopId = (loopId: string): void => {
@@ -176,7 +175,7 @@ export const loopWorkgraphWebhookDelete = async (loopId: string, workgraphId: st
   }
 };
 
-export const webhookInboundReceive = async (receiverId: string, headers: Record<string, string | string[] | undefined>, body: unknown): Promise<void> => {
+export const webhookInboundReceive = async (receiverId: string, headers: Record<string, string | string[] | undefined>, _body: unknown): Promise<void> => {
   const webhook = await queryWebhookByReceiverId(receiverId);
 
   if (!webhook?.active) {
@@ -191,11 +190,7 @@ export const webhookInboundReceive = async (receiverId: string, headers: Record<
     throw new WebhookUnauthorizedError(`Webhook authentication failed.`);
   }
 
-  await queryWebhookItemCreate({
-    receiverId,
-    headers: normalizedHeaders,
-    body,
-  });
+  const enqueueResult = await enqueueWorkgraphSync({ loopId: webhook.loop, workgraphId: webhook.workgraph, receiverId }, false);
 
   console.log(`[webhook][ingest] accepted and enqueued`, {
     receiverId,
@@ -203,7 +198,6 @@ export const webhookInboundReceive = async (receiverId: string, headers: Record<
     type: webhook.type,
     loopId: webhook.loop,
     workgraphId: webhook.workgraph,
+    started: enqueueResult.accepted,
   });
-
-  triggerWebhookItemProcessor();
 };

@@ -69,12 +69,17 @@ config:
     pg-pool-max:
       description: Maximum number of clients in the PostgreSQL pool
       type: int
-      default: 1
+      default: 2
       required: false
     pg-pool-idle-timeout-ms:
       description: Idle timeout for PostgreSQL pool clients in milliseconds
       type: int
       default: 60000
+      required: false
+    pg-connection-timeout-ms:
+      description: PostgreSQL connection timeout in milliseconds
+      type: int
+      default: 10000
       required: false
     frontend-base-url:
       type: string

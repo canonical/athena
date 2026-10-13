@@ -48,6 +48,7 @@ The Compose stack includes:
 - `prepare`, a one-shot migration runner
 - `dex` on `localhost:5556`, also reachable through `http://athena.localhost/dex`
 - `athena` on `http://athena.localhost`
+- `athena-worker`, the `pg-boss` worker
 
 For the complete first-run walkthrough, see the [quick-start guide](./quick-start.md).
 

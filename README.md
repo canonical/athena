@@ -19,7 +19,11 @@ Task behavior is implemented in [src/components/task](./src/components/task).
   - optional assigned workgraph item
   - active queue items and archived queue history
 - Queue items are message entries with approval states (`pending`, `awaiting-approval`, `approved`, `completed`).
-- The server starts a background task processor from [src/server.ts](./src/server.ts), and task iteration logic lives in [src/components/task/task.processor.ts](./src/components/task/task.processor.ts) and [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
+- Preparation installs and upgrades `pg-boss`; the web process enqueues durable work and the
+  worker runs task iteration,
+  Workgraph synchronization, runner submission/polling, and RAG handlers. Task iteration logic
+  lives in [src/components/task/task.processor.ts](./src/components/task/task.processor.ts) and
+  [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
 - The loop-level tool catalog is defined in [src/components/tool/tool.catalog.ts](./src/components/tool/tool.catalog.ts); some tools require explicit user approval before completion.
 - Task iteration notes are tracked in [docs/task-iteration.md](./docs/task-iteration.md).
 
@@ -56,7 +60,8 @@ The current application serves an authenticated SPA plus a JSON API.
   - runner management under `/runner/...`
   - workgraph management under `/workgraph/...`
 - Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
-- The server also starts background processors for tasks and inbound webhook items.
+- Durable background handlers run in independently scalable `athena-worker` units. Web and worker
+  use separate PostgreSQL relation users with the provider-supported `admin` role.
 
 ## E2E testing
 
@@ -119,6 +124,15 @@ Athena reads backend runtime configuration from environment variables with the p
 - `APP_ATHENA_OIDC_DISCOVERY_URL=http://dex.localhost/dex/.well-known/openid-configuration`
 - `APP_ATHENA_OIDC_CLIENT_ID=athena`
 - `APP_ATHENA_SESSION_MAX_AGE=86400000`
+- `APP_ATHENA_INSTANCE_ID` defaults to the Juju unit name, then the hostname
+- `APP_ATHENA_PG_POOL_MAX=2` for the web process; worker deployments explicitly default to `1`
+- `APP_ATHENA_PG_POOL_IDLE_TIMEOUT_MS=60000`
+- `APP_ATHENA_PG_CONNECTION_TIMEOUT_MS=10000`
+- `APP_ATHENA_BACKGROUND_JOB_SCHEMA=pgboss`
+- `APP_ATHENA_BACKGROUND_JOB_WORKER_CONCURRENCY=2`
+- `APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT=3`
+- `APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS=5`
+- `APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS=30000`
 
 ### Frontend build-time variable
 
@@ -152,6 +166,7 @@ The checked-in sample is [.example.env](./.example.env). It includes:
 - [rockcraft.yaml](./rockcraft.yaml) builds the Node application and stages the built backend, frontend, dependencies, and migrations into the rock.
 - [scripts/stage-app.sh](./scripts/stage-app.sh) assembles an ephemeral `app/` directory for rock builds without changing the tracked repository layout.
 - [charm](./charm) contains a Python-based `expressjs-framework` charm that depends on PostgreSQL and expects Juju secrets for OIDC and credential encryption.
+- [worker-charm](./worker-charm) contains the `pg-boss` worker charm.
 - Manual charm deployment guidance lives in [charm/tests/manual/README.md](./charm/tests/manual/README.md).
 
 ## Related documentation
