@@ -38,7 +38,7 @@ export const backendConfig = {
   },
   database: {
     connectionString: requiredEnv.getEnv(`POSTGRESQL_DB_CONNECT_STRING`),
-    poolMax: positiveInteger(`PG_POOL_MAX`, env.getNumber(`PG_POOL_MAX`, 1)),
+    poolMax: positiveInteger(`PG_POOL_MAX`, env.getNumber(`PG_POOL_MAX`, 2)),
     poolIdleTimeoutMs: positiveInteger(`PG_POOL_IDLE_TIMEOUT_MS`, env.getNumber(`PG_POOL_IDLE_TIMEOUT_MS`, 60_000)),
     connectionTimeoutMs: positiveInteger(`PG_CONNECTION_TIMEOUT_MS`, env.getNumber(`PG_CONNECTION_TIMEOUT_MS`, 10_000)),
   },

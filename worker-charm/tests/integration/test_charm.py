@@ -34,10 +34,10 @@ def test_worker_blocks_without_required_relations(
     juju.wait(jubilant.all_blocked, timeout=10 * 60)
 
 
-def test_relations_and_credential_start_worker(
+def test_database_and_credential_start_worker(
     web_charm: pathlib.Path, app_image: str, juju: jubilant.Juju
 ) -> None:
-    """Exercise runtime-role membership, shared credentials, and the worker service."""
+    """Exercise direct PostgreSQL credentials and the worker service."""
     juju.deploy(
         web_charm,
         app=WEB_APP_NAME,
@@ -76,7 +76,7 @@ def test_relations_and_credential_start_worker(
         "wait-for",
         "application",
         WEB_APP_NAME,
-        "--query=status==\"active\"",
+        '--query=status=="active"',
         "--timeout=15m",
     )
     juju.integrate(APP_NAME, POSTGRESQL_APP_NAME)

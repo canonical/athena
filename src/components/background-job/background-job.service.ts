@@ -18,8 +18,8 @@ const createBoss = (role: BackgroundJobClientRole): PgBoss => {
   const boss = new PgBoss({
     db: toPgBossDatabase({ query }),
     schema: backendConfig.backgroundJobs.schema,
-    createSchema: !worker,
-    migrate: !worker,
+    createSchema: false,
+    migrate: false,
     schedule: false,
     supervise: worker,
   });
@@ -72,6 +72,7 @@ export const backgroundJobStartProducer = async (): Promise<void> => {
 
     try {
       await nextProducer.start();
+      await verifyInstalledSchema(nextProducer);
       await removeDeprecatedSchedules(nextProducer);
       await ensureQueues(nextProducer, definitions);
       producer = nextProducer;
@@ -137,14 +138,22 @@ async function ensureQueues(boss: PgBoss, definitions: readonly BackgroundJobDef
     await boss.updateQueue(definition.name, mutableQueueOptions);
   }
 
+  await verifyQueues(boss, definitions);
+}
+
+async function verifyQueues(boss: PgBoss, definitions: readonly BackgroundJobDefinition[]): Promise<void> {
   const queues = new Map((await boss.getQueues(definitions.map(({ name }) => name))).map((queue) => [queue.name, queue]));
 
   for (const definition of definitions) {
     const expectedPolicy = definition.queue?.policy ?? `standard`;
-    const actualPolicy = queues.get(definition.name)?.policy;
+    const queue = queues.get(definition.name);
 
-    if (actualPolicy !== expectedPolicy) {
-      throw new BackgroundJobConfigurationError(`Background queue \`${definition.name}\` uses policy \`${actualPolicy ?? `missing`}\`; expected \`${expectedPolicy}\`.`);
+    if (!queue) {
+      throw new BackgroundJobConfigurationError(`Background queue \`${definition.name}\` is not installed.`);
+    }
+
+    if (queue.policy !== expectedPolicy) {
+      throw new BackgroundJobConfigurationError(`Background queue \`${definition.name}\` uses policy \`${queue.policy}\`; expected \`${expectedPolicy}\`.`);
     }
   }
 }
@@ -161,7 +170,7 @@ export const backgroundJobCreateWorker = async (): Promise<PgBoss> => {
   try {
     await worker.start();
     await verifyInstalledSchema(worker);
-    await ensureQueues(worker, definitions);
+    await verifyQueues(worker, definitions);
     enqueueClient = worker;
 
     for (const definition of definitions) {

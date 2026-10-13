@@ -17,7 +17,6 @@ from charms.data_platform_libs.v0.data_interfaces import (  # pyright: ignore[re
 logger = logging.getLogger(__name__)
 
 VERSION = "1.2.0"
-WORKER_RUNTIME_ROLE = "athena_worker_runtime"
 
 
 class AthenaWorkerCharm(ops.CharmBase):
@@ -31,7 +30,7 @@ class AthenaWorkerCharm(ops.CharmBase):
             self,
             relation_name="postgresql",
             database_name=str(self.config["database-name"]),
-            extra_user_roles=WORKER_RUNTIME_ROLE,
+            extra_user_roles="admin",
         )
         framework.observe(self.on.app_pebble_ready, self._reconcile)
         framework.observe(self.on.config_changed, self._on_config_changed)
@@ -74,18 +73,14 @@ class AthenaWorkerCharm(ops.CharmBase):
         value = content.get(content_key)
         return value if isinstance(value, str) and value else None
 
-    def _database_data(self) -> dict[str, str]:
-        """Return the current PostgreSQL relation data."""
+    def _database_uri(self) -> str | None:
+        """Build the worker-owned PostgreSQL connection URI."""
         relation_data = list(
             self._database.fetch_relation_data(
                 fields=["uris", "endpoints", "username", "password", "database"]
             ).values()
         )
-        return relation_data[0] if relation_data else {}
-
-    def _database_uri(self) -> str | None:
-        """Build the worker-owned PostgreSQL connection URI."""
-        data = self._database_data()
+        data = relation_data[0] if relation_data else {}
         uris = data.get("uris")
         if uris:
             return uris.split(",")[0]

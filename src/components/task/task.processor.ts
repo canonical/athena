@@ -10,8 +10,12 @@ import { z } from "zod";
 
 const taskPingIntervalMs = 5_000;
 
+export const enqueueTaskProcessor = async (): Promise<void> => {
+  await backgroundJobEnqueue(taskProcessJobDefinition, {});
+};
+
 export const triggerTaskProcessor = (): void => {
-  void backgroundJobEnqueue(taskProcessJobDefinition, {}).catch((error) => {
+  void enqueueTaskProcessor().catch((error) => {
     log.error(`Task processing enqueue failed`, {
       error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : { message: String(error) },
     });
@@ -132,7 +136,7 @@ const taskProcessJobDefinition: BackgroundJobDefinition<z.infer<typeof taskProce
   name: `task.process`,
   version: 1,
   payloadSchema: taskProcessPayloadSchema,
-  queue: { policy: `stately` },
+  queue: { policy: `short` },
   worker: { localConcurrency: 1 },
   handler: async ({ job }) => ({ processedCount: await runTaskProcessor(job.id) }),
 };

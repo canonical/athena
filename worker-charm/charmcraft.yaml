@@ -36,7 +36,7 @@ config:
     database-name:
       type: string
       default: athena
-      description: PostgreSQL database name owned and migrated by the Athena application
+      description: PostgreSQL database name migrated by the Athena web application
     credential:
       type: secret
       description: >

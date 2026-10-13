@@ -24,7 +24,7 @@ class AthenaCharm(paas_charm.expressjs.Charm):
         super().__init__(*args)
         postgresql = self._database_requirers.get("postgresql")
         if postgresql:
-            postgresql.extra_user_roles = "createrole"
+            postgresql.extra_user_roles = "admin"
         self.framework.observe(self.on.start, self._on_start)
 
     def _on_start(self, event: ops.StartEvent) -> None:

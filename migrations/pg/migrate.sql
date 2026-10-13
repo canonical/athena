@@ -6,7 +6,6 @@ SELECT pg_advisory_xact_lock(hashtextextended('athena-schema-migrations', 0));
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS vector;
-\ir ./grant-worker.sql
 
 \echo >>> Running Athena function migrations
 \ir ./fncs/000100.uuidv7.sql

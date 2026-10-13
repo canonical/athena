@@ -12,22 +12,26 @@ Athena runs durable background work as PostgreSQL-backed `pg-boss` jobs.
   jobs carry stable identifiers and invoke idempotent domain transitions.
 - Each process owns one PostgreSQL pool with explicit limits and timeouts. `pg-boss` uses that
   pool and polls instead of LISTEN/NOTIFY, so the worker can use transaction-mode pooling.
-- Migrations own a stable non-login `athena_worker_runtime` PostgreSQL group. Worker relation
-  users receive membership from PostgreSQL and do not own or migrate schemas. The web relation
-  currently retains `CREATEROLE` to provision that group; production should preprovision it and
-  remove that attribute.
+- Web and worker applications each own a standard PostgreSQL client relation and receive separate
+  relation users with the provider-supported `admin` role. This follows the usual multi-application
+  charm pattern and keeps credential rotation and revocation in the PostgreSQL relation lifecycle.
+- Web startup installs Athena and `pg-boss` schema changes and creates the deployed queue catalog.
+  Workers do not execute DDL and wait until web preparation is complete before starting handlers.
 
 ## Control-flow transfers
 
 - Task creation, user messages, approvals, rejections, Workgraph assignment, and runner results
   enqueue task iteration after committing their domain state.
+- Task wake-ups use a `short` queue: at most one wake-up waits while active drains execute. This
+  coalesces bursts without losing the follow-up needed when work arrives near the end of a drain.
 - Inbound webhooks authenticate synchronously, then enqueue Workgraph synchronization keyed by
   the receiver. A successful sync promotes eligible items to tasks, then enqueues task iteration.
 - Runner tool execution creates a `runnerQueue` record and enqueues submission. Submission stores
   the external task identifier before polling begins. Poll completion atomically updates the
   runner record and appends one task message, then enqueues task iteration.
-- Processing is event-driven. Athena does not periodically scan domain tables to recover missed
-  enqueues; callers must successfully enqueue each required handoff.
+- Processing is event-driven. Each worker startup enqueues task iteration, providing bounded
+  recovery for task handoffs missed before that startup. Athena does not periodically scan domain
+  tables, so callers must still successfully enqueue each required handoff for prompt processing.
 
 ## Delivery
 
@@ -40,7 +44,10 @@ Athena runs durable background work as PostgreSQL-backed `pg-boss` jobs.
 
 ## Lifecycle
 
-- Web processes install or upgrade the `pg-boss` schema. Workers never migrate and fail startup
-  until the schema exists.
+- Preparation installs or upgrades the `pg-boss` schema. Web and worker processes verify that it
+  exists and fail startup when preparation has not completed.
+- Web startup creates queues for the deployed job catalog and applies their mutable settings.
+  Worker startup only verifies that each registered handler has a queue with the expected policy;
+  workers do not create or update queue definitions.
 - On shutdown, web processes stop accepting requests and stop the producer; worker processes
   drain `pg-boss` handlers within a bounded timeout. Each process closes its pool last.

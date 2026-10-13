@@ -3,6 +3,7 @@ import { backgroundJobCreateWorker } from "@components/background-job/background
 import { backendConfig } from "@components/config/backend-config.js";
 import { log } from "@components/logging/logging.service.js";
 import { closePG, ensurePG } from "@components/postgres/postgres.js";
+import { enqueueTaskProcessor } from "@components/task/task.processor.js";
 
 ensurePG({
   applicationName: `athena-worker/${backendConfig.runtime.instanceId}`,
@@ -22,6 +23,7 @@ const startWorker = async () => {
 };
 
 const worker = await startWorker();
+await enqueueTaskProcessor();
 let stopping = false;
 
 const stop = async (signal: NodeJS.Signals): Promise<void> => {

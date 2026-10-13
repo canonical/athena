@@ -19,7 +19,8 @@ Task behavior is implemented in [src/components/task](./src/components/task).
   - optional assigned workgraph item
   - active queue items and archived queue history
 - Queue items are message entries with approval states (`pending`, `awaiting-approval`, `approved`, `completed`).
-- The web process enqueues durable work through `pg-boss`; the worker runs task iteration,
+- Preparation installs and upgrades `pg-boss`; the web process enqueues durable work and the
+  worker runs task iteration,
   Workgraph synchronization, runner submission/polling, and RAG handlers. Task iteration logic
   lives in [src/components/task/task.processor.ts](./src/components/task/task.processor.ts) and
   [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
@@ -59,7 +60,8 @@ The current application serves an authenticated SPA plus a JSON API.
   - runner management under `/runner/...`
   - workgraph management under `/workgraph/...`
 - Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
-- Durable background handlers run in independently scalable `athena-worker` units.
+- Durable background handlers run in independently scalable `athena-worker` units. Web and worker
+  use separate PostgreSQL relation users with the provider-supported `admin` role.
 
 ## E2E testing
 
@@ -123,7 +125,7 @@ Athena reads backend runtime configuration from environment variables with the p
 - `APP_ATHENA_OIDC_CLIENT_ID=athena`
 - `APP_ATHENA_SESSION_MAX_AGE=86400000`
 - `APP_ATHENA_INSTANCE_ID` defaults to the Juju unit name, then the hostname
-- `APP_ATHENA_PG_POOL_MAX=1`
+- `APP_ATHENA_PG_POOL_MAX=2` for the web process; worker deployments explicitly default to `1`
 - `APP_ATHENA_PG_POOL_IDLE_TIMEOUT_MS=60000`
 - `APP_ATHENA_PG_CONNECTION_TIMEOUT_MS=10000`
 - `APP_ATHENA_BACKGROUND_JOB_SCHEMA=pgboss`
