@@ -8,6 +8,8 @@ This index is the entry point for implementation planning artifacts.
 
 - [x] Deliver the shared `pg-boss` substrate and standalone worker runtime without migrating domain
   processors. Detailed plan: [background-job-substrate.plan.md](./background-job-substrate.plan.md)
+- [x] Deploy the standalone runtime as an independently scalable worker charm without migrating
+  domain processors. Detailed plan: [background-worker-charm.plan.md](./background-worker-charm.plan.md)
 
 ### Persona Definition Capability (Foundation)
 

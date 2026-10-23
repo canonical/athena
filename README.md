@@ -59,7 +59,7 @@ The current application serves an authenticated SPA plus a JSON API.
 - The server still starts the existing task, webhook, and runner processors while their durable-job
   migrations are delivered independently.
 - Preparation installs `pg-boss`; the web process owns its producer and queue catalog, and the
-  separately runnable worker validates the catalog. The initial catalog is intentionally empty.
+  separately deployable worker validates the catalog. The initial catalog is intentionally empty.
 
 ## E2E testing
 
@@ -164,6 +164,8 @@ The checked-in sample is [.example.env](./.example.env). It includes:
 - [rockcraft.yaml](./rockcraft.yaml) builds the Node application and stages the built backend, frontend, dependencies, and migrations into the rock.
 - [scripts/stage-app.sh](./scripts/stage-app.sh) assembles an ephemeral `app/` directory for rock builds without changing the tracked repository layout.
 - [charm](./charm) contains a Python-based `expressjs-framework` charm that depends on PostgreSQL and expects Juju secrets for OIDC and credential encryption.
+- [worker-charm](./worker-charm) packages the standalone `pg-boss` worker with its own PostgreSQL
+  relation and credential secret.
 - Manual charm deployment guidance lives in [charm/tests/manual/README.md](./charm/tests/manual/README.md).
 
 ## Related documentation

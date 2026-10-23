@@ -13,6 +13,17 @@ NEW_VERSION=$1
 
 APP_VERSION=$(jq -r .version package.json)
 
+replace_in_file() {
+  local expression=$1
+  local file=$2
+
+  if sed --version >/dev/null 2>&1; then
+    sed -i "$expression" "$file"
+  else
+    sed -i '' "$expression" "$file"
+  fi
+}
+
 if [ "$NEW_VERSION" = "$APP_VERSION" ]; then
   echo "No changes needed. Current app version is $APP_VERSION."
   exit 2
@@ -21,18 +32,22 @@ fi
 echo "Updating version to $NEW_VERSION..."
 
 # Update package.json
-sed -i "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
+replace_in_file "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
 
 # Update rockcraft.yaml
-sed -i "s/^version: \".*\"/version: \"$NEW_VERSION\"/" rockcraft.yaml
+replace_in_file "s/^version: \".*\"/version: \"$NEW_VERSION\"/" rockcraft.yaml
 
 # Update charm/src/charm.py
-sed -i "s/^VERSION = \".*\"/VERSION = \"$NEW_VERSION\"/" charm/src/charm.py
+replace_in_file "s/^VERSION = \".*\"/VERSION = \"$NEW_VERSION\"/" charm/src/charm.py
+
+# Update worker-charm/src/charm.py
+replace_in_file "s/^VERSION = \".*\"/VERSION = \"$NEW_VERSION\"/" worker-charm/src/charm.py
 
 echo "✅ Version updated to $NEW_VERSION in all files:"
 echo "  - package.json"
-echo "  - rockcraft.yaml" 
+echo "  - rockcraft.yaml"
 echo "  - charm/src/charm.py"
+echo "  - worker-charm/src/charm.py"
 
 # Verify the changes
 echo ""
@@ -40,3 +55,4 @@ echo "Verification:"
 echo "package.json: $(grep '"version"' package.json)"
 echo "rockcraft.yaml: $(grep '^version:' rockcraft.yaml)"
 echo "charm/src/charm.py: $(grep '^VERSION =' charm/src/charm.py)"
+echo "worker-charm/src/charm.py: $(grep '^VERSION =' worker-charm/src/charm.py)"

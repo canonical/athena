@@ -21,6 +21,8 @@ Athena uses PostgreSQL-backed `pg-boss` jobs as the durable background-processin
   updates queues declared by the deployed catalog.
 - The standalone worker verifies the schema and declared queue policies before registering
   handlers. It never creates schemas or queues.
+- Production runs the worker in an independently scalable `athena-worker` charm. Its inherited HTTP
+  service stays disabled even while PostgreSQL or credential dependencies are unavailable.
 - Both processes use Athena's PostgreSQL pool with explicit connection limits and shutdown
   timeouts.
 - Preparation installs Athena migrations first and then migrates the configured `pg-boss` schema.
@@ -31,8 +33,9 @@ Athena uses PostgreSQL-backed `pg-boss` jobs as the durable background-processin
 
 The substrate initially ships with an empty domain-job catalog. Existing task, webhook, and runner
 processors continue to run in the web process until their individual migration plans are delivered.
-The separate worker therefore starts idle during this phase. This preserves current behavior while
-deployment and lifecycle wiring are validated independently of domain migrations.
+The separate worker therefore starts idle during this phase in Compose and Juju deployments. This
+preserves current behavior while deployment and lifecycle wiring are validated independently of
+domain migrations.
 
 Domain migrations must add their queue definition, enqueue points, idempotency behavior, recovery
 path, and UI-driven E2E coverage together before removing the corresponding legacy processor.
