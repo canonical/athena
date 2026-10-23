@@ -73,36 +73,22 @@ test(`loop personas tab can assign catalog personas to loop`, async ({ page }) =
   await authenticate(page);
 
   const loop = await createLoop(page, `Loop catalog personas flow ${Date.now()}`);
+  const catalogPersona = `Grace`;
 
-  // Navigate to loop personas tab
   await page.goto(`http://athena.localhost/loop/${loop.id}/personas`);
   await expect(page.getByRole(`heading`, { name: `Assigned personas` })).toBeVisible();
 
-  // Open assign drawer
-  await page.getByRole(`button`, { name: `Assign persona` }).click();
-
-  // Get the persona dropdown and select first option (should be from catalog since no owned personas assigned)
-  const personaSelect = page.locator(`#assign-persona-select`);
-  const personaOptions = await personaSelect.locator(`option`).count();
-  if (personaOptions <= 1) {
-    throw new Error(`No personas available to assign (only placeholder option found)`);
-  }
-
-  // Select first available persona from dropdown
-  const options = await personaSelect.locator(`option`).allTextContents();
-  const firstPersonaLabel = options.find((opt) => opt !== `— Select a persona —`);
-
-  if (!firstPersonaLabel) {
-    throw new Error(`No personas found in dropdown`);
-  }
+  await page.getByRole(`button`, { name: `Remove ${catalogPersona}` }).click();
+  await expect(page.getByText(`${catalogPersona} has been removed from this loop.`)).toBeVisible();
 
   const rowsBefore = await page.getByRole(`row`).count();
 
-  await personaSelect.selectOption({ label: firstPersonaLabel });
+  await page.getByRole(`button`, { name: `Assign persona` }).click();
+  await page.locator(`#assign-persona-select`).selectOption({ label: catalogPersona });
   await page.getByRole(`dialog`).getByRole(`button`, { name: `Assign` }).click();
 
-  // Verify success
   await expect(page.getByText(`Persona has been assigned to this loop.`)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole(`gridcell`, { name: catalogPersona, exact: true })).toBeVisible();
   await expect.poll(async () => page.getByRole(`row`).count(), { timeout: 20_000 }).toBeGreaterThan(rowsBefore);
 });
 
