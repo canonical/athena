@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { v5 as uuidv5 } from "uuid";
@@ -120,6 +120,7 @@ const waitForUrl = async (url: string, attempts = 25): Promise<void> => {
 
 const globalSetup = async (): Promise<void> => {
   await renderDexUsers();
+  await mkdir(join(workspaceRoot, `testing`, `results`), { recursive: true });
 
   const localSeedDir = join(workspaceRoot, `migrations`, `pg`, `seed.local`);
   const localSeedDirHidden = `${localSeedDir}.bak`;
@@ -129,12 +130,12 @@ const globalSetup = async (): Promise<void> => {
   }
 
   try {
-    execFileSync(`docker`, [`compose`, `--profile`, `test`, `down`, `-v`], {
+    execFileSync(`docker`, [`compose`, `--profile`, `test`, `down`, `--remove-orphans`, `-v`], {
       cwd: workspaceRoot,
       stdio: `inherit`,
     });
 
-    execFileSync(`docker`, [`compose`, `--profile`, `test`, `up`, `-d`, `--build`, `traefik`, `postgres`, `prepare`, `dex`, `test-inference`, `athena`], {
+    execFileSync(`docker`, [`compose`, `--profile`, `test`, `up`, `-d`, `--build`, `--wait`, `--wait-timeout`, `180`, `traefik`, `postgres`, `prepare`, `dex`, `test-inference`, `athena`, `athena-worker`], {
       cwd: workspaceRoot,
       stdio: `inherit`,
     });

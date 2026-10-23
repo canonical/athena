@@ -3,6 +3,8 @@ import { queryLoopWorkgraphMarkSyncFailed, queryLoopWorkgraphMarkSynchronizing, 
 import { synchronizeLoopWorkgraphAndPromoteTasks } from "@components/workgraph/workgraph.sync.service.js";
 
 let isProcessing = false;
+let isStopping = false;
+let currentRun: Promise<void> | null = null;
 
 const processWebhookItem = async (item: { id: string; payload: Record<string, unknown> }): Promise<void> => {
   const receiverId = typeof item.payload.receiverId === `string` ? item.payload.receiverId : ``;
@@ -38,7 +40,7 @@ const processWebhookItem = async (item: { id: string; payload: Record<string, un
 };
 
 const processQueue = async (): Promise<void> => {
-  while (true) {
+  while (!isStopping) {
     const item = await queryWebhookItemClaimNext();
 
     if (!item) {
@@ -66,13 +68,13 @@ const processQueue = async (): Promise<void> => {
 };
 
 export const triggerWebhookItemProcessor = (): void => {
-  if (isProcessing) {
+  if (isStopping || isProcessing) {
     return;
   }
 
   isProcessing = true;
 
-  void (async () => {
+  currentRun = (async () => {
     try {
       await processQueue();
     } catch (error) {
@@ -81,10 +83,16 @@ export const triggerWebhookItemProcessor = (): void => {
       });
     } finally {
       isProcessing = false;
+      currentRun = null;
     }
   })();
 };
 
 export const startWebhookItemProcessor = (): void => {
   triggerWebhookItemProcessor();
+};
+
+export const stopWebhookItemProcessor = async (): Promise<void> => {
+  isStopping = true;
+  await currentRun;
 };

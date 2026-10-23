@@ -4,6 +4,11 @@ This index is the entry point for implementation planning artifacts.
 
 ## Consolidated Task List
 
+### Background processing
+
+- [x] Deliver the shared `pg-boss` substrate and standalone worker runtime without migrating domain
+  processors. Detailed plan: [background-job-substrate.plan.md](./background-job-substrate.plan.md)
+
 ### Persona Definition Capability (Foundation)
 
 - [ ] Define persona schema, lifecycle, and capability model (IC, CR, EM, PM, QA, UX personas and their execution roles within loop orchestration). Detailed plan: [persona-management.plan.md](./persona-management.plan.md)

@@ -14,7 +14,8 @@ is_truthy() {
 if is_truthy "$coverage"; then
   export COVERAGE="true"
   npm run build
-  exec npm run coverage:start
+  export NODE_OPTIONS="--loader @istanbuljs/esm-loader-hook"
+  exec ./node_modules/.bin/nyc --silent --cwd . --reporter=json --temp-dir .nyc_output node dist/server.js
 fi
 
 unset COVERAGE
@@ -24,4 +25,4 @@ if is_truthy "$dev_mode"; then
 fi
 
 npm run build
-exec npm run start
+exec node --enable-source-maps dist/server.js

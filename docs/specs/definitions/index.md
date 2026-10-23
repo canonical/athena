@@ -18,5 +18,6 @@ Normative definition files for Athena orchestration rules and constraints.
 - [user-request.md](./user-request.md)
 - [webhook-task.md](./webhook-task.md)
 - [runner-harness.md](./runner-harness.md) — runner and harness concepts
+- [background-processing.md](./background-processing.md) — durable job contract and staged adoption
 - [workshop-runner.md](./workshop-runner.md) — Ubuntu Workshop runner contract
 - [juju-athena-machine-charm.md](./juju-athena-machine-charm.md) — released Juju Athena machine host deployment

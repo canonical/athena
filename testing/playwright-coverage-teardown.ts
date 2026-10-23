@@ -13,6 +13,7 @@ type CoverageEntry = {
 const backendCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_backend`);
 const frontendCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_frontend`);
 const mergedCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_merged`);
+const workerCoverageDirectory = path.join(process.cwd(), `testing/results/.nyc_worker`);
 
 const remapPath = (filePath: string): string => filePath.replace(/^\/app\//, `${process.cwd()}/`);
 
@@ -109,7 +110,7 @@ const maybeFetchBackendCoverage = async () => {
 };
 
 const collectCoverageFiles = async (): Promise<string[]> => {
-  const directories = [frontendCoverageDirectory, backendCoverageDirectory];
+  const directories = [frontendCoverageDirectory, backendCoverageDirectory, workerCoverageDirectory];
 
   const files = await Promise.all(
     directories.map(async (directoryPath) => {

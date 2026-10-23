@@ -1,7 +1,7 @@
 FROM ubuntu:26.04
 
 RUN apt-get update \
-	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm ca-certificates curl \
+	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm postgresql-client ca-certificates curl \
 	&& rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -14,10 +14,12 @@ COPY playwright.config.ts ./
 COPY vite.config.ts ./
 COPY tsconfig.json tsconfig.server.json tsconfig.testing.json ./
 COPY src ./src
+COPY migrations ./migrations
+COPY migrate.sh ./migrate.sh
 COPY scripts ./scripts
 COPY testing ./testing
 
-RUN chmod +x ./scripts/start-athena-container.sh
+RUN chmod +x ./migrate.sh ./scripts/start-athena-container.sh ./scripts/start-athena-worker-container.sh
 
 EXPOSE 8000
 

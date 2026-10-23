@@ -19,7 +19,7 @@ Task behavior is implemented in [src/components/task](./src/components/task).
   - optional assigned workgraph item
   - active queue items and archived queue history
 - Queue items are message entries with approval states (`pending`, `awaiting-approval`, `approved`, `completed`).
-- The server starts a background task processor from [src/server.ts](./src/server.ts), and task iteration logic lives in [src/components/task/task.processor.ts](./src/components/task/task.processor.ts) and [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
+- The server currently starts the background task processor from [src/server.ts](./src/server.ts), and task iteration logic lives in [src/components/task/task.processor.ts](./src/components/task/task.processor.ts) and [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
 - The loop-level tool catalog is defined in [src/components/tool/tool.catalog.ts](./src/components/tool/tool.catalog.ts); some tools require explicit user approval before completion.
 - Task iteration notes are tracked in [docs/task-iteration.md](./docs/task-iteration.md).
 
@@ -56,7 +56,10 @@ The current application serves an authenticated SPA plus a JSON API.
   - runner management under `/runner/...`
   - workgraph management under `/workgraph/...`
 - Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
-- The server also starts background processors for tasks and inbound webhook items.
+- The server still starts the existing task, webhook, and runner processors while their durable-job
+  migrations are delivered independently.
+- Preparation installs `pg-boss`; the web process owns its producer and queue catalog, and the
+  separately runnable worker validates the catalog. The initial catalog is intentionally empty.
 
 ## E2E testing
 
@@ -92,7 +95,7 @@ What the Playwright setup does:
   - shell
   - status
 
-Coverage-enabled runs collect frontend and backend coverage data; `npm run test:ci` then generates merged reports under [testing/results/coverage](./testing/results/coverage).
+Coverage-enabled runs collect frontend, web backend, and worker coverage data; `npm run test:ci` then generates merged reports under [testing/results/coverage](./testing/results/coverage).
 
 ## Default runtime configuration
 
@@ -119,6 +122,15 @@ Athena reads backend runtime configuration from environment variables with the p
 - `APP_ATHENA_OIDC_DISCOVERY_URL=http://dex.localhost/dex/.well-known/openid-configuration`
 - `APP_ATHENA_OIDC_CLIENT_ID=athena`
 - `APP_ATHENA_SESSION_MAX_AGE=86400000`
+- `APP_ATHENA_INSTANCE_ID` defaults to the Juju unit name, then the hostname
+- `APP_ATHENA_PG_POOL_MAX=2` for the web process; local worker configuration defaults to `1`
+- `APP_ATHENA_PG_POOL_IDLE_TIMEOUT_MS=60000`
+- `APP_ATHENA_PG_CONNECTION_TIMEOUT_MS=10000`
+- `APP_ATHENA_BACKGROUND_JOB_SCHEMA=pgboss`
+- `APP_ATHENA_BACKGROUND_JOB_WORKER_CONCURRENCY=2`
+- `APP_ATHENA_BACKGROUND_JOB_RETRY_LIMIT=3`
+- `APP_ATHENA_BACKGROUND_JOB_RETRY_DELAY_SECONDS=5`
+- `APP_ATHENA_BACKGROUND_JOB_SHUTDOWN_TIMEOUT_MS=30000`
 
 ### Frontend build-time variable
 
