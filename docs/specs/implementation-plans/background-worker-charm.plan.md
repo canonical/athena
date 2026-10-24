@@ -2,8 +2,8 @@
 
 ## Status
 
-Implemented. The deployed domain-job catalog remains empty until the processor migration plans are
-delivered.
+Implemented. Task processing now runs in this worker; webhook and runner processors remain in the
+web process until their migration plans are delivered.
 
 ## Scope
 
@@ -21,7 +21,8 @@ built from the shared rock without changing current domain processing behavior.
 - [x] Deployment activates web preparation before relating and activating the worker.
 - [x] Integration coverage exercises the blocked state, disabled HTTP service, complete PostgreSQL
   and credential path, worker startup, and active state.
-- [x] Existing task, webhook, and runner processors remain in the web process.
+- [x] The initial charm delivery left all domain processors in the web process so its deployment
+  lifecycle could be validated independently.
 
 ## Database authorization decision
 
@@ -36,4 +37,5 @@ first and wait for it to become active before relating worker. Worker startup ve
 ## Related specifications
 
 - [background-processing.md](../definitions/background-processing.md)
+- [background-task-processing.plan.md](./background-task-processing.plan.md)
 - [Athena worker charm](../../../worker-charm/README.md)

@@ -31,11 +31,14 @@ Athena uses PostgreSQL-backed `pg-boss` jobs as the durable background-processin
 
 ## Staged adoption
 
-The substrate initially ships with an empty domain-job catalog. Existing task, webhook, and runner
-processors continue to run in the web process until their individual migration plans are delivered.
-The separate worker therefore starts idle during this phase in Compose and Juju deployments. This
-preserves current behavior while deployment and lifecycle wiring are validated independently of
-domain migrations.
+Task iteration runs as the `task.process` job in the standalone worker. Task creation and every
+task-unblocking action enqueue a wake-up after committing domain state. The queue uses the `short`
+policy with one local handler: at most one wake-up waits while an active drain continues, so bursts
+coalesce without losing the follow-up needed for work arriving near the end of a drain. Worker
+startup also enqueues a wake-up as bounded recovery for a handoff missed before startup.
+
+Webhook and runner processors continue to run in the web process until their individual migration
+plans are delivered.
 
 Domain migrations must add their queue definition, enqueue points, idempotency behavior, recovery
 path, and UI-driven E2E coverage together before removing the corresponding legacy processor.

@@ -42,6 +42,9 @@ export const backendConfig = {
     poolIdleTimeoutMs: positiveInteger(`PG_POOL_IDLE_TIMEOUT_MS`, env.getNumber(`PG_POOL_IDLE_TIMEOUT_MS`, 60_000)),
     connectionTimeoutMs: positiveInteger(`PG_CONNECTION_TIMEOUT_MS`, env.getNumber(`PG_CONNECTION_TIMEOUT_MS`, 10_000)),
   },
+  credentials: {
+    encryptionKey: env.getEnv(`CREDENTIAL_ENCRYPTION_KEY`, ``),
+  },
   backgroundJobs: {
     schema: backgroundJobSchema,
     workerConcurrency: positiveInteger(`BACKGROUND_JOB_WORKER_CONCURRENCY`, env.getNumber(`BACKGROUND_JOB_WORKER_CONCURRENCY`, 2)),

@@ -10,6 +10,8 @@ This index is the entry point for implementation planning artifacts.
   processors. Detailed plan: [background-job-substrate.plan.md](./background-job-substrate.plan.md)
 - [x] Deploy the standalone runtime as an independently scalable worker charm without migrating
   domain processors. Detailed plan: [background-worker-charm.plan.md](./background-worker-charm.plan.md)
+- [x] Move task iteration from the web process to a durable worker job. Detailed plan:
+  [background-task-processing.plan.md](./background-task-processing.plan.md)
 
 ### Persona Definition Capability (Foundation)
 
