@@ -37,8 +37,12 @@ policy with one local handler: at most one wake-up waits while an active drain c
 coalesce without losing the follow-up needed for work arriving near the end of a drain. Worker
 startup also enqueues a wake-up as bounded recovery for a handoff missed before startup.
 
-Webhook and runner processors continue to run in the web process until their individual migration
-plans are delivered.
+UI requests and authenticated inbound webhooks enqueue `workgraph.sync`, keyed by loop and
+Workgraph. The handler revalidates webhook configuration before synchronizing, records failures on
+the assignment, promotes eligible items to tasks idempotently, and hands those tasks to
+`task.process`. The stately queue retains at most one queued and one active sync for each assignment.
+
+The runner processor continues to run in the web process until its migration plan is delivered.
 
 Domain migrations must add their queue definition, enqueue points, idempotency behavior, recovery
 path, and UI-driven E2E coverage together before removing the corresponding legacy processor.

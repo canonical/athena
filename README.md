@@ -56,8 +56,9 @@ The current application serves an authenticated SPA plus a JSON API.
   - runner management under `/runner/...`
   - workgraph management under `/workgraph/...`
 - Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
-- The standalone worker runs task processing. The server still starts the existing webhook and
-  runner processors while their durable-job migrations are delivered independently.
+- The standalone worker runs task processing and Workgraph synchronization, including webhook
+  triggers. The server still starts the existing runner processor while its durable-job migration
+  is delivered independently.
 - Preparation installs `pg-boss`; the web process owns its producer and queue catalog, and the
   separately deployable worker validates the catalog and runs its registered handlers.
 

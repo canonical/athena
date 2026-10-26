@@ -12,6 +12,8 @@ This index is the entry point for implementation planning artifacts.
   domain processors. Detailed plan: [background-worker-charm.plan.md](./background-worker-charm.plan.md)
 - [x] Move task iteration from the web process to a durable worker job. Detailed plan:
   [background-task-processing.plan.md](./background-task-processing.plan.md)
+- [x] Move UI- and webhook-triggered Workgraph synchronization to a durable worker job. Detailed
+  plan: [background-workgraph-sync.plan.md](./background-workgraph-sync.plan.md)
 
 ### Persona Definition Capability (Foundation)
 

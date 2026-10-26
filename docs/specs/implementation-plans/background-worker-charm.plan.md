@@ -2,8 +2,8 @@
 
 ## Status
 
-Implemented. Task processing now runs in this worker; webhook and runner processors remain in the
-web process until their migration plans are delivered.
+Implemented. Task processing and Workgraph synchronization now run in this worker; the runner
+processor remains in the web process until its migration plan is delivered.
 
 ## Scope
 
@@ -38,4 +38,5 @@ first and wait for it to become active before relating worker. Worker startup ve
 
 - [background-processing.md](../definitions/background-processing.md)
 - [background-task-processing.plan.md](./background-task-processing.plan.md)
+- [background-workgraph-sync.plan.md](./background-workgraph-sync.plan.md)
 - [Athena worker charm](../../../worker-charm/README.md)

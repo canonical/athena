@@ -1,8 +1,9 @@
 # Athena worker charm
 
 Runs the deployed Athena `pg-boss` catalog from the shared `app-image` rock through the standalone
-worker entrypoint. The worker never runs migrations or serves HTTP. Task iteration runs here;
-webhook and runner processing remain in the web application until their separate migrations land.
+worker entrypoint. The worker never runs migrations or serves HTTP. Task iteration and Workgraph
+synchronization run here; runner processing remains in the web application until its separate
+migration lands.
 
 The `credential` secret must hold the web charm's `encryption-key`. The worker relates directly to
 PostgreSQL and receives its own generated user with the provider-supported `admin` role. Deploy and

@@ -19,7 +19,6 @@ import { staticRouter } from "@components/static/static.router.js";
 import { statusRouter } from "@components/status/status.router.js";
 import { stepSequenceRouter } from "@components/stepSequence/stepSequence.router.js";
 import { taskRouter } from "@components/task/task.router.js";
-import { startWebhookItemProcessor, stopWebhookItemProcessor } from "@components/webhook/webhook.processor.js";
 import { webhookPublicRouter } from "@components/webhook/webhook.public.router.js";
 import { webhookRouter } from "@components/webhook/webhook.router.js";
 import { workgraphRouter } from "@components/workgraph/workgraph.router.js";
@@ -66,7 +65,6 @@ defineLoggingErrorHandler(app);
 const server = app.listen(port, () => {
   log.info(`Athena server listening on port ${port}`);
 
-  startWebhookItemProcessor();
   startRunnerQueueConsumer();
 });
 
@@ -91,7 +89,6 @@ const stop = async (signal: NodeJS.Signals): Promise<void> => {
       new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
       }),
-      stopWebhookItemProcessor(),
       stopRunnerQueueConsumer(),
     ]);
   } catch (error) {

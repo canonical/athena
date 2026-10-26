@@ -42,7 +42,7 @@ status != completed}
   R -- Yes --> S[Return null, skip creation]
   R -- No --> T[Insert queued task]
 
-  T --> U[Trigger task processor]
+  T --> U[Enqueue task.process]
   U --> V[Increment createdTaskCount]
   S --> K
   V --> K

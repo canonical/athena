@@ -1,4 +1,4 @@
-import { getPool, query } from "@components/postgres/postgres.js";
+import { getPool, type QueryExecutor, query } from "@components/postgres/postgres.js";
 import { decryptSecret, encryptSecret } from "@components/utilities/secret-envelope.js";
 import type { LoopWorkgraphWebhook, LoopWorkgraphWebhookUpdate } from "@components/webhook/webhook.schema.js";
 import type { JiraSyncedItem } from "./workgraph.jira.service.js";
@@ -340,8 +340,8 @@ export const queryLoopWorkgraphMarkSyncFailed = async (loopId: string, workgraph
   );
 };
 
-export const queryLoopWorkgraphMarkSynchronizing = async (loopId: string, workgraphId: string): Promise<boolean> => {
-  const result = await query(
+export const queryLoopWorkgraphMarkSynchronizing = async (loopId: string, workgraphId: string, executor: QueryExecutor = { query }): Promise<boolean> => {
+  const result = await executor.query(
     `
       UPDATE "loopWorkgraph"
       SET
