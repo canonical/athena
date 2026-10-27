@@ -42,7 +42,11 @@ Workgraph. The handler revalidates webhook configuration before synchronizing, r
 the assignment, promotes eligible items to tasks idempotently, and hands those tasks to
 `task.process`. The stately queue retains at most one queued and one active sync for each assignment.
 
-The runner processor continues to run in the web process until its migration plan is delivered.
+GitHub Copilot Cloud execution uses `runner.submit` and `runner.poll`, keyed by runner queue item.
+The queue item and initial submission handoff commit atomically. Submission stores the external
+task ID before scheduling a poll; terminal finalization updates runner history and appends one
+idempotent message to the originating task in one transaction before waking `task.process`. Worker
+startup recovers pending submissions and claimed executions whose external ID was already stored.
 
 Domain migrations must add their queue definition, enqueue points, idempotency behavior, recovery
 path, and UI-driven E2E coverage together before removing the corresponding legacy processor.

@@ -1,4 +1,4 @@
-import { authenticate, createLoop, expect, type Page, test } from "../../../testing/playwright/index.js";
+import { approveToolCall, authenticate, callsTool, createLoop, createTaskViaUi, expect, openToolCallApproval, type Page, replies, scenario, sendTaskMessage, test, turnTimeout } from "../../../testing/playwright/index.js";
 
 const openRunnerList = async (page: Page) => {
   await page.goto(`http://athena.localhost/runner/list`);
@@ -256,4 +256,48 @@ test(`loop runner repositories page shows error for runner not in loop`, async (
 
   await expect(page.getByRole(`heading`, { name: /Runner repositories/ })).toBeVisible();
   await expect(page.getByText(`Unable to load runner repositories`)).toBeVisible();
+});
+
+test(`runner jobs execute in the worker and resume the task after a terminal failure`, async ({ page, runnableLoop, inference }) => {
+  const instruction = `Delegate this change to the configured runner.`;
+  const resumedReply = `The runner failure is recorded and the task is active again.`;
+  const repositoryName = `Runner job repository ${Date.now()}`;
+
+  await inference.mock(
+    scenario().answers(
+      instruction,
+      callsTool(`athena_enqueue_run`, {
+        prompt: `Update the repository documentation.`,
+        plan: `1. Inspect the documentation.\n2. Apply the update.`,
+        repository: repositoryName,
+      }),
+      replies(resumedReply),
+    ),
+  );
+
+  await openRunnerList(page);
+  await page.getByRole(`button`, { name: `Edit ${runnableLoop.runner.name}` }).click();
+  // DEL is accepted by the credential form but rejected locally as an HTTP header value, so the
+  // real adapter failure path stays deterministic without contacting GitHub.
+  await page.getByLabel(`API key`).fill(String.fromCharCode(127));
+  await page.getByRole(`button`, { name: `Save runner` }).click();
+  await expect(page.getByText(`${runnableLoop.runner.name} has been updated.`)).toBeVisible();
+
+  await createRepositoryViaUi(page, repositoryName);
+  await assignRepositoryToLoopViaUi(page, runnableLoop.loop.id, repositoryName);
+
+  await page.goto(`http://athena.localhost/loop/${runnableLoop.loop.id}/runners`);
+  const runnerRow = page.getByRole(`row`).filter({ hasText: runnableLoop.runner.name });
+  await runnerRow.getByRole(`link`, { name: `Manage` }).click();
+  await page.getByRole(`checkbox`).first().check();
+  await page.getByRole(`button`, { name: `Save assignments` }).click();
+  await expect(page.getByText(`Runner repository assignments have been updated.`)).toBeVisible();
+
+  await createTaskViaUi(page, runnableLoop.loop.id);
+  await sendTaskMessage(page, instruction);
+  await openToolCallApproval(page, `Enqueue Runner`);
+  await approveToolCall(page);
+
+  await expect(page.getByText(/Runner task failed\. Details:/)).toBeVisible({ timeout: turnTimeout });
+  await expect(page.getByText(resumedReply)).toBeVisible({ timeout: turnTimeout });
 });

@@ -14,6 +14,8 @@ This index is the entry point for implementation planning artifacts.
   [background-task-processing.plan.md](./background-task-processing.plan.md)
 - [x] Move UI- and webhook-triggered Workgraph synchronization to a durable worker job. Detailed
   plan: [background-workgraph-sync.plan.md](./background-workgraph-sync.plan.md)
+- [x] Move GitHub Copilot Cloud runner submission and polling to durable worker jobs. Detailed
+  plan: [background-runner-processing.plan.md](./background-runner-processing.plan.md)
 
 ### Persona Definition Capability (Foundation)
 

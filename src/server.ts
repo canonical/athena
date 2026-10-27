@@ -13,7 +13,6 @@ import { closePG } from "@components/postgres/postgres.js";
 import { providerRouter } from "@components/provider/provider.router.js";
 import { repositoryRouter } from "@components/repository/repository.router.js";
 import { runnerAgentRouter } from "@components/runner/runner.agent.router.js";
-import { startRunnerQueueConsumer, stopRunnerQueueConsumer } from "@components/runner/runner.queue.consumer.js";
 import { runnerRouter } from "@components/runner/runner.router.js";
 import { staticRouter } from "@components/static/static.router.js";
 import { statusRouter } from "@components/status/status.router.js";
@@ -64,8 +63,6 @@ defineLoggingErrorHandler(app);
 
 const server = app.listen(port, () => {
   log.info(`Athena server listening on port ${port}`);
-
-  startRunnerQueueConsumer();
 });
 
 let stopping = false;
@@ -85,12 +82,9 @@ const stop = async (signal: NodeJS.Signals): Promise<void> => {
   }, timeoutMs);
 
   try {
-    await Promise.all([
-      new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
-      }),
-      stopRunnerQueueConsumer(),
-    ]);
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
   } catch (error) {
     process.exitCode = 1;
     log.error(`Athena server drain failed`, {

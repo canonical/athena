@@ -19,7 +19,10 @@ Task behavior is implemented in [src/components/task](./src/components/task).
   - optional assigned workgraph item
   - active queue items and archived queue history
 - Queue items are message entries with approval states (`pending`, `awaiting-approval`, `approved`, `completed`).
-- The standalone worker runs durable task iteration through [src/components/task/task.processor.ts](./src/components/task/task.processor.ts); the iteration steps live in [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
+- The standalone worker runs durable task iteration, Workgraph synchronization, and runner
+  submission and polling. Task iteration is coordinated by
+  [src/components/task/task.processor.ts](./src/components/task/task.processor.ts); the iteration
+  steps live in [src/components/task/task.iteratorPrimary.ts](./src/components/task/task.iteratorPrimary.ts).
 - The loop-level tool catalog is defined in [src/components/tool/tool.catalog.ts](./src/components/tool/tool.catalog.ts); some tools require explicit user approval before completion.
 - Task iteration notes are tracked in [docs/task-iteration.md](./docs/task-iteration.md).
 
@@ -56,9 +59,8 @@ The current application serves an authenticated SPA plus a JSON API.
   - runner management under `/runner/...`
   - workgraph management under `/workgraph/...`
 - Loop readiness is evaluated before task processing. A loop is blocked if it does not have the required routing persona, execution persona, provider/model configuration, runner, and workgraph assignments.
-- The standalone worker runs task processing and Workgraph synchronization, including webhook
-  triggers. The server still starts the existing runner processor while its durable-job migration
-  is delivered independently.
+- The standalone worker runs task processing, Workgraph synchronization, and GitHub Copilot Cloud
+  runner submission and polling.
 - Preparation installs `pg-boss`; the web process owns its producer and queue catalog, and the
   separately deployable worker validates the catalog and runs its registered handlers.
 

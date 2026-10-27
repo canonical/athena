@@ -80,6 +80,7 @@ test(`loop personas tab can assign catalog personas to loop`, async ({ page }) =
 
   await page.getByRole(`button`, { name: `Remove ${catalogPersona}` }).click();
   await expect(page.getByText(`${catalogPersona} has been removed from this loop.`)).toBeVisible();
+  await expect(page.getByRole(`gridcell`, { name: catalogPersona, exact: true })).toHaveCount(0);
 
   const rowsBefore = await page.getByRole(`row`).count();
 

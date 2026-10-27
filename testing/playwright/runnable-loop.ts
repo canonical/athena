@@ -9,6 +9,7 @@ const runnableLoopModel = `deterministic-chat`;
 
 export type RunnableLoop = {
   loop: { id: string; name: string };
+  runner: { name: string };
   inference: InferenceMock;
 };
 
@@ -31,7 +32,7 @@ export const prepareRunnableLoop = async (page: Page, testInference: TestInferen
 
   await assertLoopIsRunnable(page, loop.id);
 
-  return { loop, inference };
+  return { loop, runner: { name: runnerName }, inference };
 };
 
 const assertLoopIsRunnable = async (page: Page, loopId: string) => {

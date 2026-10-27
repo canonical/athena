@@ -7,6 +7,7 @@ export const createTaskViaUi = async (page: Page, loopId: string) => {
   await page.getByRole(`button`, { name: `New Task` }).click();
 
   await expect(page.getByText(`Title: New Task`)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(`Hello, how can I help you?`)).toBeVisible({ timeout: turnTimeout });
 };
 
 export const sendTaskMessage = async (page: Page, message: string) => {
