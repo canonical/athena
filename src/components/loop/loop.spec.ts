@@ -299,3 +299,93 @@ test(`loop detail page defaults to task list route`, async ({ page }) => {
   await page.goto(`http://athena.localhost/loop/${loop.id}/task/list`);
   await expect(page).toHaveURL(/\/loop\/[0-9a-f-]+\/task\/list/);
 });
+
+test(`loop step settings manage sequences, definitions, ordering, and task-source mappings`, async ({ page }) => {
+  await authenticate(page);
+  const loop = await createLoop(page, `Step settings loop ${Date.now()}`);
+  const sequenceName = `Review flow ${Date.now()}`;
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/steps`);
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/step-sequences$`));
+  await expect(page.getByRole(`link`, { name: `Step Sequences` })).toBeVisible();
+  await expect(page.getByRole(`link`, { name: `Step Definitions` })).toBeVisible();
+  await expect(page.getByRole(`heading`, { name: `Step sequences` })).toBeVisible();
+  await expect(page.getByText(`No step sequences configured.`)).toBeVisible();
+  await page.getByRole(`button`, { name: `Create sequence` }).click();
+
+  const sequenceDialog = page.getByRole(`dialog`);
+  await sequenceDialog.getByLabel(`Sequence name`).fill(sequenceName);
+  await sequenceDialog.getByLabel(`Default sequence`).check();
+  await sequenceDialog.getByRole(`button`, { name: `Create sequence` }).click();
+  await expect(page.getByText(`${sequenceName} has been saved.`)).toBeVisible();
+
+  await page.getByRole(`link`, { name: sequenceName, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/step-sequences/[0-9a-f-]+$`));
+  const sequenceDetailUrl = page.url();
+  await expect(page.getByRole(`heading`, { name: sequenceName })).toBeVisible();
+  await page.getByRole(`button`, { name: `Add step` }).click();
+  let definitionDialog = page.getByRole(`dialog`);
+  await definitionDialog.getByLabel(`Step name`).fill(`Draft`);
+  await definitionDialog.getByLabel(`Instructions`).fill(`Prepare a concise draft.`);
+  await definitionDialog.getByRole(`button`, { name: `Create step` }).click();
+  await expect(page.getByRole(`row`).filter({ hasText: `Draft` })).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Add step` }).click();
+  definitionDialog = page.getByRole(`dialog`);
+  await definitionDialog.getByLabel(`Step name`).fill(`Build`);
+  await definitionDialog.getByLabel(`Instructions`).fill(`Implement the approved draft.`);
+  await definitionDialog.getByRole(`button`, { name: `Create step` }).click();
+  await expect(page.getByRole(`row`).filter({ hasText: `Build` })).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Move Build up` }).click();
+  const definitionRows = page.getByRole(`row`).filter({ has: page.getByRole(`button`, { name: /Move .* up/ }) });
+  await expect(definitionRows.nth(0)).toContainText(`Build`);
+  await expect(definitionRows.nth(1)).toContainText(`Draft`);
+
+  await page.getByRole(`button`, { name: `Edit Build` }).click();
+  definitionDialog = page.getByRole(`dialog`);
+  await definitionDialog.getByLabel(`Step name`).fill(`Build application`);
+  await definitionDialog.getByLabel(`Instructions`).fill(`Implement and verify the approved draft.`);
+  await definitionDialog.getByRole(`button`, { name: `Save step` }).click();
+  await expect(page.getByRole(`row`).filter({ hasText: `Build application` })).toBeVisible();
+
+  await page.getByRole(`link`, { name: `Step Definitions` }).click();
+  await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/step-definitions$`));
+  await expect(page.getByRole(`heading`, { name: `Task-source mappings` })).toBeVisible();
+  const userMapping = page.locator(`#step-source-user`);
+  await userMapping.selectOption({ label: sequenceName });
+  await expect(page.getByText(`User requests mapping has been saved.`)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole(`heading`, { name: `Task-source mappings` })).toBeVisible();
+  await expect(userMapping.locator(`option:checked`)).toHaveText(sequenceName);
+
+  await page.goto(sequenceDetailUrl);
+
+  page.once(`dialog`, (dialog) => void dialog.accept());
+  await page.getByRole(`button`, { name: `Delete Draft` }).click();
+  await expect(page.getByText(`Draft has been deleted.`)).toBeVisible();
+
+  page.once(`dialog`, (dialog) => void dialog.accept());
+  await page.getByRole(`button`, { name: `Delete sequence` }).click();
+  await expect(page.getByText(`${sequenceName} has been deleted.`)).toBeVisible();
+  await expect(page.getByText(`No step sequences configured.`)).toBeVisible();
+});
+
+test(`loop step settings report duplicate sequence names`, async ({ page }) => {
+  await authenticate(page);
+  const loop = await createLoop(page, `Duplicate step sequence loop ${Date.now()}`);
+  const sequenceName = `Unique sequence ${Date.now()}`;
+
+  await page.goto(`http://athena.localhost/loop/${loop.id}/step-sequences`);
+  await page.getByRole(`button`, { name: `Create sequence` }).click();
+  let sequenceDialog = page.getByRole(`dialog`);
+  await sequenceDialog.getByLabel(`Sequence name`).fill(sequenceName);
+  await sequenceDialog.getByRole(`button`, { name: `Create sequence` }).click();
+  await expect(page.getByText(`${sequenceName} has been saved.`)).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Create sequence` }).click();
+  sequenceDialog = page.getByRole(`dialog`);
+  await sequenceDialog.getByLabel(`Sequence name`).fill(sequenceName);
+  await sequenceDialog.getByRole(`button`, { name: `Create sequence` }).click();
+  await expect(page.getByText(`A step sequence named "${sequenceName}" already exists for this loop.`)).toBeVisible();
+});

@@ -74,6 +74,20 @@ route({
 });
 
 /**
+ * PUT /loop/:loop/mapping
+ * Create or replace the step sequence mapped to a task source.
+ */
+route({
+  method: `put`,
+  route: `/loop/:loop/mapping`,
+  validators: { params: stepSequenceLoopParamsSchema, body: taskSourceStepSequenceWritableSchema },
+  handler: async ({ params, body, response, respond }) => {
+    const mapping = await taskSourceStepSequenceUpsert(params.loop, body, getAuthenticatedUserId(response));
+    respond({ status: 200, data: mapping });
+  },
+});
+
+/**
  * PUT /loop/:loop/:stepSequence
  * Rename a step sequence or change its default flag.
  */
@@ -182,20 +196,6 @@ route({
   handler: async ({ params, response, respond }) => {
     const mappings = await taskSourceStepSequenceList(params.loop, getAuthenticatedUserId(response));
     respond({ status: 200, data: mappings });
-  },
-});
-
-/**
- * PUT /loop/:loop/mapping
- * Create or replace the step sequence mapped to a task source.
- */
-route({
-  method: `put`,
-  route: `/loop/:loop/mapping`,
-  validators: { params: stepSequenceLoopParamsSchema, body: taskSourceStepSequenceWritableSchema },
-  handler: async ({ params, body, response, respond }) => {
-    const mapping = await taskSourceStepSequenceUpsert(params.loop, body, getAuthenticatedUserId(response));
-    respond({ status: 200, data: mapping });
   },
 });
 

@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { fetchLoop, fetchLoopList, fetchLoopMembership, fetchLoopReadiness, fetchPendingLoopInvites, fetchProviderSelectionPolicy } from "./loop.client.js";
 import type { Loop, LoopInvite, LoopMembership, LoopReadiness, ProviderSelectionPolicy } from "./loop.schema.js";
 
@@ -10,6 +11,8 @@ export type ProviderSelectionPolicyState = { status: "loading" } | { status: "er
 export type LoopReadinessState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; readiness: LoopReadiness };
 export type LoopMembershipState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; membership: LoopMembership };
 export type LoopInviteListState = { status: "loading" } | { status: "error"; message: string } | { status: "success"; invites: LoopInvite[] };
+
+const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 type UseLoopListOptions = {
   enabled?: boolean;
@@ -24,7 +27,14 @@ export const useLoopList = (options: UseLoopListOptions = {}) => {
     enabled,
   });
 
-  const state: LoopListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, loops: data };
+  let state: LoopListState;
+  if (isPending) {
+    state = { status: `loading` };
+  } else if (isError) {
+    state = { status: `error`, message: getErrorMessage(error) };
+  } else {
+    state = { status: `success`, loops: data };
+  }
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`loops`] });
@@ -40,11 +50,18 @@ export const useLoop = (loopId: string) => {
     queryFn: () => fetchLoop(loopId),
   });
 
-  const state: LoopState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, loop: data };
+  let state: LoopState;
+  if (isPending) {
+    state = { status: `loading` };
+  } else if (isError) {
+    state = { status: `error`, message: getErrorMessage(error) };
+  } else {
+    state = { status: `success`, loop: data };
+  }
 
-  const reload = () => {
+  const reload = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: [`loops`, loopId] });
-  };
+  }, [loopId, queryClient]);
 
   return { state, reload };
 };
@@ -56,7 +73,14 @@ export const useProviderSelectionPolicy = (loopId: string) => {
     queryFn: () => fetchProviderSelectionPolicy(loopId),
   });
 
-  const state: ProviderSelectionPolicyState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, policy: data };
+  let state: ProviderSelectionPolicyState;
+  if (isPending) {
+    state = { status: `loading` };
+  } else if (isError) {
+    state = { status: `error`, message: getErrorMessage(error) };
+  } else {
+    state = { status: `success`, policy: data };
+  }
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`loopProviderSelectionPolicy`, loopId] });
@@ -72,7 +96,14 @@ export const useLoopReadiness = (loopId: string) => {
     queryFn: () => fetchLoopReadiness(loopId),
   });
 
-  const state: LoopReadinessState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, readiness: data };
+  let state: LoopReadinessState;
+  if (isPending) {
+    state = { status: `loading` };
+  } else if (isError) {
+    state = { status: `error`, message: getErrorMessage(error) };
+  } else {
+    state = { status: `success`, readiness: data };
+  }
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`loopReadiness`, loopId] });
@@ -88,7 +119,14 @@ export const useLoopMembership = (loopId: string) => {
     queryFn: () => fetchLoopMembership(loopId),
   });
 
-  const state: LoopMembershipState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, membership: data };
+  let state: LoopMembershipState;
+  if (isPending) {
+    state = { status: `loading` };
+  } else if (isError) {
+    state = { status: `error`, message: getErrorMessage(error) };
+  } else {
+    state = { status: `success`, membership: data };
+  }
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`loopMembers`, loopId] });
@@ -104,7 +142,14 @@ export const usePendingLoopInvites = () => {
     queryFn: fetchPendingLoopInvites,
   });
 
-  const state: LoopInviteListState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, invites: data };
+  let state: LoopInviteListState;
+  if (isPending) {
+    state = { status: `loading` };
+  } else if (isError) {
+    state = { status: `error`, message: getErrorMessage(error) };
+  } else {
+    state = { status: `success`, invites: data };
+  }
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`pendingLoopInvites`] });

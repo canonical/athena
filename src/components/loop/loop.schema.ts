@@ -153,19 +153,8 @@ export type Feedback = {
   message: string;
 };
 
-export const loopTabs = [`tasks`, `details`, `tools`, `members`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
+export const loopTabs = [`tasks`, `details`, `step-sequences`, `step-definitions`, `tools`, `members`, `personas`, `providers`, `runners`, `workgraphs`, `repositories`] as const;
 export const loopTabSchema = z.enum(loopTabs);
-
-export type Tab = z.infer<typeof loopTabSchema>;
-
-export type LoopProps = {
-  loopId: string;
-  tab: Tab;
-  editor?: `create` | `edit` | `clone`;
-  personaId?: string;
-  workgraphViewWorkgraphId?: string;
-  workgraphConfigTab?: `jql` | `labels` | `item-type-playbooks` | `webhook-definitions` | `synced-items`;
-};
 
 export type LoopDetailsProps = {
   loopId: string;
@@ -213,6 +202,20 @@ export type LoopWorkgraphsProps = {
 };
 
 export type LoopRepositoriesProps = {
+  loopId: string;
+  onFeedback: (feedback: Feedback | null) => void;
+};
+
+export type LoopStepSequencesProps = {
+  loopId: string;
+  onFeedback: (feedback: Feedback | null) => void;
+};
+
+export type LoopStepsProps = LoopStepSequencesProps & {
+  stepSequenceId: string;
+};
+
+export type LoopStepDefinitionsProps = {
   loopId: string;
   onFeedback: (feedback: Feedback | null) => void;
 };

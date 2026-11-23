@@ -1,5 +1,5 @@
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { fetchLoopPersonaList, fetchPersonaById, fetchPersonaCatalog, fetchPersonaList } from "./persona.client.js";
 import type { Persona } from "./persona.schema.js";
 
@@ -21,17 +21,20 @@ export const usePersonaList = (loopId: string | null) => {
     enabled: !!loopId,
   });
 
-  const state: PersonaListState = !loopId
-    ? { status: `success`, personas: [] }
-    : isPending
-      ? { status: `loading` }
-      : isError
-        ? { status: `error`, message: error instanceof Error ? error.message : String(error) }
-        : { status: `success`, personas: data };
+  let state: PersonaListState;
+  if (!loopId) {
+    state = { status: `success`, personas: [] };
+  } else if (isPending) {
+    state = { status: `loading` };
+  } else if (isError) {
+    state = { status: `error`, message: error instanceof Error ? error.message : String(error) };
+  } else {
+    state = { status: `success`, personas: data };
+  }
 
-  const reload = () => {
+  const reload = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: [`loopPersonas`, loopId] });
-  };
+  }, [loopId, queryClient]);
 
   return { state, reload };
 };
@@ -45,13 +48,16 @@ export const usePersonaListAll = (options: UseQueryOptions = {}) => {
     enabled,
   });
 
-  const state: PersonaListState = !enabled
-    ? { status: `success`, personas: [] }
-    : isPending
-      ? { status: `loading` }
-      : isError
-        ? { status: `error`, message: error instanceof Error ? error.message : String(error) }
-        : { status: `success`, personas: data };
+  let state: PersonaListState;
+  if (!enabled) {
+    state = { status: `success`, personas: [] };
+  } else if (isPending) {
+    state = { status: `loading` };
+  } else if (isError) {
+    state = { status: `error`, message: error instanceof Error ? error.message : String(error) };
+  } else {
+    state = { status: `success`, personas: data };
+  }
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`personas`] });
@@ -67,7 +73,14 @@ export const usePersonaById = (personaId: string) => {
     queryFn: () => fetchPersonaById(personaId),
   });
 
-  const state: PersonaState = isPending ? { status: `loading` } : isError ? { status: `error`, message: error instanceof Error ? error.message : String(error) } : { status: `success`, persona: data };
+  let state: PersonaState;
+  if (isPending) {
+    state = { status: `loading` };
+  } else if (isError) {
+    state = { status: `error`, message: error instanceof Error ? error.message : String(error) };
+  } else {
+    state = { status: `success`, persona: data };
+  }
 
   const reload = () => {
     void queryClient.invalidateQueries({ queryKey: [`personas`, personaId] });

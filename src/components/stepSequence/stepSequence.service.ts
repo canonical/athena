@@ -228,9 +228,7 @@ export const queryStepDefinitionReorder = async (stepSequenceId: string, ordered
     // final pass never collides with an existing value.
     await client.query(`UPDATE "stepDefinition" SET "sequenceOrder" = -"sequenceOrder" - 1 WHERE "stepSequence" = $1`, [stepSequenceId]);
 
-    for (const [index, stepDefinitionId] of orderedStepDefinitionIds.entries()) {
-      await client.query(`UPDATE "stepDefinition" SET "sequenceOrder" = $1 WHERE "id" = $2 AND "stepSequence" = $3`, [index + 1, stepDefinitionId, stepSequenceId]);
-    }
+    await Promise.all(orderedStepDefinitionIds.map((stepDefinitionId, index) => client.query(`UPDATE "stepDefinition" SET "sequenceOrder" = $1 WHERE "id" = $2 AND "stepSequence" = $3`, [index + 1, stepDefinitionId, stepSequenceId])));
 
     const result = await client.query<StepDefinition>(
       `
