@@ -5,13 +5,23 @@ import type { DefineRoutesOptions, RouteOptions, RouteRespondOptions, ValidatedH
 
 const toIssueDetails = (error: z.ZodError) => {
   return error.issues.map((issue) => ({
-    path: issue.path.map((part) => String(part)).join(`.`),
+    path: issue.path.map(String).join(`.`),
     message: issue.message,
   }));
 };
 
 const sendValidationError = (response: express.Response, target: ValidationTarget, error: z.ZodError): void => {
-  const fallbackMessage = target === `body` ? `Invalid request body.` : target === `query` ? `Invalid request query.` : `Invalid request params.`;
+  let fallbackMessage: string;
+  switch (target) {
+    case `body`:
+      fallbackMessage = `Invalid request body.`;
+      break;
+    case `query`:
+      fallbackMessage = `Invalid request query.`;
+      break;
+    default:
+      fallbackMessage = `Invalid request params.`;
+  }
 
   response.status(400).json({
     error: error.issues[0]?.message ?? fallbackMessage,

@@ -5,7 +5,7 @@
 | Authentication          |                                    |                                 | ✅     |      |
 | Loop                    |                                    |                                 | 🚧     | [theloop.md][theloop] |
 | -                       | Task                               |                                 | 🚧     | [task.md][task] |
-| -                       | -                                  | Task Steps                      | 📝     | [task-steps.md][task-steps] |
+| -                       | -                                  | Task Steps                      | 🚧     | [task-steps.md][task-steps] |
 | -                       | -                                  | User Request Task Source        | 🚧     | [user-request.md][user-request] |
 | -                       | -                                  | Tool Execution Task Source      | ⏳     | [task-source.phase2.plan.md][phase2] |
 | -                       | -                                  | Webhook Task Source             | 🚧     | [webhook-task.md][webhook-task] |
