@@ -349,6 +349,13 @@ test(`loop step settings manage sequences, definitions, ordering, and task-sourc
   await definitionDialog.getByRole(`button`, { name: `Save step` }).click();
   await expect(page.getByRole(`row`).filter({ hasText: `Build application` })).toBeVisible();
 
+  await page.getByRole(`button`, { name: `Add step` }).click();
+  definitionDialog = page.getByRole(`dialog`);
+  await definitionDialog.getByLabel(`Step name`).fill(`Review`);
+  await definitionDialog.getByLabel(`Instructions`).fill(`Review the completed implementation.`);
+  await definitionDialog.getByRole(`button`, { name: `Create step` }).click();
+  await expect(page.getByRole(`row`).filter({ hasText: `Review` })).toBeVisible();
+
   await page.getByRole(`link`, { name: `Step Definitions` }).click();
   await expect(page).toHaveURL(new RegExp(`/loop/${loop.id}/step-definitions$`));
   await expect(page.getByRole(`heading`, { name: `Task-source mappings` })).toBeVisible();
@@ -364,6 +371,13 @@ test(`loop step settings manage sequences, definitions, ordering, and task-sourc
   page.once(`dialog`, (dialog) => void dialog.accept());
   await page.getByRole(`button`, { name: `Delete Draft` }).click();
   await expect(page.getByText(`Draft has been deleted.`)).toBeVisible();
+
+  await page.getByRole(`button`, { name: `Add step` }).click();
+  definitionDialog = page.getByRole(`dialog`);
+  await definitionDialog.getByLabel(`Step name`).fill(`Verify`);
+  await definitionDialog.getByLabel(`Instructions`).fill(`Verify the implementation.`);
+  await definitionDialog.getByRole(`button`, { name: `Create step` }).click();
+  await expect(page.getByRole(`row`).filter({ hasText: `Verify` })).toBeVisible();
 
   page.once(`dialog`, (dialog) => void dialog.accept());
   await page.getByRole(`button`, { name: `Delete sequence` }).click();
